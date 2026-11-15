@@ -48,14 +48,12 @@ class FirebaseAuthBackend implements AuthBackend {
 
   final FirebaseAuth _auth;
 
+  static bool _hasGoogle(User user) =>
+      user.providerData.any((p) => p.providerId == 'google.com');
+
   static OnlineUser? _user(User? user) => user == null
       ? null
-      : OnlineUser(
-          uid: user.uid,
-          googleLinked: user.providerData.any(
-            (p) => p.providerId == 'google.com',
-          ),
-        );
+      : OnlineUser(uid: user.uid, googleLinked: _hasGoogle(user));
 
   static AuthCredential _google(GoogleCredential credential) {
     final token = credential.idToken;
@@ -89,17 +87,16 @@ class FirebaseAuthBackend implements AuthBackend {
   Future<OnlineUser> signInWithGoogle(GoogleCredential credential) async {
     var google = _google(credential);
     final current = _auth.currentUser;
-    if (current != null && current.isAnonymous) {
+    if (current != null && !_hasGoogle(current)) {
       // Probe with a link first, so a Google account that was never linked
-      // does not replace (and lose) the current anonymous session.
+      // does not replace (and lose) the current session. Checked by
+      // provider, not isAnonymous, which a link + unlink can change.
       AuthCredential? linkedElsewhere;
       try {
         await current.linkWithCredential(google);
       } on FirebaseAuthException catch (e) {
-        if (e.code != 'credential-already-in-use' || e.credential == null) {
-          throw _authError(e);
-        }
-        linkedElsewhere = e.credential;
+        if (e.code != 'credential-already-in-use') throw _authError(e);
+        linkedElsewhere = e.credential ?? google;
       }
       if (linkedElsewhere == null) {
         await _guard(() => current.unlink('google.com'));
