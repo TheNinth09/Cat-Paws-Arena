@@ -9,16 +9,16 @@ class JoinedRoom {
     required this.code,
     required this.hostUid,
     required this.guestUid,
+    required this.matchId,
   });
-  final String code, hostUid, guestUid;
+  final String code, hostUid, guestUid, matchId;
 }
 
-/// Creates and joins friend rooms. A room lives 24 hours (server time) or
-/// until a friend joins it.
+/// Creates and joins friend rooms. A room lives [RoomRecord.lifetime]
+/// (server time) or until a friend joins it.
 class RoomService {
   RoomService(this.store, {this.random});
 
-  static const lifetime = Duration(hours: 24);
   static const maxAttempts = 8;
 
   final CloudStore store;
@@ -26,14 +26,8 @@ class RoomService {
 
   Future<RoomRecord> createRoom(String hostUid) async {
     for (var i = 0; i < maxAttempts; i++) {
-      final now = store.serverNow();
-      final room = RoomRecord(
-        code: RoomCode.generate(random),
-        hostUid: hostUid,
-        createdAt: now,
-        expiresAt: now.add(lifetime),
-      );
-      if (await store.createRoom(room)) return room;
+      final room = await store.createRoom(RoomCode.generate(random), hostUid);
+      if (room != null) return room;
     }
     throw const OnlineException(OnlineErrorCode.roomCodeExhausted);
   }
@@ -51,6 +45,7 @@ class RoomService {
         code: code,
         hostUid: room!.hostUid,
         guestUid: guestUid,
+        matchId: room.matchId,
       ),
       RoomClaim.notFound => throw const OnlineException(
         OnlineErrorCode.roomNotFound,
@@ -61,6 +56,10 @@ class RoomService {
       RoomClaim.ownRoom => throw const OnlineException(OnlineErrorCode.ownRoom),
     };
   }
+
+  /// For the host: completes when a friend joins [room].
+  Future<MatchLink> waitForGuest(RoomRecord room) =>
+      store.watchJoin(room).first;
 
   Future<void> cancelRoom(RoomRecord room) => store.deleteRoom(room.code);
 }

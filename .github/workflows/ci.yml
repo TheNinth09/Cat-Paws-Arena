@@ -48,6 +48,39 @@ jobs:
         working-directory: packages/arena_engine
         run: dart test
 
+  backend:
+    name: Firestore rules and functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # firebase-tools needs Java 21 for the emulator.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            backend/functions/package-lock.json
+
+      - name: Rules tests (local emulator, demo project)
+        working-directory: backend
+        run: |
+          npm ci
+          npm run test:rules
+
+      - name: Functions type-check
+        working-directory: backend/functions
+        run: |
+          npm ci
+          npm run build
+
   android:
     name: Android debug build
     runs-on: ubuntu-latest

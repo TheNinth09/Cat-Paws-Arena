@@ -1,0 +1,165 @@
+rules_version = '2';
+
+// Cat Paws Arena, Firestore in europe-west1 (docs/contract.md §7).
+// Checklist: backend/SECURITY_RULES.md. Tests: backend/test/rules.test.js.
+// Anything not matched below is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function exactKeys(data, keys) {
+      return data.keys().hasOnly(keys) && data.keys().hasAll(keys);
+    }
+
+    // Same limits as CloudProfile: <= 64 chars, no control characters.
+    function shortId(s) {
+      return s is string && s.matches('^[^\\x00-\\x1F\\x7F]{0,64}$');
+    }
+
+    function inRange(v, count) {
+      return v is int && v >= 0 && v < count;
+    }
+
+    // Must match CloudProfile in lib/online/cloud_profile.dart; a Dart test
+    // checks the option counts below against it.
+    function validProfile(d) {
+      return exactKeys(d, ['schemaVersion', 'revision', 'trophies', 'coins',
+            'cat', 'accessory', 'fur', 'eyes', 'ears', 'pattern', 'power',
+            'owned', 'claims', 'daily', 'sfx', 'music', 'english',
+            'notifications'])
+        && d.schemaVersion == 1
+        && d.revision is int
+        && d.trophies is int && d.trophies >= 0
+        && d.coins is int && d.coins >= 0
+        && d.cat in ['Tzuki', 'Bubble', 'Custom']
+        && shortId(d.accessory)
+        && inRange(d.fur, 6)
+        && inRange(d.eyes, 4)
+        && inRange(d.ears, 4)
+        && inRange(d.pattern, 5)
+        && inRange(d.power, 3)
+        && d.owned is list && d.owned.size() <= 512
+        && d.claims is list && d.claims.size() <= 512
+        && shortId(d.daily)
+        && d.sfx is bool && d.music is bool
+        && d.english is bool && d.notifications is bool;
+    }
+
+    // Cloud save. Private to its owner; never shown to other players.
+    match /users/{uid} {
+      allow get, delete: if isUser(uid);
+      allow create: if isUser(uid) && validProfile(request.resource.data)
+        && request.resource.data.revision == 1;
+      allow update: if isUser(uid) && validProfile(request.resource.data)
+        && request.resource.data.revision == resource.data.revision + 1;
+
+      // Your-turn push target (Firebase installation ID) of one install.
+      match /devices/{installId} {
+        allow get, list, delete: if isUser(uid);
+        allow create, update: if isUser(uid)
+          && installId.matches('^[a-z0-9]{20}$')
+          && exactKeys(request.resource.data, ['fid', 'platform', 'updatedAt'])
+          && request.resource.data.fid is string
+          && request.resource.data.fid.size() <= 256
+          && request.resource.data.platform == 'android'
+          && request.resource.data.updatedAt == request.time;
+      }
+    }
+
+    // Server-time probe for FirestoreCloudStore.syncClock.
+    match /clocks/{uid} {
+      allow get, delete: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && exactKeys(request.resource.data, ['t'])
+        && request.resource.data.t == request.time;
+    }
+
+    function roomLifetime() {
+      return duration.value(24, 'h');
+    }
+
+    function matchIdFor(code, room) {
+      return code + '_' + string(room.createdAt.toMillis());
+    }
+
+    // True when this request also creates the match that claims the room.
+    function claimedByMe(code, room) {
+      let path = /databases/$(database)/documents/matches/$(matchIdFor(code, room));
+      return existsAfter(path) && getAfter(path).data.guestUid == request.auth.uid;
+    }
+
+    // Friend room codes. Get by exact code only; no listing others' rooms.
+    match /rooms/{code} {
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.hostUid == request.auth.uid;
+      allow create: if signedIn()
+        && code.matches('^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$')
+        && exactKeys(request.resource.data, ['hostUid', 'createdAt', 'expiresAt'])
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time + duration.value(23, 'h')
+        && request.resource.data.expiresAt < request.time + duration.value(25, 'h');
+      allow update: if false;
+      allow delete: if signedIn() && (
+        resource.data.hostUid == request.auth.uid
+        || request.time >= resource.data.createdAt + roomLifetime()
+        || claimedByMe(code, resource.data));
+    }
+
+    // Created only in the room-claim transaction, which deletes the room in
+    // the same commit, so one room makes at most one match.
+    function validClaim(matchId, d) {
+      let roomPath = /databases/$(database)/documents/rooms/$(d.roomCode);
+      return exactKeys(d, ['roomCode', 'hostUid', 'guestUid', 'createdAt'])
+        && d.roomCode is string
+        && exists(roomPath)
+        && !existsAfter(roomPath)
+        && d.guestUid == request.auth.uid
+        && d.hostUid == get(roomPath).data.hostUid
+        && d.hostUid != d.guestUid
+        && d.createdAt == request.time
+        && request.time < get(roomPath).data.createdAt + roomLifetime()
+        && matchId == matchIdFor(d.roomCode, get(roomPath).data);
+    }
+
+    function isPlayer(m) {
+      return signedIn()
+        && request.auth.uid in [m.data.hostUid, m.data.guestUid];
+    }
+
+    function isPlayerOf(matchId) {
+      return isPlayer(get(/databases/$(database)/documents/matches/$(matchId)));
+    }
+
+    // Only the two players. A missing match can be watched by its ID (the
+    // host waits for the guest) but reveals nothing.
+    match /matches/{matchId} {
+      allow get: if signedIn() && (resource == null || isPlayer(resource));
+      allow list: if false;
+      allow create: if signedIn() && validClaim(matchId, request.resource.data);
+      // Moves, hashes and results arrive with the match slice.
+      allow update, delete: if false;
+
+      // Preset emotes only (lib/online/emotes.dart). No text reaches the
+      // other player.
+      match /emotes/{emoteId} {
+        allow read: if isPlayerOf(matchId);
+        allow create: if isPlayerOf(matchId)
+          && exactKeys(request.resource.data, ['emote', 'from', 'at'])
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.at == request.time
+          && request.resource.data.emote in
+            ['hello', 'good_game', 'wow', 'oops', 'thanks', 'purr'];
+        allow update, delete: if false;
+      }
+    }
+  }
+}

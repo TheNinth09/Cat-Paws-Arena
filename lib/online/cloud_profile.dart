@@ -1,3 +1,4 @@
+import '../cat_avatar.dart';
 import '../catalog.dart';
 import '../profile.dart';
 import 'online_errors.dart';
@@ -30,9 +31,11 @@ class CloudProfile {
   static const maxListLength = 512;
 
   /// Values the cat screen and avatar can draw (lib/cats_screen.dart,
-  /// lib/cat_avatar.dart). Anything else would crash on display.
+  /// lib/cat_avatar.dart). Anything else is not a save this app made.
   static const cats = {'Tzuki', 'Bubble', 'Custom'};
-  static const furCount = 4, patternCount = 2, eyesCount = 3, earsCount = 2;
+  static final furCount = catFurColours.length,
+      eyesCount = catEyeColours.length;
+  static const patternCount = catPatternCount, earsCount = catEarCount;
 
   final int trophies, coins, fur, eyes, ears, pattern, power, revision;
   final String cat, accessory, daily;

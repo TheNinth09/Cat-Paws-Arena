@@ -1,0 +1,6 @@
+# Keeps `flutter analyze` at the repo root out of npm packages (firebase-tools
+# ships Dart templates).
+analyzer:
+  exclude:
+    - node_modules/**
+    - functions/node_modules/**

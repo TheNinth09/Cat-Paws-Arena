@@ -6,6 +6,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase config for friend duels. Builds without the file keep working.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Release signing is read from android/key.properties, which is never committed.
 // Without it, release builds fall back to the debug key so local builds keep working.
 val keystorePropertiesFile = rootProject.file("key.properties")

@@ -1,6 +1,7 @@
 import 'cloud_profile.dart';
 import 'online_backend.dart';
 import 'online_errors.dart';
+import 'parent_gate.dart';
 
 /// Account lifecycle: anonymous start, optional Google link, cloud save of
 /// the cat and progress, and in-app deletion.
@@ -20,14 +21,21 @@ class OnlineAccount {
   Future<OnlineUser> start() async =>
       auth.currentUser ?? await auth.signInAnonymously();
 
-  Future<OnlineUser> linkGoogle(GoogleCredential credential) async {
+  /// Google is optional and only reachable after the parent gate.
+  Future<OnlineUser> linkGoogle(
+    GoogleCredential credential,
+    ParentGateApproval approval,
+  ) async {
     _signedIn;
     return auth.linkGoogle(credential);
   }
 
   /// After a reinstall: signs in with the linked Google account and returns
   /// the saved cat and progress, or null when nothing was saved yet.
-  Future<CloudProfile?> restoreWithGoogle(GoogleCredential credential) async {
+  Future<CloudProfile?> restoreWithGoogle(
+    GoogleCredential credential,
+    ParentGateApproval approval,
+  ) async {
     await auth.signInWithGoogle(credential);
     return load();
   }
