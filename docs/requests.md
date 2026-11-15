@@ -37,3 +37,11 @@ Request: Owner adds the repository secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYS
 Reason: The APK is no longer tracked. `.github/workflows/release.yml` needs these secrets to sign; it refuses to publish a debug-signed APK.
 Status: open — orchestrator documented the tag-release flow in README.md; still requires the owner to add the four Android signing secrets before the first tagged release.
 ```
+
+```text
+Lane: 2
+Blocking PR: lane-2-slice-3 (slice 3: feel)
+Request: Add `- assets/audio/` under `flutter: assets:` in pubspec.yaml.
+Reason: Lane 2 owns assets/audio/ and ships 16 synthesized SFX WAVs plus CREDITS.md there. Without the assets entry they are not bundled and AudioPlayer cannot load them at runtime; cues fail silently until this lands.
+Status: open
+```

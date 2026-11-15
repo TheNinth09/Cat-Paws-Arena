@@ -33,6 +33,9 @@ const _gemColors = [
   Color(0xffff9d76),
 ];
 
+const _bannerGold = Color(0xffffd166);
+const _mutedBanner = Color(0xffd8b48f);
+
 /// Presentation-only board. It renders a [BoardSnapshot] and animates the
 /// contract event list from `docs/contract.md`; it contains no game rules —
 /// all timing lives in the view's ticker, never in rule code.
@@ -82,6 +85,7 @@ class BoardViewState extends State<BoardView>
   late List<BoardCell> _cells;
   final List<_Fx> _fx = [];
   final List<({double at, BoardEvent event})> _meta = [];
+  final List<_Banner> _banners = [];
   final List<Completer<void>> _completers = [];
   final Map<String, ui.Image> _art = {};
   late final Ticker _ticker = createTicker(_onTick);
@@ -102,6 +106,12 @@ class BoardViewState extends State<BoardView>
 
   /// True while events or animations are still in flight.
   bool get busy => _fx.isNotEmpty || _meta.isNotEmpty || _schedule > _now;
+
+  /// Live cell-effect count; used by tests to prove an event animated.
+  int get debugFxCount => _fx.length;
+
+  /// Live meta-banner count; used by tests to prove a meta event animated.
+  int get debugBannerCount => _banners.length;
 
   void _resetCells() {
     final src = widget.initial.cells;
@@ -125,6 +135,7 @@ class BoardViewState extends State<BoardView>
       _resetCells();
       _fx.clear();
       _meta.clear();
+      _banners.clear();
       _selected = null;
     }
     if (widget.suspended != oldWidget.suspended) {
@@ -565,7 +576,10 @@ class BoardViewState extends State<BoardView>
   };
 
   void _ensureTicker() {
-    if (_ticker.isActive || (_fx.isEmpty && _meta.isEmpty)) return;
+    if (_ticker.isActive ||
+        (_fx.isEmpty && _meta.isEmpty && _banners.isEmpty)) {
+      return;
+    }
     _lastElapsed = Duration.zero;
     _ticker.start();
   }
@@ -591,13 +605,18 @@ class BoardViewState extends State<BoardView>
     _meta.removeWhere((m) {
       if (_now >= m.at) {
         widget.onEvent?.call(m.event);
+        _banners.add(_Banner(m.event, _now));
         dirty = true;
         return true;
       }
       return false;
     });
+    _banners.removeWhere((b) => _now >= b.start + _Banner.dur);
     _fx.removeWhere((f) => f.done(_now));
-    if (_fx.isEmpty && _meta.isEmpty && _schedule <= _now) {
+    if (_fx.isEmpty &&
+        _meta.isEmpty &&
+        _banners.isEmpty &&
+        _schedule <= _now) {
       _ticker.stop();
       widget.onIdle?.call();
       for (final c in _completers) {
@@ -612,6 +631,7 @@ class BoardViewState extends State<BoardView>
     _ticker.stop();
     _fx.clear();
     _meta.clear();
+    _banners.clear();
     _selected = null;
     widget.onIdle?.call();
     for (final c in _completers) {
@@ -666,6 +686,85 @@ class BoardViewState extends State<BoardView>
     if (target != null && _adjacent(from, target)) _attempt(from, target);
   }
 
+  // --- meta-event banners ----------------------------------------------
+
+  /// Floating label for events that have no board-cell animation
+  /// (ObstacleQueued, PowerCharged, ExtraMove, RoundEnded, MatchEnded).
+  Widget _bannerLayer(double cell) {
+    if (_banners.isEmpty) return const SizedBox.shrink();
+    return Stack(
+      children: [
+        for (final b in _banners)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: cell * height * 0.3,
+            child: Center(child: _bannerContent(b)),
+          ),
+      ],
+    );
+  }
+
+  Widget _bannerContent(_Banner b) {
+    final t = ((_now - b.start) / _Banner.dur).clamp(0.0, 1.0);
+    final opacity =
+        (t / 0.12).clamp(0.0, 1.0) * ((1 - t) / 0.3).clamp(0.0, 1.0);
+    final (text, color, size) = switch (b.event) {
+      ObstacleQueued(:final count) => (
+        count == 1
+            ? '1 obstacol următor!'
+            : '$count obstacole următoare!',
+        const Color(0xffffb066),
+        15.0,
+      ),
+      PowerCharged(:final amount) => amount >= 100
+          ? ('ENERGIE MAXIMĂ!', _bannerGold, 17.0)
+          : ('Energie $amount%', _bannerGold, 13.0),
+      ExtraMove() => ('MUTARE EXTRA!', const Color(0xffb9e07a), 18.0),
+      RoundEnded(:final round, :final scores) => (
+        'Runda ${round + 1}  •  ${scores.first} – ${scores.second}',
+        _mutedBanner,
+        15.0,
+      ),
+      MatchEnded(:final outcome) => (
+        switch (outcome) {
+          MatchOutcome.firstWin => 'VICTORIE!',
+          MatchOutcome.secondWin => 'ÎNFRÂNGERE',
+          MatchOutcome.draw => 'EGALITATE',
+        },
+        _bannerGold,
+        22.0,
+      ),
+      _ => ('', _bannerGold, 12.0),
+    };
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Opacity(
+      opacity: opacity,
+      child: Transform.translate(
+        offset: Offset(0, -16 * t),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xdd3a2418),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.65), width: 1.4),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: size,
+              fontWeight: FontWeight.w900,
+              shadows: const [
+                Shadow(color: Color(0x66000000), offset: Offset(0, 1.5)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // --- build -----------------------------------------------------------
 
   @override
@@ -683,16 +782,22 @@ class BoardViewState extends State<BoardView>
             onTapUp: (d) => _onTapUp(d, cell),
             onPanStart: (_) {},
             onPanUpdate: (d) => _onPanUpdate(d, cell),
-            child: CustomPaint(
-              painter: _BoardPainter(
-                cells: _cells,
-                fx: _fx,
-                now: _now,
-                art: _art,
-                selected: _selected,
-                width: width,
-                height: height,
-              ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CustomPaint(
+                  painter: _BoardPainter(
+                    cells: _cells,
+                    fx: _fx,
+                    now: _now,
+                    art: _art,
+                    selected: _selected,
+                    width: width,
+                    height: height,
+                  ),
+                ),
+                IgnorePointer(child: _bannerLayer(cell)),
+              ],
             ),
           ),
         ),
@@ -840,6 +945,14 @@ class _Fx {
     _FxKind.shuffle => 0.5 - 0.5 * math.cos(math.pi * t),
     _ => t,
   };
+}
+
+/// A transient floating label for meta events (no cell animation).
+class _Banner {
+  const _Banner(this.event, this.start);
+  final BoardEvent event;
+  final double start;
+  static const dur = 0.95;
 }
 
 class _BoardPainter extends CustomPainter {
