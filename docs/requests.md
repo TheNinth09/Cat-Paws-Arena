@@ -43,7 +43,7 @@ Lane: 4
 Blocking PR: lane-5 (slice 3a: room codes, account and cloud save over a fake transport)
 Request: In lib/app_dialogs.dart settings, add "Link Google account" and "Delete account" entries (delete behind a parent gate and a confirm step) that call `OnlineAccount.linkGoogle` and `OnlineAccount.deleteAccount` from `lib/online/online_account.dart`, then clear local data. Add a join-room field that passes the typed code to `RoomService.joinRoom` (it already accepts lower case, spaces and dashes). Show both only when online play is configured; until then keep the existing "unavailable" label.
 Reason: Slice 3 requires account linking and in-app account deletion; the UI files are lane-4 owned. Lane 5 provides the logic only.
-Status: open
+Status: open — assigned to lane-4 for a post-slice-3a settings UI slice; not blocking lane-5 slice 3a.
 ```
 
 ```text
@@ -51,5 +51,13 @@ Lane: 5
 Blocking PR: lane-5 (slice 3a)
 Request: Owner creates the Firebase project (Blaze, Firestore europe-west1) for `games.oneear.catpawsarena` and provides `android/app/google-services.json`; orchestrator then approves adding `firebase_core`, `firebase_auth`, `cloud_firestore`, `firebase_messaging` and `google_sign_in` to pubspec.yaml.
 Reason: Lane 5 adds no Firebase SDK until the config file exists. The Firebase implementations of `AuthBackend` and `CloudStore` (lib/online/online_backend.dart) replace `FakeCloud` after that.
-Status: open
+Status: open — owner action; orchestrator approves adding firebase_core, firebase_auth, cloud_firestore, firebase_messaging and google_sign_in to pubspec.yaml once android/app/google-services.json exists.
+```
+
+```text
+Lane: 4
+Blocking PR: lane-4 slice 2 (House Tour)
+Request: Lane 2 adds an optional house-cat opponent (name, trophies, avatar fields) to `MatchScreen` and `ArenaMatchController` so a match can start against the selected `HouseCat` instead of always `Bubble Bot`.
+Reason: Lane-4 lobby offers named resident house cats; lane-4 cannot edit lane-2 match files. Orchestrator forwards lane-4's request to lane-2.
+Status: open — assigned to lane-2; does not block lane-5 slice 3a.
 ```
