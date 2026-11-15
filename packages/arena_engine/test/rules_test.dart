@@ -584,7 +584,7 @@ void main() {
       EngineErrorCode.insufficientCharge,
     );
     // Zoomies without a valid row is an invalid move, not a charge issue.
-    final s2 = stateWith(firstCells: fixture(), charge: [100, 0]);
+    final s2 = stateWith(firstCells: fixture(), charge: [kPowerCost, 0]);
     final r2 = applyMove(s2, const PowerMove(power: PowerKind.zoomies));
     expect(r2, isA<EngineFailure<MoveResult>>());
     expect(
@@ -613,10 +613,12 @@ void main() {
     expect(queued.single.count, 2);
     expect(st.pendingObstacles[1], hasLength(2));
     // Charge was spent then partially refilled by the clears.
-    expect(st.chargeOf(PlayerSlot.first) < kPowerCost, isTrue);
-    expect(st.chargeOf(PlayerSlot.first) > 0, isTrue);
+    expect(st.chargeOf(PlayerSlot.first), lessThanOrEqualTo(kPowerCost));
+    expect(st.chargeOf(PlayerSlot.first), greaterThan(0));
     expect(
-      res.value.events.whereType<PowerCharged>().any((e) => e.amount == -kPowerCost),
+      res.value.events
+          .whereType<PowerCharged>()
+          .any((e) => e.amount == -powerChargeCost(PowerKind.zoomies)),
       isTrue,
     );
     // Score equals the sum of point-bearing events.

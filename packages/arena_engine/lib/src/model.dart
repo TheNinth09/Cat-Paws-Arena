@@ -199,18 +199,37 @@ const int kEngineVersion = 1;
 /// this cap are discarded (the oldest queued obstacles are kept).
 const int kMaxPendingObstacles = 12;
 
-/// Charge required before a power may be fired. Cleared pieces add
-/// [kChargePerPiece] charge each, capped at this value.
-const int kPowerCost = 100;
+/// Maximum power charge. Cleared pieces add [kChargePerPiece] charge each,
+/// capped at this value.
+const int kPowerCost = 500;
+
+/// Charge a [PowerKind.zoomies] activation costs. Powers are free and of
+/// equal strength; per-kind costs are the slice-3 balance tuning numbers
+/// (see `report/harness.md`). Each cost sits above the charge its own
+/// effect regenerates, so no power can fuel itself.
+const int kZoomiesChargeCost = 460;
+
+/// Charge a [PowerKind.shadowPounce] activation costs.
+const int kShadowPounceChargeCost = 500;
+
+/// Charge a [PowerKind.laserChase] activation costs.
+const int kLaserChaseChargeCost = 175;
+
+/// Pieces removed by [PowerKind.laserChase].
+const int kLaserBreakCount = 8;
+
+/// Charge cost of firing [power].
+int powerChargeCost(PowerKind power) => switch (power) {
+  PowerKind.zoomies => kZoomiesChargeCost,
+  PowerKind.shadowPounce => kShadowPounceChargeCost,
+  PowerKind.laserChase => kLaserChaseChargeCost,
+};
 
 /// Charge gained per cleared piece.
 const int kChargePerPiece = 4;
 
 /// Points awarded per cleared piece. Flat scoring: no cascade multiplier.
 const int kPointsPerPiece = 10;
-
-/// Pieces removed by [PowerKind.laserChase].
-const int kLaserBreakCount = 6;
 
 /// Obstacles sent to the opponent by [PowerKind.zoomies].
 const int kZoomiesObstacleCount = 2;

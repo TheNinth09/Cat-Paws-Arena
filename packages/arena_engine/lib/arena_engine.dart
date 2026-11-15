@@ -10,4 +10,5 @@
 /// hash algorithm and determinism notes.
 library;
 
+export 'src/bots.dart';
 export 'src/engine.dart';

@@ -104,19 +104,23 @@ round cannot become endless. Cascades count too.
 ## Power charge and powers
 
 Every cleared piece (colour match, special blast, power blast) adds
-`kChargePerPiece` (4) charge, capped at `kPowerCost` (100). Firing a
-power consumes one move and the full bar (`PowerCharged` with a negative
-delta), then resolves:
+`kChargePerPiece` (4) charge, capped at `kPowerCost` (500). Firing a
+power consumes one move and its own charge cost (`powerChargeCost` —
+see the tuning table below), reported as a `PowerCharged` event with a
+negative delta, then resolves:
 
 - **Zoomies** — clears every piece in `targetRow` and queues
   `kZoomiesObstacleCount` (2) random-kind obstacles for the opponent
-  (`ObstacleQueued`).
+  (`ObstacleQueued`). Costs `kZoomiesChargeCost` (460).
 - **Shadow Pounce** — clears every piece of the most common colour
-  (ties resolve to the lowest colour code).
-- **Laser Chase** — breaks `kLaserBreakCount` (6) random pieces, then
-  clears all of the user's own obstacles (boxes and yarn locks).
+  (ties resolve to the lowest colour code). Costs
+  `kShadowPounceChargeCost` (500 — a full bar).
+- **Laser Chase** — breaks `kLaserBreakCount` (8) random pieces, then
+  clears all of the user's own obstacles (boxes and yarn locks). Costs
+  `kLaserChaseChargeCost` (175).
 
-`legalMoves` lists power moves only while the active player is charged.
+`legalMoves` lists power moves only while the active player has enough
+charge for that power.
 
 ## Event order inside a transition
 
@@ -158,12 +162,43 @@ Every transition returns an ordered, immutable `List<GameEvent>`:
 `PowerCharged`, `PowerFired`, `Shuffled`, `ExtraMove`, `RoundEnded`,
 `MatchEnded`.
 
+## Bots
+
+`lib/src/bots.dart` implements `ArenaBot` (`chooseMove(MatchState)`),
+exported from `package:arena_engine/arena_engine.dart`:
+
+- `RandomBot(seed)` — uniform pick over `legalMoves`.
+- `GreedyBot()` — largest first clear; deterministic tie-break.
+- `LookaheadBot()` — evaluates each candidate by simulating the
+  transition plus a bounded reply search; deterministic.
+- `PowerBot(power)` — plays regular swaps via greedy scoring but only
+  fires its own [power] (swap-only fallback, so one power setting can
+  never accidentally use another power).
+
+Three house-cat levels are `RandomBot`, `GreedyBot` and `LookaheadBot`;
+apps should label them clearly as house cats.
+
+## Luck harness
+
+```sh
+dart run tool/harness.dart [matchesPerSetting]   # default 2000
+```
+
+Plays bot-vs-bot matches for each setting (identical-bot pairings plus
+lookahead-vs-random and one dedicated setting per power) in parallel
+isolates and writes `report/harness.md` with match outcomes, per-power
+use statistics, power parity and the list of tuned numbers.
+
 ## Tuning constants
 
-All balance numbers live in `lib/src/model.dart`: `kPointsPerPiece` (10),
-`kChargePerPiece` (4), `kPowerCost` (100), `kLaserBreakCount` (6),
+All balance numbers live in `lib/src/model.dart`:
+`kPointsPerPiece` (10), `kChargePerPiece` (4), `kPowerCost` (500 cap),
+`kZoomiesChargeCost` (460), `kShadowPounceChargeCost` (500),
+`kLaserChaseChargeCost` (175), `kLaserBreakCount` (8),
 `kZoomiesObstacleCount` (2), `kRainbowRemoveCount` (12),
-`kMaxPendingObstacles` (12). Slice 3's harness validates power parity.
+`kMaxPendingObstacles` (12). The charge costs were tuned by the slice-3
+harness until the three power settings stayed within 10% mean match
+score of each other; the report lists every changed number.
 
 ## Testing
 

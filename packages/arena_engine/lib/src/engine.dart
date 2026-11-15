@@ -69,12 +69,17 @@ EngineResult<List<Move>> legalMoves(MatchState state) {
     for (final (a, b) in pairs)
       SwapMove(firstCell: pos(a), secondCell: pos(b)),
   ];
-  if (state.chargeOf(slot) >= kPowerCost) {
-    moves.add(const PowerMove(power: PowerKind.shadowPounce));
-    moves.add(const PowerMove(power: PowerKind.laserChase));
+  final charge = state.chargeOf(slot);
+  if (charge >= powerChargeCost(PowerKind.zoomies)) {
     for (var row = 0; row < board.height; row++) {
       moves.add(PowerMove(power: PowerKind.zoomies, targetRow: row));
     }
+  }
+  if (charge >= powerChargeCost(PowerKind.shadowPounce)) {
+    moves.add(const PowerMove(power: PowerKind.shadowPounce));
+  }
+  if (charge >= powerChargeCost(PowerKind.laserChase)) {
+    moves.add(const PowerMove(power: PowerKind.laserChase));
   }
   return EngineOk(List<Move>.unmodifiable(moves));
 }
@@ -183,8 +188,9 @@ EngineResult<MoveResult> _applyPower(
   PlayerSlot slot,
   String hashBefore,
 ) {
-  if (state.chargeOf(slot) < kPowerCost) {
-    return const EngineFailure(
+  final cost = powerChargeCost(move.power);
+  if (state.chargeOf(slot) < cost) {
+    return EngineFailure(
       EngineError(
         EngineErrorCode.insufficientCharge,
         'power charge below cost',
@@ -207,9 +213,9 @@ EngineResult<MoveResult> _applyPower(
   final work = _Work.fromState(state);
   final board = work.boards[slot.index];
   work.movesRemaining[slot.index]--;
-  work.powerCharge[slot.index] = 0;
+  work.powerCharge[slot.index] -= cost;
   work.events.add(
-    PowerCharged(player: slot, amount: -kPowerCost),
+    PowerCharged(player: slot, amount: -cost),
   );
 
   final rng = work.rngFor(slot);
