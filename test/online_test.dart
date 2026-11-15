@@ -303,10 +303,10 @@ void main() {
         'claims': ['300'],
         'cat': 'Unknown',
         'accessory': 'x' * 65,
-        'fur': 4,
-        'eyes': 3,
-        'ears': 2,
-        'pattern': 2,
+        'fur': CloudProfile.furCount,
+        'eyes': CloudProfile.eyesCount,
+        'ears': CloudProfile.earsCount,
+        'pattern': CloudProfile.patternCount,
         'power': 3,
         'daily': 'a\nb',
       };
@@ -319,6 +319,17 @@ void main() {
           reason: e.key,
         );
       }
+    });
+
+    test('accepts every option the cat creator offers', () async {
+      final json = await valid()
+        ..['cat'] = 'Custom'
+        ..['fur'] = CloudProfile.furCount - 1
+        ..['eyes'] = CloudProfile.eyesCount - 1
+        ..['ears'] = CloudProfile.earsCount - 1
+        ..['pattern'] = CloudProfile.patternCount - 1;
+      final profile = CloudProfile.fromJson(json);
+      expect(profile.toJson(), json);
     });
   });
 
