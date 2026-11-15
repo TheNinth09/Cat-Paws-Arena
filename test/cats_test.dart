@@ -1,11 +1,65 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:cat_paws_arena/cat_avatar.dart';
+import 'package:cat_paws_arena/cats_screen.dart';
 import 'package:cat_paws_arena/main.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:cat_paws_arena/ui_widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
+
+class _CatRender {
+  const _CatRender(this.width, this.height, this.png, this.rgba);
+  final int width, height;
+  final Uint8List png, rgba;
+}
+
+/// Renders [child] inside a repaint boundary and returns the captured PNG
+/// and raw RGBA pixels. The boundary isolates the cat, so the background
+/// stays transparent.
+Future<_CatRender> _renderCat(
+  WidgetTester tester,
+  Widget child, {
+  double pixelRatio = 1,
+}) async {
+  final key = UniqueKey();
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(child: RepaintBoundary(key: key, child: child)),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(key),
+  );
+  final render = await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: pixelRatio);
+    final png = await image.toByteData(format: ui.ImageByteFormat.png);
+    final rgba = await image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    );
+    final result = _CatRender(
+      image.width,
+      image.height,
+      png!.buffer.asUint8List(),
+      rgba!.buffer.asUint8List(),
+    );
+    image.dispose();
+    return result;
+  });
+  return render!;
+}
+
+int _alphaAt(_CatRender render, int x, int y) =>
+    render.rgba[(y * render.width + x) * 4 + 3];
 
 void main() {
   testWidgets('runtime bundle contains only sprites and fonts', (tester) async {
@@ -24,6 +78,105 @@ void main() {
     );
     await tester.pumpWidget(const MaterialApp(home: StudioSplash()));
     expectCleanArtwork(tester);
+  });
+
+  testWidgets('Tzuki and Bubble render from layers at 48, 120 and 320 px', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final player = Player(prefs);
+    for (final cat in ['Tzuki', 'Bubble']) {
+      player.cat = cat;
+      for (final size in [48.0, 120.0, 320.0]) {
+        final render = await _renderCat(tester, CatAvatar(player, size: size));
+        expect(render.width, size.round(), reason: '$cat at $size');
+        expect(render.height, size.round(), reason: '$cat at $size');
+        expect(
+          render.png.length,
+          greaterThan(200),
+          reason: '$cat at $size produced a real image',
+        );
+        // The avatar must be painted by the layer compositor.
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is CustomPaint && widget.painter is CatLayersPainter,
+          ),
+          findsWidgets,
+          reason: '$cat at $size uses layered rendering',
+        );
+        // Transparent corner, opaque centre: the cat is really drawn.
+        expect(_alphaAt(render, 0, 0), 0, reason: '$cat at $size corner');
+        expect(
+          _alphaAt(render, render.width ~/ 2, render.height * 3 ~/ 5),
+          255,
+          reason: '$cat at $size centre',
+        );
+      }
+    }
+  });
+
+  testWidgets('swapping the ear layer changes nothing else', (tester) async {
+    const specTwoEars = CatSpec(
+      fur: Color(0xff99938b),
+      pattern: 1,
+      eyes: Color(0xff69f0ae),
+      ears: 0,
+    );
+    const specLeftEar = CatSpec(
+      fur: Color(0xff99938b),
+      pattern: 1,
+      eyes: Color(0xff69f0ae),
+      ears: 1,
+    );
+    final withoutEars = CatLayerKind.values
+        .where((kind) => kind != CatLayerKind.ears)
+        .toSet();
+    final onlyEars = {CatLayerKind.ears};
+
+    // Every non-ear layer is pixel-identical between the two specs.
+    final baseA = await _renderCat(
+      tester,
+      CatSpecAvatar(specTwoEars, onlyLayers: withoutEars),
+    );
+    final baseB = await _renderCat(
+      tester,
+      CatSpecAvatar(specLeftEar, onlyLayers: withoutEars),
+    );
+    expect(baseA.rgba, baseB.rgba);
+
+    // The ear layer itself does change.
+    final earsA = await _renderCat(
+      tester,
+      CatSpecAvatar(specTwoEars, onlyLayers: onlyEars),
+    );
+    final earsB = await _renderCat(
+      tester,
+      CatSpecAvatar(specLeftEar, onlyLayers: onlyEars),
+    );
+    expect(earsA.rgba, isNot(earsB.rgba));
+
+    // The full cat changes, and only inside the ear region (top-right of
+    // the head, above the eyes).
+    final fullA = await _renderCat(tester, CatSpecAvatar(specTwoEars));
+    final fullB = await _renderCat(tester, CatSpecAvatar(specLeftEar));
+    expect(fullA.rgba, isNot(fullB.rgba));
+    var diffs = 0, outside = 0;
+    for (var y = 0; y < fullA.height; y++) {
+      for (var x = 0; x < fullA.width; x++) {
+        final i = (y * fullA.width + x) * 4;
+        if (fullA.rgba[i] != fullB.rgba[i] ||
+            fullA.rgba[i + 1] != fullB.rgba[i + 1] ||
+            fullA.rgba[i + 2] != fullB.rgba[i + 2] ||
+            fullA.rgba[i + 3] != fullB.rgba[i + 3]) {
+          diffs++;
+          if (y > fullA.height * 0.4 || x < fullA.width * 0.5) outside++;
+        }
+      }
+    }
+    expect(diffs, greaterThan(0));
+    expect(outside, 0, reason: 'ear swap must not touch the rest of the cat');
   });
 
   test('rewards, daily limits, purchases, tiers and persistence', () async {
@@ -50,5 +203,199 @@ void main() {
     expect(restored.coins, p.coins);
     expect(restored.owned, contains('hat'));
     expect(restored.daily, p.today);
+  });
+
+  test('preset cat names cover at least 200 unique entries', () {
+    expect(catPresetNames.length, greaterThanOrEqualTo(200));
+    expect(catPresetNames.toSet().length, catPresetNames.length);
+  });
+
+  testWidgets('all 480 creator combinations render without exceptions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Wrap(
+              children: [
+                for (var fur = 0; fur < catFurColours.length; fur++)
+                  for (var pattern = 0; pattern < catPatternCount; pattern++)
+                    for (var eyes = 0; eyes < catEyeColours.length; eyes++)
+                      for (var ears = 0; ears < catEarCount; ears++)
+                        CatSpecAvatar(
+                          CatSpec.custom(
+                            fur: fur,
+                            pattern: pattern,
+                            eyes: eyes,
+                            ears: ears,
+                          ),
+                          size: 24,
+                        ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byType(CatSpecAvatar),
+      findsNWidgets(catFurColours.length *
+          catPatternCount *
+          catEyeColours.length *
+          catEarCount),
+    );
+  });
+
+  testWidgets('a fixed sample of 30 combinations produces real images', (
+    tester,
+  ) async {
+    final signatures = <int>{};
+    for (var i = 0; i < 30; i++) {
+      final spec = CatSpec.custom(
+        fur: i % catFurColours.length,
+        pattern: (i * 7) % catPatternCount,
+        eyes: (i * 3) % catEyeColours.length,
+        ears: (i * 5) % catEarCount,
+      );
+      final render = await _renderCat(tester, CatSpecAvatar(spec, size: 64));
+      expect(render.png.length, greaterThan(200), reason: 'combo $i');
+      expect(
+        _alphaAt(render, render.width ~/ 2, render.height * 3 ~/ 5),
+        255,
+        reason: 'combo $i centre is painted',
+      );
+      signatures.add(render.rgba.fold(0, (h, b) => (h * 31 + b) & 0x7fffffff));
+    }
+    expect(
+      signatures.length,
+      greaterThan(10),
+      reason: 'the sample must cover visually distinct cats',
+    );
+  });
+
+  testWidgets('creator builds a cat, saves it, and restores on reopen', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final player = Player(prefs);
+    tester.view.physicalSize = const Size(900, 1900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(home: CatsScreen(player: player, onShop: () {})),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Creează-ți Pisica'));
+    await tester.pumpAndSettle();
+    expect(player.cat, 'Custom');
+
+    await tester.tap(find.text('Negru'));
+    await tester.pumpAndSettle();
+    expect(player.fur, 4);
+
+    await tester.tap(find.text('Calico'));
+    await tester.pumpAndSettle();
+    expect(player.pattern, 3);
+
+    await tester.tap(find.text('Albaștri'));
+    await tester.pumpAndSettle();
+    expect(player.eyes, 1);
+
+    await tester.tap(find.text('Smocuri'));
+    await tester.pumpAndSettle();
+    expect(player.ears, 3);
+
+    await tester.tap(find.widgetWithText(ArenaButton, 'ECHIPEAZĂ').first);
+    await tester.pumpAndSettle();
+    expect(player.power, 1);
+
+    final savedName = prefs.getString(catCustomNameKey);
+    expect(savedName, isNotNull);
+    expect(catPresetNames, contains(savedName));
+    expect(player.cat, 'Custom');
+
+    final restored = Player(prefs);
+    expect(restored.cat, 'Custom');
+    expect(restored.fur, 4);
+    expect(restored.pattern, 3);
+    expect(restored.eyes, 1);
+    expect(restored.ears, 3);
+    expect(restored.power, 1);
+
+    await tester.pumpWidget(
+      MaterialApp(home: CatsScreen(player: restored, onShop: () {})),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('CREATOR'), findsOneWidget);
+    expect(find.text(savedName!), findsOneWidget);
+  });
+
+  testWidgets('share card renders to a fixed-size PNG', (tester) async {
+    const spec = CatSpec(
+      fur: Color(0xff292b3c),
+      pattern: 1,
+      eyes: Color(0xffffc63c),
+      ears: 0,
+    );
+    final render = await _renderCat(
+      tester,
+      const CatShareCard(
+        spec: spec,
+        catName: 'Luna',
+        room: 'Living',
+      ),
+      pixelRatio: 3,
+    );
+    expect(render.width, 1080);
+    expect(render.height, 1350);
+    expect(render.png.length, greaterThan(1000));
+  });
+
+  testWidgets('share card holds only cat, name, room and game name', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final player = Player(prefs);
+    player.name = 'Alex';
+    player.photo = 'aGVsbG8='; // would decode to bytes if ever rendered
+    final spec = catSpecForPlayer(player);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: CatShareCard(
+              spec: spec,
+              catName: 'Luna',
+              room: player.room,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final texts = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byType(CatShareCard),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data)
+        .toSet();
+    expect(texts, {'Luna', 'CAMERA • ${player.room}', 'Cat Paws Arena'});
+    expect(find.text('Alex'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Image && widget.image is MemoryImage,
+      ),
+      findsNothing,
+      reason: 'the card must not contain a photo',
+    );
   });
 }

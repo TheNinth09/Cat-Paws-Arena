@@ -1,4 +1,10 @@
+import 'dart:math';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cat_avatar.dart';
 import 'catalog.dart';
@@ -29,13 +35,432 @@ const _stageGradient = RadialGradient(
   colors: [Color(0xfffff6d8), Color(0xfff4d9a0), Color(0xffe2a866)],
 );
 
-class CatsScreen extends StatelessWidget {
+/// Preset names a custom cat can take. Names shown to other players must
+/// come from this list — typed text is never a peer-visible identity.
+const catPresetNames = <String>[
+  'Luna',
+  'Milo',
+  'Oliver',
+  'Bella',
+  'Lucy',
+  'Leo',
+  'Loki',
+  'Nala',
+  'Simba',
+  'Oscar',
+  'Mochi',
+  'Willow',
+  'Jasper',
+  'Lily',
+  'Felix',
+  'Ginger',
+  'Shadow',
+  'Boots',
+  'Whiskers',
+  'Mittens',
+  'Smokey',
+  'Oreo',
+  'Pepper',
+  'Cinnamon',
+  'Pumpkin',
+  'Peanut',
+  'Bandit',
+  'Scout',
+  'Olive',
+  'Poppy',
+  'Daisy',
+  'Rosie',
+  'Lulu',
+  'Mia',
+  'Zoe',
+  'Ivy',
+  'Jade',
+  'Cleo',
+  'Max',
+  'Charlie',
+  'Toby',
+  'Bruno',
+  'Rocky',
+  'Duke',
+  'Zeus',
+  'Apollo',
+  'Atlas',
+  'Thor',
+  'Nemo',
+  'Marlin',
+  'Crush',
+  'Squirt',
+  'Pearl',
+  'Marina',
+  'Coral',
+  'Bubbles',
+  'Dory',
+  'Finn',
+  'Jake',
+  'Riley',
+  'Bailey',
+  'Molly',
+  'Sophie',
+  'Emma',
+  'Chloe',
+  'Ruby',
+  'Hazel',
+  'Violet',
+  'Iris',
+  'Aurora',
+  'Stella',
+  'Nova',
+  'Comet',
+  'Cosmo',
+  'Astro',
+  'Pixel',
+  'Byte',
+  'Echo',
+  'Miso',
+  'Tofu',
+  'Sushi',
+  'Boba',
+  'Matcha',
+  'Latte',
+  'Mocha',
+  'Espresso',
+  'Cocoa',
+  'Chai',
+  'Maple',
+  'Honey',
+  'Biscuit',
+  'Cupcake',
+  'Muffin',
+  'Cookie',
+  'Brownie',
+  'Waffle',
+  'Pancake',
+  'Bagel',
+  'Pretzel',
+  'Noodle',
+  'Pasta',
+  'Ravioli',
+  'Meatball',
+  'Bacon',
+  'Salami',
+  'Prosciutto',
+  'Boulder',
+  'Pebble',
+  'Stone',
+  'Granite',
+  'Marble',
+  'Onyx',
+  'Opal',
+  'Topaz',
+  'Amber',
+  'Saffron',
+  'Clover',
+  'Fern',
+  'Basil',
+  'Thyme',
+  'Rosemary',
+  'Mint',
+  'Sage',
+  'Rowan',
+  'Skye',
+  'Rain',
+  'Storm',
+  'Ember',
+  'Ash',
+  'Flint',
+  'Slate',
+  'Juno',
+  'Vesta',
+  'Minerva',
+  'Diana',
+  'Freya',
+  'Frigg',
+  'Sif',
+  'Idun',
+  'Hel',
+  'Ra',
+  'Anubis',
+  'Bastet',
+  'Sekhmet',
+  'Horus',
+  'Thoth',
+  'Isis',
+  'Osiris',
+  'Set',
+  'Hapi',
+  'Miu',
+  'Pisi',
+  'Motan',
+  'Zmeu',
+  'Coco',
+  'Tincuță',
+  'Bobo',
+  'Gică',
+  'Michi',
+  'Puiu',
+  'Fufu',
+  'Nucu',
+  'Tutu',
+  'Bubu',
+  'Cici',
+  'Didi',
+  'Gigi',
+  'Mimi',
+  'Nini',
+  'Pipi',
+  'Sisi',
+  'Titi',
+  'Ileana',
+  'Vlad',
+  'Andrei',
+  'Petre',
+  'Ion',
+  'Maria',
+  'Elena',
+  'Ana',
+  'Ioana',
+  'Matei',
+  'Ștefan',
+  'Radu',
+  'Cristian',
+  'Alexandru',
+  'Gabriel',
+  'David',
+  'Samuel',
+  'Noah',
+  'Ethan',
+  'Liam',
+  'James',
+  'Henry',
+  'Jack',
+  'Owen',
+  'Caleb',
+  'Isaac',
+  'Lucas',
+  'Mason',
+  'Logan',
+  'Eli',
+  'Adam',
+  'Nathan',
+  'Aaron',
+  'Benjamin',
+  'Daniel',
+  'Matthew',
+  'Andrew',
+  'Joshua',
+  'Ryan',
+  'Nathaniel',
+  'Christian',
+  'Jonathan',
+  'Isaiah',
+  'Sebastian',
+  'Dominic',
+  'Vincent',
+  'Julian',
+  'Hugo',
+  'Felipe',
+  'Diego',
+  'Mateo',
+  'Santiago',
+  'Thiago',
+  'Enzo',
+  'Lorenzo',
+  'Giovanni',
+  'Marco',
+  'Luca',
+  'Alessandro',
+  'Francesco',
+  'Antonio',
+  'Leonardo',
+  'Riccardo',
+  'Tommaso',
+  'Edoardo',
+  'Matteo',
+  'Gabriele',
+  'Federico',
+  'Alessio',
+  'Nicolas',
+  'Antoine',
+  'Léo',
+  'Sacha',
+  'Théo',
+  'Mathis',
+  'Paul',
+];
+
+/// Shared-preferences key holding the custom cat's preset name. The visual
+/// spec itself lives in the regular [Player] fields (fur/pattern/eyes/
+/// ears/power/accessory), which `profile.dart` already persists.
+const catCustomNameKey = 'cat_custom_name_v1';
+
+/// Loads the saved preset name for the custom cat, or null when absent or
+/// not part of [catPresetNames] (typed text is never accepted as a
+/// peer-visible name).
+String? loadCustomCatName(SharedPreferences prefs) {
+  final raw = prefs.getString(catCustomNameKey);
+  return raw != null && catPresetNames.contains(raw) ? raw : null;
+}
+
+void saveCustomCatName(SharedPreferences prefs, String name) {
+  if (catPresetNames.contains(name)) {
+    prefs.setString(catCustomNameKey, name);
+  }
+}
+
+class CatsScreen extends StatefulWidget {
   const CatsScreen({super.key, required this.player, required this.onShop});
   final Player player;
   final VoidCallback onShop;
+
+  @override
+  State<CatsScreen> createState() => _CatsScreenState();
+}
+
+class _CatsScreenState extends State<CatsScreen> {
+  final _random = Random();
+  String? _catName;
+
+  Player get player => widget.player;
+
+  @override
+  void initState() {
+    super.initState();
+    _catName = loadCustomCatName(player.prefs);
+    if (_catName == null) _pickRandomName();
+  }
+
   void change(VoidCallback update) {
-    update();
+    setState(update);
     player.save();
+  }
+
+  void _pickRandomName() {
+    _catName = catPresetNames[_random.nextInt(catPresetNames.length)];
+    saveCustomCatName(player.prefs, _catName!);
+  }
+
+  void _randomise() => change(() {
+    player.fur = _random.nextInt(catFurColours.length);
+    player.pattern = _random.nextInt(catPatternCount);
+    player.eyes = _random.nextInt(catEyeColours.length);
+    player.ears = _random.nextInt(catEarCount);
+    player.power = _random.nextInt(powers.length);
+    _pickRandomName();
+  });
+
+  void _pickName() {
+    var query = '';
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Numele pisicii'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 320,
+            child: Column(
+              children: [
+                TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Caută nume',
+                    isDense: true,
+                  ),
+                  onChanged: (value) =>
+                      setDialogState(() => query = value.toLowerCase()),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisSpacing: 6,
+                          crossAxisSpacing: 6,
+                      childAspectRatio: 2.6,
+                    ),
+                    itemCount: catPresetNames.length,
+                    itemBuilder: (context, index) {
+                      final name = catPresetNames[index];
+                      if (query.isNotEmpty &&
+                          !name.toLowerCase().contains(query)) {
+                        return const SizedBox.shrink();
+                      }
+                      return _OptionChip(
+                        text: name,
+                        selected: name == _catName,
+                        onTap: () {
+                          change(() => _catName = name);
+                          saveCustomCatName(player.prefs, name);
+                          Navigator.pop(dialogContext);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('GATA'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Renders [CatShareCard] offstage, captures it as a PNG and hands it to
+  /// the platform share sheet. The card carries only the cat, its preset
+  /// name, the room and the game name — never the player's name or photo.
+  Future<void> _shareCard() async {
+    final spec = catSpecForPlayer(player);
+    final catName = player.cat == 'Custom'
+        ? (_catName ?? 'Pisică')
+        : player.cat;
+    final boundaryKey = GlobalKey();
+    final overlay = Overlay.of(context);
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => Positioned(
+        left: -4000,
+        top: -4000,
+        child: RepaintBoundary(
+          key: boundaryKey,
+          child: CatShareCard(
+            spec: spec,
+            catName: catName,
+            room: player.room,
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      final boundary =
+          boundaryKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (data == null) return;
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              data.buffer.asUint8List(),
+              mimeType: 'image/png',
+            ),
+          ],
+          fileNameOverrides: const ['pisica_mea.png'],
+        ),
+      );
+    } finally {
+      entry.remove();
+    }
   }
 
   Widget choices(
@@ -73,13 +498,118 @@ class CatsScreen extends StatelessWidget {
     ),
   );
 
+  Widget swatches(
+    String title,
+    List<Color> colours,
+    List<String> names,
+    int selected,
+    ValueChanged<int> update,
+  ) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xff6b4a32),
+            fontWeight: FontWeight.w900,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var i = 0; i < colours.length; i++)
+              _SwatchChip(
+                colour: colours[i],
+                label: names[i],
+                selected: selected == i,
+                onTap: () => change(() => update(i)),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget nameRow() => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Nume',
+          style: TextStyle(
+            color: Color(0xff6b4a32),
+            fontWeight: FontWeight.w900,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xfffff8e6), Color(0xffffedbb)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _catName == null
+                        ? const Color(0x6651312d)
+                        : ink,
+                    width: _catName == null ? 1.5 : 2.2,
+                  ),
+                ),
+                child: Text(
+                  _catName ?? '—',
+                  style: const TextStyle(
+                    color: ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _IconAction(
+              icon: Icons.casino,
+              tooltip: 'Nume aleatoriu',
+              onTap: () => change(_pickRandomName),
+            ),
+            const SizedBox(width: 6),
+            _IconAction(
+              icon: Icons.grid_view,
+              tooltip: 'Alege numele',
+              onTap: _pickName,
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => ListView(
     key: const PageStorageKey('cats-scroll'),
     padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
     children: [
       const _CatsBanner(),
-      _CatStage(player: player),
+      _CatStage(player: player, catName: _catName),
+      const SizedBox(height: 8),
+      ArenaButton(
+        text: 'DISTRUIE CARDUL',
+        onPressed: _shareCard,
+        secondary: true,
+      ),
       const SectionHeading('ALEGE PISICA'),
       AdaptiveCardGrid(
         minWidth: 104,
@@ -101,28 +631,41 @@ class CatsScreen extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _PanelTitle('PERSONALIZARE'),
-              choices(
+              Row(
+                children: [
+                  const Expanded(child: _PanelTitle('CREATOR')),
+                  ArenaButton(
+                    text: 'ALEATORIZEAZĂ',
+                    onPressed: _randomise,
+                    green: true,
+                    singleLine: true,
+                  ),
+                ],
+              ),
+              nameRow(),
+              swatches(
                 'Culoare blană',
-                ['Gri', 'Portocaliu', 'Crem', 'Mov'],
+                catFurColours,
+                const ['Gri', 'Portocaliu', 'Crem', 'Mov', 'Negru', 'Alb'],
                 player.fur,
                 (v) => player.fur = v,
               ),
               choices(
                 'Model',
-                ['Uniform', 'Tigrat'],
+                const ['Uniform', 'Tigrat', 'Bicolor', 'Calico', 'Colorpoint'],
                 player.pattern,
                 (v) => player.pattern = v,
               ),
-              choices(
+              swatches(
                 'Culoare ochi',
-                ['Verzi', 'Albaștri', 'Aurii'],
+                catEyeColours,
+                const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
                 player.eyes,
                 (v) => player.eyes = v,
               ),
               choices(
                 'Urechi',
-                ['Două urechi', 'Doar stânga'],
+                const ['Două urechi', 'Doar stânga', 'Plisate', 'Smocuri'],
                 player.ears,
                 (v) => player.ears = v,
               ),
@@ -139,17 +682,9 @@ class CatsScreen extends StatelessWidget {
                 art: powers[i],
                 title: powerNames[i],
                 selected: i == player.power,
-                buttonText: i == player.power
-                    ? 'ECHIPAT'
-                    : i == 0 || player.owned.contains(powers[i])
-                    ? 'ECHIPEAZĂ'
-                    : 'DEBLOCHEAZĂ ÎN MAGAZIN',
-                green:
-                    i != player.power &&
-                    (i == 0 || player.owned.contains(powers[i])),
-                onPressed: () => i == 0 || player.owned.contains(powers[i])
-                    ? change(() => player.power = i)
-                    : onShop(),
+                buttonText: i == player.power ? 'ECHIPAT' : 'ECHIPEAZĂ',
+                green: i != player.power,
+                onPressed: () => change(() => player.power = i),
               ),
           ],
         ),
@@ -201,7 +736,7 @@ class CatsScreen extends StatelessWidget {
               green: player.accessory != item && player.owned.contains(item),
               onPressed: () => player.owned.contains(item)
                   ? change(() => player.accessory = item)
-                  : onShop(),
+                  : widget.onShop(),
             ),
         ],
       ),
@@ -258,8 +793,9 @@ class _CatsBanner extends StatelessWidget {
 }
 
 class _CatStage extends StatelessWidget {
-  const _CatStage({required this.player});
+  const _CatStage({required this.player, this.catName});
   final Player player;
+  final String? catName;
 
   @override
   Widget build(BuildContext context) {
@@ -314,7 +850,12 @@ class _CatStage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        label(player.cat.toUpperCase(), size: 24),
+        label(
+          player.cat == 'Custom'
+              ? (catName ?? 'PISI').toUpperCase()
+              : player.cat.toUpperCase(),
+          size: 24,
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -392,6 +933,39 @@ class _PanelTitle extends StatelessWidget {
   );
 }
 
+class _IconAction extends StatelessWidget {
+  const _IconAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: Material(
+      color: const Color(0xfffff3c4),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: ink, width: 1.8),
+          ),
+          child: Icon(icon, size: 20, color: ink),
+        ),
+      ),
+    ),
+  );
+}
+
 class _OptionChip extends StatelessWidget {
   const _OptionChip({
     required this.text,
@@ -435,11 +1009,81 @@ class _OptionChip extends StatelessWidget {
               const Icon(Icons.check, size: 15, color: ink),
               const SizedBox(width: 5),
             ],
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                text,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: ink,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _SwatchChip extends StatelessWidget {
+  const _SwatchChip({
+    required this.colour,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final Color colour;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          gradient: selected
+              ? _goldGradient
+              : const LinearGradient(
+                  colors: [Color(0xfffff8e6), Color(0xffffedbb)],
+                ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? ink : const Color(0x6651312d),
+            width: selected ? 2.4 : 1.5,
+          ),
+          boxShadow: selected
+              ? const [
+                  BoxShadow(color: Color(0x5561312d), offset: Offset(0, 2)),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: colour,
+                border: Border.all(color: ink, width: 1.4),
+              ),
+            ),
+            const SizedBox(width: 6),
             Text(
-              text,
+              label,
               style: const TextStyle(
                 color: ink,
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -518,16 +1162,10 @@ class _CatPickCard extends StatelessWidget {
 
   Widget _face() {
     if (cat == 'Custom') return CatAvatar(player, size: 72);
-    return CustomPaint(
-      size: const Size(72, 72),
-      painter: CatPainter(
-        cat == 'Bubble' ? const Color(0xff292b3c) : const Color(0xff99938b),
-        cat == 'Tzuki' ? 1 : 0,
-        cat == 'Bubble'
-            ? gold
-            : [Colors.greenAccent, Colors.lightBlueAccent, gold][player.eyes],
-        cat == 'Tzuki' ? 1 : player.pattern,
-      ),
+    return CatSpecAvatar(
+      catSpecFor(cat, player),
+      size: 72,
+      showAccessory: false,
     );
   }
 }
@@ -580,6 +1218,135 @@ class _EquipCard extends StatelessWidget {
           const SizedBox(height: 6),
           ArenaButton(text: buttonText, onPressed: onPressed, green: green),
         ],
+      ),
+    ),
+  );
+}
+
+/// Fixed-size card shared through the platform share sheet: the cat, its
+/// preset name, its room and the game name — nothing else. It never shows
+/// the player's name, photo, or any other personal data.
+class CatShareCard extends StatelessWidget {
+  const CatShareCard({
+    super.key,
+    required this.spec,
+    required this.catName,
+    required this.room,
+    this.gameName = 'Cat Paws Arena',
+    this.width = 360,
+    this.height = 450,
+  });
+
+  /// Visual description of the cat to draw (see [catSpecForPlayer]).
+  final CatSpec spec;
+
+  /// Preset cat name — never typed text.
+  final String catName;
+
+  /// Room label (see [Player.room]).
+  final String room;
+
+  /// Game title shown at the bottom of the card.
+  final String gameName;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: Container(
+      decoration: BoxDecoration(
+        gradient: _stageGradient,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: ink, width: 3),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x6651312d),
+            offset: Offset(0, 6),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 14,
+              left: 16,
+              child: Opacity(
+                opacity: 0.22,
+                child: sprite('tile_paw', size: 34),
+              ),
+            ),
+            Positioned(
+              bottom: 14,
+              right: 16,
+              child: Opacity(
+                opacity: 0.22,
+                child: sprite('tile_paw', size: 34),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: CatSpecAvatar(
+                        spec,
+                        size: 205,
+                        showAccessory: false,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    catName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: ink,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0x66ffffff),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: ink, width: 1.4),
+                    ),
+                    child: Text(
+                      'CAMERA • $room',
+                      style: const TextStyle(
+                        color: Color(0xff6b4a32),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    gameName,
+                    style: const TextStyle(
+                      color: ink,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );
