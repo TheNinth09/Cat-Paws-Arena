@@ -25,7 +25,9 @@ flutter run --dart-define=CPA_ONLINE_BACKEND=firebase
 - Nothing calls `OnlineServices.start()` yet: `lib/main.dart` is the
   orchestrator's file (request in `docs/requests.md`).
 - Android applies `com.google.gms.google-services` only when
-  `google-services.json` exists.
+  `google-services.json` exists, and the manifest removes
+  `FirebaseInitProvider`, so Firebase does not start at process launch
+  (checked on the emulator: no `FirebaseApp` log in a default build).
 - `.github/workflows/release.yml` builds with `CPA_ONLINE_BACKEND=firebase`
   and fails without `google-services.json`.
 
