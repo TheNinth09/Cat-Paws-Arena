@@ -52,6 +52,8 @@ class BoardView extends StatefulWidget {
     this.inputEnabled = true,
     this.active = true,
     this.suspended = false,
+    this.rowPicker,
+    this.hintCells,
   });
 
   /// Initial board contents (row-major, zero-based cell indices).
@@ -75,6 +77,13 @@ class BoardView extends StatefulWidget {
 
   /// True freezes animation time (pause/background/modal).
   final bool suspended;
+
+  /// When set, taps report the tapped row (0-based) instead of selecting a
+  /// cell — used to pick a Zoomies target row.
+  final void Function(int row)? rowPicker;
+
+  /// Cells highlighted as a suggested move (tutorial hint).
+  final Set<int>? hintCells;
 
   @override
   State<BoardView> createState() => BoardViewState();
@@ -385,6 +394,8 @@ class BoardViewState extends State<BoardView>
         return out;
       case Shuffled(:final cells, :final pieces):
         return _shuffle(event, cells, pieces, start);
+      case BoardReset(:final snapshot):
+        return _reset(event, snapshot, start);
       case ObstacleQueued() ||
           PowerCharged() ||
           ExtraMove() ||
@@ -392,6 +403,43 @@ class BoardViewState extends State<BoardView>
           MatchEnded():
         return const [];
     }
+  }
+
+  /// Round transition: swap in the freshly dealt board and fade each piece
+  /// in column-by-column so the new round reads as a fresh deal.
+  List<_Fx> _reset(BoardEvent event, BoardSnapshot snapshot, double start) {
+    final src = snapshot.cells;
+    final out = <_Fx>[];
+    for (var idx = 0; idx < _cells.length && idx < src.length; idx++) {
+      final cell = src[idx];
+      _cells[idx] = cell;
+      final stagger = (idx % width) * 0.02 + (idx ~/ width) * 0.008;
+      if (cell.piece != null) {
+        out.add(
+          _staticFx(
+            event,
+            _FxKind.refill,
+            idx,
+            piece: cell.piece,
+            start: start + stagger,
+            dur: 0.24,
+          ),
+        );
+      }
+      if (cell.obstacle != null) {
+        out.add(
+          _staticFx(
+            event,
+            _FxKind.obstacleIn,
+            idx,
+            obstacle: cell.obstacle,
+            start: start + stagger,
+            dur: 0.26,
+          ),
+        );
+      }
+    }
+    return out;
   }
 
   List<_Fx> _popCells(
@@ -572,6 +620,7 @@ class BoardViewState extends State<BoardView>
     ObstacleLanded() => 0.12,
     ObstacleBroken() => 0.12,
     Shuffled() => 0.34,
+    BoardReset() => 0.55,
     _ => 0.03,
   };
 
@@ -669,6 +718,11 @@ class BoardViewState extends State<BoardView>
   void _onTapUp(TapUpDetails details, double cell) {
     final target = _cellAt(details.localPosition, cell);
     if (target == null || !widget.inputEnabled || busy) return;
+    final picker = widget.rowPicker;
+    if (picker != null) {
+      picker(target ~/ width);
+      return;
+    }
     final sel = _selected;
     if (sel != null && _adjacent(sel, target) && sel != target) {
       _attempt(sel, target);
@@ -678,7 +732,7 @@ class BoardViewState extends State<BoardView>
   }
 
   void _onPanUpdate(DragUpdateDetails details, double cell) {
-    if (!widget.inputEnabled || busy) return;
+    if (!widget.inputEnabled || busy || widget.rowPicker != null) return;
     _dragFrom ??= _downCell;
     final from = _dragFrom;
     if (from == null) return;
@@ -722,7 +776,7 @@ class BoardViewState extends State<BoardView>
           : ('Energie $amount%', _bannerGold, 13.0),
       ExtraMove() => ('MUTARE EXTRA!', const Color(0xffb9e07a), 18.0),
       RoundEnded(:final round, :final scores) => (
-        'Runda ${round + 1}  •  ${scores.first} – ${scores.second}',
+        'Runda $round  •  ${scores.first} – ${scores.second}',
         _mutedBanner,
         15.0,
       ),
@@ -792,6 +846,7 @@ class BoardViewState extends State<BoardView>
                     now: _now,
                     art: _art,
                     selected: _selected,
+                    hinted: widget.hintCells,
                     width: width,
                     height: height,
                   ),
@@ -964,6 +1019,7 @@ class _BoardPainter extends CustomPainter {
     required this.selected,
     required this.width,
     required this.height,
+    this.hinted,
   });
 
   final List<BoardCell> cells;
@@ -973,6 +1029,7 @@ class _BoardPainter extends CustomPainter {
   final int? selected;
   final int width;
   final int height;
+  final Set<int>? hinted;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1005,6 +1062,31 @@ class _BoardPainter extends CustomPainter {
                 ? const Color(0xff754c52)
                 : const Color(0xff916168));
       canvas.drawRRect(rrect, bg);
+    }
+
+    final hinted = this.hinted;
+    if (hinted != null && hinted.isNotEmpty) {
+      final hp = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.4
+        ..color = Color.fromRGBO(
+          255,
+          214,
+          109,
+          0.5 + 0.3 * math.sin(now * 6),
+        );
+      for (final i in hinted) {
+        if (i < 0 || i >= cells.length) continue;
+        final col = i % width, row = i ~/ width;
+        final x = ox + col * cell, y = oy + row * cell;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x + 2, y + 2, cell - 4, cell - 4),
+            Radius.circular(cell * 0.16),
+          ),
+          hp,
+        );
+      }
     }
 
     void drawPiece(
@@ -1230,5 +1312,6 @@ class _BoardPainter extends CustomPainter {
       old.now != now ||
       old.cells != cells ||
       old.fx.length != fx.length ||
-      old.selected != selected;
+      old.selected != selected ||
+      old.hinted != hinted;
 }

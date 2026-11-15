@@ -46,7 +46,7 @@ class MatchBoard {
   }
 
   /// Records a rejected swap; performs no state mutation.
-  void rejectSwap(int a, int b, SwapRejectReason reason) {
+  void rejectSwap(int a, int b, String reason) {
     _events.add(
       SwapRejected(
         player: slot,

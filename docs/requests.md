@@ -41,7 +41,15 @@ Status: open — orchestrator documented the tag-release flow in README.md; stil
 ```text
 Lane: 2
 Blocking PR: lane-2-slice-3 (slice 3: feel)
-Request: Add `- assets/audio/` under `flutter: assets:` in pubspec.yaml.
-Reason: Lane 2 owns assets/audio/ and ships 16 synthesized SFX WAVs plus CREDITS.md there. Without the assets entry they are not bundled and AudioPlayer cannot load them at runtime; cues fail silently until this lands.
+Request: Resolved in lane-2-s2 — the 16 SFX WAVs and CREDITS.md moved to assets/generated/audio/ (bundled via the existing assets/generated/ entry), so no pubspec audio line is needed and other lanes' bundle-whitelist tests stay green.
+Reason: Lane 2 owns the audio assets; keeping them under assets/generated/ matches the AGENTS.md runtime-bundle rule ("assets/generated/ individual sprites/audio") and avoids editing lane-3/lane-4 test whitelists.
+Status: answered — superseded by the generated/audio move on lane-2-s2.
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2-s2 (slice 2: arena engine duel)
+Request: Keep `arena_engine: path: packages/arena_engine` in pubspec.yaml when this branch merges — slice 2 cannot compile without the local package dependency. The slice-3 SFX moved from assets/audio/ to assets/generated/audio/ so the runtime bundle stays inside the assets/generated/ + assets/fonts/ whitelist without touching other lanes' tests; pubspec needs no audio line. Also: lane 1 fixes two `unnecessary_const` infos in packages/arena_engine/lib/src/engine.dart:61,63 (or the orchestrator excludes packages/** from the root analyzer), otherwise `flutter analyze` reports 2 info issues owned by lane 1.
+Reason: The vendored engine package is lane-1 code; the analyzer lints live there, not in lane-2 files.
 Status: open
 ```

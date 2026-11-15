@@ -1,10 +1,9 @@
 /// Contract event types for the duel board.
 ///
-/// Provisional mirror of the event contract in `docs/contract.md` section 3,
-/// defined here until `package:arena_engine` (lane 1) lands and becomes the
-/// authoritative source. Field names follow the contract; cells are
-/// zero-based row-major indices (`row * width + col`) into the configured
-/// board, matching the agreed 7x7 duel (indices 0..48).
+/// View-facing event model adapted from `package:arena_engine` game events
+/// by `engine_events.dart` (cell indices are flat `row * width + col`,
+/// piece identity is assigned there because the engine tracks codes, not
+/// pieces). The widget consumes only these types — never engine internals.
 library;
 
 /// Stable player identifiers from the contract; never display names.
@@ -20,16 +19,6 @@ enum ObstacleKind { cardboardBox, slipper, tangledYarn }
 /// The three agreed free powers (contract decision 4: equal strength, none
 /// sold). Names are provisional until the engine names them.
 enum PowerKind { zoomies, shadowPounce, laserChase }
-
-/// Why a swap was rejected; the engine owns the authoritative reason codes,
-/// the UI maps them to text.
-enum SwapRejectReason {
-  notAdjacent,
-  blocked,
-  noMatch,
-  outOfTurn,
-  gameOver,
-}
 
 enum MatchOutcome { firstWin, secondWin, draw }
 
@@ -109,7 +98,7 @@ final class Swapped extends BoardEvent {
   final int secondCell;
 }
 
-/// Rejected swap; no state mutation.
+/// Rejected swap; no state mutation. [reason] is the engine's reason code.
 final class SwapRejected extends BoardEvent {
   const SwapRejected({
     required this.player,
@@ -120,7 +109,7 @@ final class SwapRejected extends BoardEvent {
   final PlayerSlot player;
   final int firstCell;
   final int secondCell;
-  final SwapRejectReason reason;
+  final String reason;
 }
 
 /// Flat points for the cleared pieces (no cascade multiplier).
@@ -280,4 +269,12 @@ final class MatchEnded extends BoardEvent {
   final MatchOutcome outcome;
   final ({int first, int second}) scores;
   final ({String first, String second}) finalHashes;
+}
+
+/// The board was redealt for a new round. Inserted by the adapter right
+/// after [RoundEnded] (when the match continues) so following events such
+/// as [ObstacleLanded] apply to the fresh board.
+final class BoardReset extends BoardEvent {
+  const BoardReset({required this.snapshot});
+  final BoardSnapshot snapshot;
 }

@@ -39,9 +39,22 @@ const _emoteItems = [
 ];
 
 class MatchScreen extends StatefulWidget {
-  const MatchScreen({super.key, required this.player, required this.mode});
+  const MatchScreen({
+    super.key,
+    required this.player,
+    required this.mode,
+    this.botLevel,
+    this.legacyRace,
+  });
   final Player player;
   final int mode;
+
+  /// House-cat difficulty (0–2); defaults to the controller's pick.
+  final int? botLevel;
+
+  /// Test hook: forces the legacy 90-second race regardless of the
+  /// `CPA_LEGACY_RACE` dart-define.
+  final bool? legacyRace;
   @override
   State<MatchScreen> createState() => _MatchScreenState();
 }
@@ -71,10 +84,19 @@ class _MatchScreenState extends State<MatchScreen>
       widget.mode >= 0 && widget.mode < modeNames.length ? widget.mode : 0;
   String get modeName => modeNames[modeIndex];
 
+  /// Debug-only escape hatch: keeps the old 90-second race reachable via
+  /// `--dart-define=CPA_LEGACY_RACE=true` until Gate 1 is decided.
+  static const _legacyRace = bool.fromEnvironment('CPA_LEGACY_RACE');
+
   @override
   void initState() {
     super.initState();
-    match = ArenaMatchController(p, widget.mode);
+    match = ArenaMatchController(
+      p,
+      widget.mode,
+      botLevel: widget.botLevel ?? 1,
+      legacyRace: widget.legacyRace ?? _legacyRace,
+    );
     match.eventSink = (events) {
       _boardKey.currentState?.play(events);
     };
@@ -344,8 +366,9 @@ class _MatchScreenState extends State<MatchScreen>
                 child: _FighterCard(
                   tag: 'BOT',
                   avatar: const _BotHead(size: 48),
-                  name: 'Bubble Bot',
-                  detail: '${match.botTrophies} trofee',
+                  name: match.botName,
+                  detail:
+                      '${match.botLevelName} • ${match.botTrophies} trofee',
                 ),
               ),
             ],
@@ -360,6 +383,8 @@ class _MatchScreenState extends State<MatchScreen>
         ],
       ),
       const SizedBox(height: 14),
+      if (match.isEngine) _botLevelPicker(),
+      if (match.isEngine) const SizedBox(height: 10),
       _rewardsPanel(),
       const SizedBox(height: 14),
       _searching(),
@@ -477,11 +502,127 @@ class _MatchScreenState extends State<MatchScreen>
     },
   );
 
+  /// House-cat difficulty, pickable while the VS phase searches.
+  Widget _botLevelPicker() => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      for (var i = 0; i < ArenaMatchController.botLevelNames.length; i++)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: _LevelChip(
+            label: ArenaMatchController.botLevelNames[i],
+            selected: match.botLevel == i,
+            onTap: () => match.botLevel = i,
+          ),
+        ),
+    ],
+  );
+
+  /// Engine duel status: round, moves left and obstacles arriving next
+  /// round. The legacy race keeps its countdown in [_battleBar] instead.
+  Widget _duelStatus() {
+    final incoming = match.incomingObstacles;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0x66ffffff),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x33ffc63c)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            child: Text(
+              'Runda ${match.round}/${match.totalRounds} • '
+              '${match.movesLeft} mutări',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: ink,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          if (incoming.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            sprite(
+              incoming.first == ObstacleKind.tangledYarn
+                  ? 'obs_tangled_yarn'
+                  : 'obs_cardboard_box',
+              size: 18,
+            ),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(
+                incoming.length == 1
+                    ? '1 obstacol sosesc'
+                    : '${incoming.length} obstacole sosesc',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xff9a5b23),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// First-match coach mark: explains the three-move round and highlights
+  /// a suggested swap on the board.
+  Widget _tutorialOverlay() {
+    if (!match.tutorialActive) return const SizedBox.shrink();
+    final texts = [
+      'Prima ta luptă! Fă 3 mutări pe rundă — obstacolele vin la adversar.',
+      'Schimbă două piese alăturate de aceeași culoare. Urmează indicatorul auriu!',
+      'Gata prima rundă! Urmărește scorul și mutările rămase sus.',
+    ];
+    final text = texts[match.playerMoves.clamp(0, texts.length - 1)];
+    return Positioned(
+      left: 10,
+      right: 10,
+      bottom: 8,
+      child: IgnorePointer(
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: const Color(0xee3a2418),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: gold, width: 1.3),
+            ),
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: cream,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget battle() => Column(
     children: [
       _battleBar(),
       const SizedBox(height: 4),
       _scoreStrip(),
+      if (match.isEngine) ...[
+        const SizedBox(height: 3),
+        _duelStatus(),
+      ],
       const SizedBox(height: 4),
       Expanded(child: _board()),
       const SizedBox(height: 4),
@@ -515,7 +656,9 @@ class _MatchScreenState extends State<MatchScreen>
           child: Center(
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              child: _TimerPill(seconds: match.remaining),
+              child: match.isEngine
+                  ? _RoundPill(round: match.round, total: match.totalRounds)
+                  : _TimerPill(seconds: match.remaining),
             ),
           ),
         ),
@@ -537,7 +680,7 @@ class _MatchScreenState extends State<MatchScreen>
           child: _ScoreChip(
             avatar: CatAvatar(p, size: 36),
             name: p.name,
-            score: match.board.score,
+            score: match.playerScore,
           ),
         ),
         const SizedBox(width: 6),
@@ -546,7 +689,7 @@ class _MatchScreenState extends State<MatchScreen>
         Expanded(
           child: _ScoreChip(
             avatar: const _BotHead(size: 36),
-            name: 'Bubble Bot · BOT',
+            name: '${match.botName} · BOT',
             score: match.botScore,
           ),
         ),
@@ -554,7 +697,9 @@ class _MatchScreenState extends State<MatchScreen>
     ),
   );
 
-  Widget _board() => LayoutBuilder(
+  Widget _board() {
+    final hint = match.hintSwap;
+    return LayoutBuilder(
     builder: (context, constraints) {
       final side = constraints.biggest.shortestSide;
       return Center(
@@ -592,6 +737,13 @@ class _MatchScreenState extends State<MatchScreen>
                     inputEnabled: match.acceptingInput,
                     active: match.phase != MatchPhase.finished,
                     suspended: match.paused,
+                    rowPicker: match.zoomiesArmed
+                        ? (row) => match.firePower(
+                            PowerKind.zoomies,
+                            targetRow: row,
+                          )
+                        : null,
+                    hintCells: hint == null ? null : {hint.$1, hint.$2},
                   ),
                 ),
                 if (emote.isNotEmpty)
@@ -600,13 +752,15 @@ class _MatchScreenState extends State<MatchScreen>
                     top: 6,
                     child: IgnorePointer(child: _EmoteBubble(emote)),
                   ),
+                _tutorialOverlay(),
               ],
             ),
           ),
         ),
       );
     },
-  );
+    );
+  }
 
   Widget _powerDeck() => Container(
     padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
@@ -629,7 +783,9 @@ class _MatchScreenState extends State<MatchScreen>
           children: [
             sprite(powers[power], size: 24),
             const SizedBox(width: 8),
-            Expanded(child: _ChargeBar(value: match.board.charge / 100)),
+            Expanded(
+              child: _ChargeBar(value: match.playerCharge / 100),
+            ),
             const SizedBox(width: 8),
             SizedBox(
               width: 54,
@@ -637,11 +793,11 @@ class _MatchScreenState extends State<MatchScreen>
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerRight,
                 child: Text(
-                  match.board.charge >= 100
+                  match.playerCharge >= 100
                       ? 'GATA!'
-                      : '${match.board.charge}%',
+                      : '${match.playerCharge}%',
                   style: TextStyle(
-                    color: match.board.charge >= 100
+                    color: match.playerCharge >= 100
                         ? const Color(0xffb9e07a)
                         : gold,
                     fontSize: 14,
@@ -662,11 +818,13 @@ class _MatchScreenState extends State<MatchScreen>
               child: Tooltip(
                 message: powerNames[power],
                 child: ArenaButton(
-                  text: '${_powerShort[power]} • ${match.board.charge}%',
+                  text: match.zoomiesArmed
+                      ? 'Alege rândul!'
+                      : '${_powerShort[power]} • ${match.playerCharge}%',
                   spriteName: powers[power],
                   singleLine: true,
-                  onPressed: match.board.charge >= 100
-                      ? () => match.firePower(power)
+                  onPressed: match.playerCharge >= 100
+                      ? () => match.firePower(PowerKind.values[power])
                       : null,
                 ),
               ),
@@ -724,10 +882,18 @@ class _MatchScreenState extends State<MatchScreen>
         ),
         const SizedBox(height: 2),
         label(
-          '${match.board.score} — ${match.botScore}',
+          '${match.playerScore} — ${match.botScore}',
           size: 24,
           color: gold,
         ),
+        if (match.isEngine) ...[
+          const SizedBox(height: 2),
+          label(
+            'vs ${match.botName} (BOT) • ${match.totalRounds} runde',
+            size: 12,
+            color: _muted,
+          ),
+        ],
         const SizedBox(height: 14),
         _scoreStrip(),
         const SizedBox(height: 12),
@@ -737,12 +903,15 @@ class _MatchScreenState extends State<MatchScreen>
           text: 'REVANȘĂ',
           green: true,
           spriteName: 'btn_play_paw',
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute<void>(
-              builder: (_) => MatchScreen(player: p, mode: widget.mode),
-            ),
-          ),
+          onPressed: match.isEngine
+              ? match.rematch
+              : () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        MatchScreen(player: p, mode: widget.mode),
+                  ),
+                ),
         ),
         ArenaButton(
           text: 'ACASĂ',
@@ -1127,6 +1296,83 @@ class _TimerPill extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Round indicator for the engine duel (replaces the timer pill).
+class _RoundPill extends StatelessWidget {
+  const _RoundPill({required this.round, required this.total});
+  final int round;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+    decoration: BoxDecoration(
+      color: const Color(0xff33231d),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: gold, width: 1.4),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x44000000),
+          offset: Offset(0, 2),
+          blurRadius: 5,
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.flag, size: 15, color: gold),
+        const SizedBox(width: 6),
+        Text(
+          'Runda $round/$total',
+          style: const TextStyle(
+            color: gold,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            shadows: [Shadow(color: Color(0x66000000), offset: Offset(0, 1))],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// House-cat difficulty chip on the VS screen.
+class _LevelChip extends StatelessWidget {
+  const _LevelChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: selected ? const Color(0xff8a5a3b) : const Color(0x33ffffff),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected ? gold : const Color(0x55ffc63c),
+          width: selected ? 1.8 : 1,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: selected ? cream : _muted,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ),
+  );
 }
 
 class _MiniButton extends StatelessWidget {
