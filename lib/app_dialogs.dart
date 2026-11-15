@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -471,6 +472,11 @@ class _ParentGateDialog extends StatefulWidget {
 
 class _ParentGateDialogState extends State<_ParentGateDialog> {
   final answer = TextEditingController();
+  final random = Random();
+  late final int first = 10 + random.nextInt(30);
+  late final int second = 3 + random.nextInt(17);
+
+  bool get _correct => answer.text.trim() == '${first + second}';
 
   @override
   void dispose() {
@@ -493,7 +499,7 @@ class _ParentGateDialogState extends State<_ParentGateDialog> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Pentru ${widget.action}, un părinte trebuie să confirme. Cât fac 7 + 5?',
+          'Pentru ${widget.action}, un părinte trebuie să confirme. Cât fac $first + $second?',
           style: const TextStyle(
             color: Color(0xff6b4a35),
             fontSize: 14,
@@ -519,9 +525,7 @@ class _ParentGateDialogState extends State<_ParentGateDialog> {
         text: 'CONFIRMĂ',
         green: true,
         singleLine: true,
-        onPressed: answer.text.trim() == '12'
-            ? () => Navigator.pop(context, true)
-            : null,
+        onPressed: _correct ? () => Navigator.pop(context, true) : null,
       ),
     ],
   );

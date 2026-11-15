@@ -44,9 +44,17 @@ void main() {
       of: find.text('Verificare părinte'),
       matching: find.byType(AlertDialog),
     );
+    final question = tester
+        .widget<Text>(
+          find.descendant(of: gate, matching: find.textContaining('Cât fac')),
+        )
+        .data!;
+    final match = RegExp(r'Cât fac (\d+) \+ (\d+)\?').firstMatch(question)!;
+    final answer = (int.parse(match.group(1)!) + int.parse(match.group(2)!))
+        .toString();
     await tester.enterText(
       find.descendant(of: gate, matching: find.byType(TextField)),
-      '12',
+      answer,
     );
     await tester.pump();
     await tester.tap(find.text('CONFIRMĂ'));
