@@ -301,7 +301,13 @@ void main() {
         'sfx': 1,
         'owned': 'bow',
         'claims': ['300'],
-        'cat': 'x' * 65,
+        'cat': 'Unknown',
+        'accessory': 'x' * 65,
+        'fur': 4,
+        'eyes': 3,
+        'ears': 2,
+        'pattern': 2,
+        'power': 3,
         'daily': 'a\nb',
       };
       for (final e in cases.entries) {

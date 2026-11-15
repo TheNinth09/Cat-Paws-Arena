@@ -1,3 +1,4 @@
+import '../catalog.dart';
 import '../profile.dart';
 import 'online_errors.dart';
 
@@ -27,6 +28,11 @@ class CloudProfile {
   static const schemaVersion = 1;
   static const maxIdLength = 64;
   static const maxListLength = 512;
+
+  /// Values the cat screen and avatar can draw (lib/cats_screen.dart,
+  /// lib/cat_avatar.dart). Anything else would crash on display.
+  static const cats = {'Tzuki', 'Bubble', 'Custom'};
+  static const furCount = 4, patternCount = 2, eyesCount = 3, earsCount = 2;
 
   final int trophies, coins, fur, eyes, ears, pattern, power, revision;
   final String cat, accessory, daily;
@@ -152,6 +158,11 @@ class CloudProfile {
       return v is int && v >= 0 ? v : bad(k);
     }
 
+    int option(String k, int count) {
+      final v = json[k];
+      return v is int && v >= 0 && v < count ? v : bad(k);
+    }
+
     bool flag(String k) {
       final v = json[k];
       return v is bool ? v : bad(k);
@@ -170,13 +181,13 @@ class CloudProfile {
       revision: count('revision'),
       trophies: count('trophies'),
       coins: count('coins'),
-      cat: id(json['cat'], 'cat'),
+      cat: cats.contains(json['cat']) ? json['cat'] as String : bad('cat'),
       accessory: id(json['accessory'], 'accessory'),
-      fur: count('fur'),
-      eyes: count('eyes'),
-      ears: count('ears'),
-      pattern: count('pattern'),
-      power: count('power'),
+      fur: option('fur', furCount),
+      eyes: option('eyes', eyesCount),
+      ears: option('ears', earsCount),
+      pattern: option('pattern', patternCount),
+      power: option('power', powers.length),
       owned: {for (final v in list('owned')) id(v, 'owned')},
       claims: {
         for (final v in list('claims')) v is int && v >= 0 ? v : bad('claims'),
