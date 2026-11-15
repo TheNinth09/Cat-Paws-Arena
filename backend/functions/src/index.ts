@@ -20,6 +20,8 @@ const DELETED = "deleted";
  */
 export const onUserDeleted = v1
   .region(region)
+  // Retried until it succeeds; every step below is safe to repeat.
+  .runWith({ failurePolicy: true })
   .auth.user()
   .onDelete(async (user) => {
     const db = getFirestore();
