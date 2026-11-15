@@ -12,7 +12,20 @@
           "package_name": "games.oneear.catpawsarena"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "724370470624-u8ajo6o77dpv9fr0nq19l2jrl8tm107b.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "games.oneear.catpawsarena",
+            "certificate_hash": "3c639f4d76cdae706eae319ae6dddfffd8869bb9"
+          }
+        },
+        {
+          "client_id": "724370470624-fbi05ftg85gtfu8egnbs8coasqb2okch.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBJOfWZn4sCoMeYeyOdWs3BeeNFvp-GMg0"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "724370470624-fbi05ftg85gtfu8egnbs8coasqb2okch.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
