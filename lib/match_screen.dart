@@ -467,7 +467,12 @@ class _MatchScreenState extends State<MatchScreen>
           onTap: surrender,
         ),
         Expanded(
-          child: Center(child: _TimerPill(seconds: match.remaining)),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: _TimerPill(seconds: match.remaining),
+            ),
+          ),
         ),
         _CircleButton(
           size: 40,

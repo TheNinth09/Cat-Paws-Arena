@@ -4,7 +4,11 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as im;
 
-void main() {
+void main(List<String> args) {
+  if (args.contains('--icons-only')) {
+    generateLauncherIcons();
+    return;
+  }
   Directory('assets/generated').createSync(recursive: true);
   final sheets = <String, Map<String, List<int>>>{
     'tiles_obstacles': {
@@ -60,21 +64,7 @@ void main() {
           .writeAsBytesSync(im.encodePng(im.copyResize(crop, width: 256)));
     }
   }
-  final icon = im.decodeImage(
-    File('assets/app_icon.png.jpg').readAsBytesSync(),
-  )!;
-  for (final e in {
-    'mdpi': 48,
-    'hdpi': 72,
-    'xhdpi': 96,
-    'xxhdpi': 144,
-    'xxxhdpi': 192,
-  }.entries) {
-    File('android/app/src/main/res/mipmap-${e.key}/ic_launcher.png')
-        .writeAsBytesSync(
-          im.encodePng(im.copyResize(icon, width: e.value, height: e.value)),
-        );
-  }
+  generateLauncherIcons();
   final bytes = BytesBuilder();
   const rate = 22050, seconds = 2;
   final data = ByteData(rate * seconds * 2);
@@ -114,4 +104,69 @@ void main() {
   number(data.lengthInBytes, 4);
   bytes.add(data.buffer.asUint8List());
   File('assets/generated/purr.wav').writeAsBytesSync(bytes.toBytes());
+}
+
+void generateLauncherIcons() {
+  final icon = im.decodeImage(File('assets/app_icon.png').readAsBytesSync())!;
+  const root = 'android/app/src/main/res';
+  for (final entry in {
+    'mdpi': 48,
+    'hdpi': 72,
+    'xhdpi': 96,
+    'xxhdpi': 144,
+    'xxxhdpi': 192,
+  }.entries) {
+    final size = entry.value;
+    final folder = '$root/mipmap-${entry.key}';
+    File('$folder/ic_launcher.png').writeAsBytesSync(
+      im.encodePng(
+        im.copyResize(
+          icon,
+          width: size,
+          height: size,
+          interpolation: im.Interpolation.average,
+        ),
+      ),
+    );
+    final canvasSize = (size * 108 / 48).round();
+    final artSize = (canvasSize * 0.66).round();
+    final foreground = im.Image(
+      width: canvasSize,
+      height: canvasSize,
+      numChannels: 4,
+    );
+    im.compositeImage(
+      foreground,
+      im.copyResize(
+        icon,
+        width: artSize,
+        height: artSize,
+        interpolation: im.Interpolation.average,
+      ),
+      dstX: (canvasSize - artSize) ~/ 2,
+      dstY: (canvasSize - artSize) ~/ 2,
+    );
+    File('$folder/ic_launcher_foreground.png')
+        .writeAsBytesSync(im.encodePng(foreground));
+  }
+  final pixel = icon.getPixel(icon.width ~/ 2, 0);
+  final color = [
+    pixel.r,
+    pixel.g,
+    pixel.b,
+  ].map((v) => v.toInt().toRadixString(16).padLeft(2, '0')).join();
+  Directory('$root/mipmap-anydpi-v26').createSync(recursive: true);
+  File('$root/mipmap-anydpi-v26/ic_launcher.xml')
+      .writeAsStringSync('''<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
+''');
+  File('$root/values/ic_launcher_background.xml')
+      .writeAsStringSync('''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#$color</color>
+</resources>
+''');
 }
