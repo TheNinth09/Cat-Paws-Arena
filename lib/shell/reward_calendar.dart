@@ -1,7 +1,4 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_dialogs.dart';
 import '../profile.dart';
@@ -9,48 +6,51 @@ import '../ui_widgets.dart';
 import 'daily_time.dart';
 
 class RewardCalendar {
-  RewardCalendar(this.prefs);
+  RewardCalendar(this.player);
 
   static const rewards = [100, 150, 200, 300, 400, 600, 1000];
-  static const _key = 'reward_calendar_v1';
+  // Calendar state is namespaced above trophy claim IDs so `Player.save`
+  // persists the claim and the coin reward in the same write.
+  static const _lastDayBase = 1000000;
+  static const _streakBase = 2000000;
 
-  final SharedPreferences prefs;
+  final Player player;
 
-  ({String last, int streak}) _read() {
-    try {
-      final raw = prefs.getString(_key);
-      if (raw == null) return (last: '', streak: 0);
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      return (
-        last: data['last'] as String? ?? '',
-        streak: (data['streak'] as num? ?? 0).toInt(),
-      );
-    } catch (_) {
-      return (last: '', streak: 0);
+  int _epochDay(DateTime time) =>
+      utcDay(time).millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
+
+  ({int lastEpochDay, int streak}) _read() {
+    var lastEpochDay = -1, streak = 0;
+    for (final claim in player.claims) {
+      if (claim >= _streakBase) {
+        streak = claim - _streakBase;
+      } else if (claim >= _lastDayBase) {
+        lastEpochDay = claim - _lastDayBase;
+      }
     }
+    return (lastEpochDay: lastEpochDay, streak: streak);
   }
 
   ({int day, bool claimed}) stateFor(DateTime now) {
-    final today = utcDayKey(now);
+    final today = _epochDay(now);
     final data = _read();
-    if (data.last == today) {
+    if (data.lastEpochDay == today) {
       return (day: data.streak.clamp(1, rewards.length), claimed: true);
     }
-    if (data.last == addUtcDays(today, -1)) {
+    if (data.lastEpochDay == today - 1) {
       return (day: data.streak % rewards.length + 1, claimed: false);
     }
     return (day: 1, claimed: false);
   }
 
-  Future<int?> claim(DateTime now) async {
+  int? claim(DateTime now) {
     final state = stateFor(now);
     if (state.claimed) return null;
-    final amount = rewards[state.day - 1];
-    await prefs.setString(
-      _key,
-      jsonEncode({'last': utcDayKey(now), 'streak': state.day}),
-    );
-    return amount;
+    final today = _epochDay(now);
+    player.claims.removeWhere((claim) => claim >= _lastDayBase);
+    player.claims.add(_lastDayBase + today);
+    player.claims.add(_streakBase + state.day);
+    return rewards[state.day - 1];
   }
 }
 
@@ -71,11 +71,11 @@ class RewardCalendarPanel extends StatefulWidget {
 }
 
 class _RewardCalendarPanelState extends State<RewardCalendarPanel> {
-  late final calendar = RewardCalendar(widget.player.prefs);
+  late final calendar = RewardCalendar(widget.player);
   late ({int day, bool claimed}) state = calendar.stateFor(DateTime.now());
 
   Future<void> claim() async {
-    final amount = await calendar.claim(DateTime.now());
+    final amount = calendar.claim(DateTime.now());
     if (amount != null) {
       widget.player.coins += amount;
       await widget.player.save();

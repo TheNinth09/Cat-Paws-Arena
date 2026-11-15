@@ -272,15 +272,15 @@ void main() {
     'reward calendar resets after a missed day and never pays twice',
     (tester) async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
-      final calendar = RewardCalendar(prefs);
+      final p = Player(await SharedPreferences.getInstance());
+      final calendar = RewardCalendar(p);
       final day1 = DateTime.utc(2026, 4, 1, 12);
       final day2 = DateTime.utc(2026, 4, 2, 12);
       final day4 = DateTime.utc(2026, 4, 4, 12);
-      expect(await calendar.claim(day1), RewardCalendar.rewards[0]);
-      expect(await calendar.claim(day1), isNull);
-      expect(await calendar.claim(day2), RewardCalendar.rewards[1]);
-      expect(await calendar.claim(day4), RewardCalendar.rewards[0]);
+      expect(calendar.claim(day1), RewardCalendar.rewards[0]);
+      expect(calendar.claim(day1), isNull);
+      expect(calendar.claim(day2), RewardCalendar.rewards[1]);
+      expect(calendar.claim(day4), RewardCalendar.rewards[0]);
       expect(tester.takeException(), isNull);
     },
   );
