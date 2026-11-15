@@ -1,0 +1,106 @@
+name: Release APK
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: 3.47.7
+
+jobs:
+  release:
+    name: Build and attach release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches pubspec version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(sed -n 's/^version:[[:space:]]*\([^+[:space:]]*\).*/\1/p' pubspec.yaml)"
+          echo "tag=$tag pubspec=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pubspec.yaml version $version." >&2
+            exit 1
+          fi
+
+      - name: Write signing configuration
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "Missing repository secret $name; refusing to publish a debug-signed release." >&2
+              exit 1
+            fi
+          done
+          keystore="$RUNNER_TEMP/upload-keystore.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          # java.util.Properties treats backslashes as escapes.
+          escape() { printf '%s' "${1//\\/\\\\}"; }
+          {
+            echo "storeFile=$(escape "$keystore")"
+            echo "storePassword=$(escape "$ANDROID_KEYSTORE_PASSWORD")"
+            echo "keyAlias=$(escape "$ANDROID_KEY_ALIAS")"
+            echo "keyPassword=$(escape "$ANDROID_KEY_PASSWORD")"
+          } > android/key.properties
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: flutter test
+        run: |
+          flutter pub get
+          flutter test
+
+      - name: flutter build apk --release
+        run: flutter build apk --release
+
+      - name: Verify APK identity and signature
+        run: |
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          "${tools}aapt2" dump badging "$apk" | grep -q "^package: name='games.oneear.catpawsarena'"
+          certs="$("${tools}apksigner" verify --print-certs "$apk")"
+          if echo "$certs" | grep -q "CN=Android Debug"; then
+            echo "Release APK is signed with the debug key." >&2
+            exit 1
+          fi
+
+      - name: Attach APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          asset="cat-paws-arena-${GITHUB_REF_NAME}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "$asset"
+          sha256sum "$asset" > "$asset.sha256"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$asset" "$asset.sha256" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset" "$asset.sha256" \
+              --title "Cat Paws Arena $GITHUB_REF_NAME" --generate-notes --verify-tag
+          fi
+
+      - name: Remove signing files
+        if: always()
+        run: rm -f android/key.properties "$RUNNER_TEMP/upload-keystore.jks"
