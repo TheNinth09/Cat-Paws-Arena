@@ -1,4 +1,4 @@
-package com.pawsandclaws.cat_paws_arena
+package games.oneear.catpawsarena
 
 import io.flutter.embedding.android.FlutterActivity
 
