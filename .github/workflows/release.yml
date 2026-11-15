@@ -87,6 +87,9 @@ jobs:
             exit 1
           fi
 
+      - name: Families policy (no AD_ID, no ad or analytics SDKs)
+        run: .github/scripts/check_families_policy.sh build/app/outputs/flutter-apk/app-release.apk
+
       - name: Attach APK to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
