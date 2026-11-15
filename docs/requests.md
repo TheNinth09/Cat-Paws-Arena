@@ -76,5 +76,5 @@ Lane: 1
 Blocking PR: lane-1-s3 (slice 3: bots and luck harness)
 Request: Add a path dependency on the engine to the root `pubspec.yaml` (orchestrator-owned): `arena_engine: { path: packages/arena_engine }` under `dependencies:`.
 Reason: Lanes 2 and 4 must `import 'package:arena_engine/arena_engine.dart'` to drive matches with the real engine instead of provisional contract types (lane 2 already carries `lib/duel_events.dart` workarounds because the package is not yet a dependency). The package is pure Dart with no Flutter imports, so the path dependency is safe for all consumers once `lane-1` merges to `main`.
-Status: open — orchestrator will add the `arena_engine` path dependency to root `pubspec.yaml` after this engine merge.
+Status: answered — orchestrator added the `arena_engine` path dependency to root `pubspec.yaml`.
 ```
