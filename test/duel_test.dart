@@ -13,6 +13,7 @@ import 'package:cat_paws_arena/engine_events.dart';
 import 'package:cat_paws_arena/match_controller.dart';
 import 'package:cat_paws_arena/match_screen.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:cat_paws_arena/shell/house_tour.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
@@ -919,6 +920,40 @@ void main() {
     expect(find.textContaining('Prima ta luptă'), findsNothing);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('cpa_duel_tutorial_done'), isTrue);
+  });
+
+  testWidgets('house-cat opponent replaces the rotating bot', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    const cat = HouseCat(
+      id: 'living-misu',
+      name: 'Misu',
+      room: 0,
+      level: 7,
+      trophies: 45,
+      fur: 1,
+      eyes: 1,
+      ears: 0,
+      pattern: 0,
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: MatchScreen(player: p, mode: 0, opponent: cat)),
+    );
+    final st = tester.state(find.byType(MatchScreen)) as dynamic;
+    final m = st.match as ArenaMatchController;
+    expect(m.opponent, isNotNull);
+    expect(m.botName, 'Misu');
+    expect(m.botTrophies, 45);
+    expect(m.botLevel, 1); // level 7 -> medium bucket
+    // VS screen: cat name, BOT label, no difficulty chips.
+    expect(find.text('Misu'), findsWidgets);
+    expect(find.textContaining('BOT'), findsWidgets);
+    expect(find.text('Greu'), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 100));
+    // Match screen keeps the opponent labelled.
+    expect(find.textContaining('Misu'), findsWidgets);
+    expect(find.textContaining('BOT'), findsWidgets);
   });
 
   testWidgets('rematch restarts the duel with a fresh seed', (tester) async {

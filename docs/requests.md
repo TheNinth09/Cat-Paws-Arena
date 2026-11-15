@@ -59,7 +59,7 @@ Lane: 4
 Blocking PR: lane-4 slice 2 (House Tour)
 Request: Lane 2 adds an optional house-cat opponent (name, trophies, avatar fields) to `MatchScreen` and `ArenaMatchController` so a match can start against the selected `HouseCat` instead of always `Bubble Bot`.
 Reason: Lane-4 lobby offers named resident house cats; lane-4 cannot edit lane-2 match files. Orchestrator forwards lane-4's request to lane-2.
-Status: open — assigned to lane-2; does not block lane-5 slice 3a.
+Status: answered on lane-2-s2 — `MatchScreen(opponent: HouseCat)` + `ArenaMatchController(opponent: BotOpponent)` added; VS/match/result show the cat's name, trophies, look and BOT label, level chips hidden, difficulty mapped from cat level (1–4 easy, 5–8 medium, 9–12 hard). Remaining step is lane-4's: pass the selected cat in `onBattle` (lib/home_screen.dart).
 ```
 
 ```text

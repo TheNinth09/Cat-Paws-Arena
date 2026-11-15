@@ -13,6 +13,25 @@ import 'profile.dart';
 
 enum MatchPhase { searching, playing, finished }
 
+/// Fixed house-cat opponent for House Tour battles (lane-4 request):
+/// the match starts against this cat instead of the rotating house bots.
+class BotOpponent {
+  const BotOpponent({
+    required this.name,
+    required this.trophies,
+    required this.level,
+  });
+
+  final String name;
+  final int trophies;
+
+  /// House-cat progression level (1–12); mapped to bot difficulty 0–2.
+  final int level;
+
+  /// Difficulty bucket: levels 1–4 easy, 5–8 medium, 9–12 hard.
+  int get botLevel => ((level - 1) ~/ 4).clamp(0, 2);
+}
+
 /// Owns match timers, pause reasons, one-time rewards and the event queue
 /// for both duel formats:
 ///
@@ -29,10 +48,12 @@ class ArenaMatchController extends ChangeNotifier {
     this.mode, {
     int botLevel = 1,
     this.legacyRace = false,
+    this.opponent,
     int? seed,
   }) : _botLevel = botLevel.clamp(0, 2) {
     _seed = seed ?? Random().nextInt(1 << 30);
-    botTrophies = max(0, player.trophies + Random().nextInt(151) - 75);
+    botTrophies = opponent?.trophies ??
+        max(0, player.trophies + Random().nextInt(151) - 75);
     board.slot = PlayerSlot.first;
     bot.slot = PlayerSlot.second;
     board.obstacleKind = _obstacleKindFor(player.tier);
@@ -65,9 +86,13 @@ class ArenaMatchController extends ChangeNotifier {
   final bool legacyRace;
   final board = MatchBoard(), bot = MatchBoard();
 
+  /// Fixed house-cat opponent, or null for the rotating house bots.
+  final BotOpponent? opponent;
+
   int _botLevel;
-  int get botLevel => _botLevel;
+  int get botLevel => opponent?.botLevel ?? _botLevel;
   set botLevel(int value) {
+    if (opponent != null) return;
     final v = value.clamp(0, 2);
     if (v == _botLevel) return;
     _botLevel = v;
@@ -75,8 +100,9 @@ class ArenaMatchController extends ChangeNotifier {
     refresh();
   }
 
-  String get botName => botNames[_botLevel];
-  String get botLevelName => botLevelNames[_botLevel];
+  String get botName => opponent?.name ?? botNames[_botLevel];
+  String get botLevelName =>
+      opponent == null ? botLevelNames[_botLevel] : 'Casa';
 
   late int _seed;
   int get seed => _seed;
@@ -217,7 +243,7 @@ class ArenaMatchController extends ChangeNotifier {
     if (_started) return;
     _started = true;
     _botSeed = _seed ^ 0x5f3759df;
-    _bot = HouseBot(level: _botLevel, seed: _botSeed);
+    _bot = HouseBot(level: botLevel, seed: _botSeed);
     final res = engine.newMatch(_seed, const engine.MatchConfig.duel());
     if (res is engine.EngineOk<engine.MatchState>) {
       _state = res.value;
@@ -381,7 +407,7 @@ class ArenaMatchController extends ChangeNotifier {
         : DateTime.now().difference(_matchStart!).inSeconds;
     debugPrint(
       'CPA duel finished: ${_acceptedMoves + _botMoves} moves, '
-      '${secs}s, botLevel=$_botLevel, seed=$_seed, outcome=$outcome',
+      '${secs}s, botLevel=$botLevel, seed=$_seed, outcome=$outcome',
     );
     finish(outcome);
   }

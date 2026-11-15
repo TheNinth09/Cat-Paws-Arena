@@ -12,6 +12,7 @@ import 'duel_audio.dart';
 import 'duel_events.dart';
 import 'match_controller.dart';
 import 'profile.dart';
+import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
 
 /// Compile-time switch for the frame-time profiling overlay. Build a release
@@ -45,6 +46,7 @@ class MatchScreen extends StatefulWidget {
     required this.mode,
     this.botLevel,
     this.legacyRace,
+    this.opponent,
   });
   final Player player;
   final int mode;
@@ -55,6 +57,10 @@ class MatchScreen extends StatefulWidget {
   /// Test hook: forces the legacy 90-second race regardless of the
   /// `CPA_LEGACY_RACE` dart-define.
   final bool? legacyRace;
+
+  /// House Tour opponent (lane-4 request): when set, the duel starts
+  /// against this house cat instead of a rotating house bot.
+  final HouseCat? opponent;
   @override
   State<MatchScreen> createState() => _MatchScreenState();
 }
@@ -96,6 +102,13 @@ class _MatchScreenState extends State<MatchScreen>
       widget.mode,
       botLevel: widget.botLevel ?? 1,
       legacyRace: widget.legacyRace ?? _legacyRace,
+      opponent: widget.opponent == null
+          ? null
+          : BotOpponent(
+              name: widget.opponent!.name,
+              trophies: widget.opponent!.trophies,
+              level: widget.opponent!.level,
+            ),
     );
     match.eventSink = (events) {
       _boardKey.currentState?.play(events);
@@ -365,7 +378,7 @@ class _MatchScreenState extends State<MatchScreen>
               Expanded(
                 child: _FighterCard(
                   tag: 'BOT',
-                  avatar: const _BotHead(size: 48),
+                  avatar: _botAvatar(48),
                   name: match.botName,
                   detail:
                       '${match.botLevelName} • ${match.botTrophies} trofee',
@@ -383,8 +396,9 @@ class _MatchScreenState extends State<MatchScreen>
         ],
       ),
       const SizedBox(height: 14),
-      if (match.isEngine) _botLevelPicker(),
-      if (match.isEngine) const SizedBox(height: 10),
+      if (match.isEngine && match.opponent == null) _botLevelPicker(),
+      if (match.isEngine && match.opponent == null)
+        const SizedBox(height: 10),
       _rewardsPanel(),
       const SizedBox(height: 14),
       _searching(),
@@ -501,6 +515,12 @@ class _MatchScreenState extends State<MatchScreen>
       );
     },
   );
+
+  /// Bot avatar: the resident house cat's look when a House Tour
+  /// opponent is set, otherwise the generic bot head.
+  Widget _botAvatar(double size) => widget.opponent == null
+      ? _BotHead(size: size)
+      : CatAvatar(houseCatPlayer(p.prefs, widget.opponent!), size: size);
 
   /// House-cat difficulty, pickable while the VS phase searches.
   Widget _botLevelPicker() => Row(
@@ -688,7 +708,7 @@ class _MatchScreenState extends State<MatchScreen>
         const SizedBox(width: 6),
         Expanded(
           child: _ScoreChip(
-            avatar: const _BotHead(size: 36),
+            avatar: _botAvatar(36),
             name: '${match.botName} · BOT',
             score: match.botScore,
           ),
