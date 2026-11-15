@@ -2,12 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:cat_paws_arena/events_screen.dart';
 import 'package:cat_paws_arena/main.dart';
+import 'package:cat_paws_arena/online/fake_backend.dart';
+import 'package:cat_paws_arena/online/online_account.dart';
+import 'package:cat_paws_arena/online/online_backend.dart';
+import 'package:cat_paws_arena/online/rooms.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/shop_screen.dart';
 import 'package:cat_paws_arena/shell/app_info.dart';
 import 'package:cat_paws_arena/shell/daily_board.dart';
 import 'package:cat_paws_arena/shell/economy.dart';
 import 'package:cat_paws_arena/shell/house_tour.dart';
+import 'package:cat_paws_arena/shell/online_play.dart';
 import 'package:cat_paws_arena/shell/reward_calendar.dart';
 import 'package:cat_paws_arena/team_screen.dart';
 import 'package:cat_paws_arena/ui_widgets.dart';
@@ -16,6 +21,40 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'artwork_test_support.dart';
 
 void main() {
+  Future<void> openSettings(WidgetTester tester) async {
+    await tester.tap(find.byTooltip('Meniu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Setări'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> closeDialogContaining(WidgetTester tester, String text) async {
+    final dialog = find.ancestor(
+      of: find.text(text),
+      matching: find.byType(AlertDialog),
+    );
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.text('ÎNCHIDE')).first,
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> passParentGate(WidgetTester tester) async {
+    final field = find.byKey(const Key('parentGateAnswer'));
+    final gate = find.ancestor(of: field, matching: find.byType(AlertDialog));
+    final question = tester
+        .widgetList<Text>(find.descendant(of: gate, matching: find.byType(Text)))
+        .map((text) => text.data ?? '')
+        .firstWhere((data) => data.contains('×'), orElse: () => '');
+    final match = RegExp(r'(\d+)\s*×\s*(\d+)').firstMatch(question)!;
+    final answer =
+        (int.parse(match.group(1)!) * int.parse(match.group(2)!)).toString();
+    await tester.enterText(field, answer);
+    await tester.pump();
+    await tester.tap(find.descendant(of: gate, matching: find.text('OK')));
+    await tester.pumpAndSettle();
+  }
+
   for (final size in [
     const Size(320, 568),
     const Size(360, 640),
@@ -308,5 +347,162 @@ void main() {
     expect(launchCosmetics, isNotEmpty);
     expect(expectedEarnedPawsPerDay, greaterThan(0));
     expect(daysToEarnEveryLaunchCosmetic, greaterThanOrEqualTo(30));
+  });
+
+  testWidgets('settings keeps online entries unavailable until configured', (
+    tester,
+  ) async {
+    OnlinePlay.services = null;
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await openSettings(tester);
+    expect(find.text('Joc online'), findsOneWidget);
+    expect(find.text('Indisponibil'), findsOneWidget);
+    for (final hidden in [
+      'Link Google account',
+      'Delete account',
+      'Join room',
+      'Cod cameră',
+    ]) {
+      expect(find.text(hidden), findsNothing);
+    }
+    await tester.tap(find.text('ÎNCHIDE'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings links Google account behind parent gate', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final cloud = FakeCloud();
+    final account = OnlineAccount(FakeAuth(cloud), cloud);
+    var credentialCalls = 0;
+    OnlinePlay.services = OnlinePlayServices(
+      account: account,
+      rooms: RoomService(cloud),
+      googleCredential: () async {
+        credentialCalls++;
+        return const GoogleCredential('google-test');
+      },
+    );
+    addTearDown(() => OnlinePlay.services = null);
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await openSettings(tester);
+    expect(find.text('Link Google account'), findsOneWidget);
+    expect(find.text('Delete account'), findsOneWidget);
+    expect(find.text('Join room'), findsOneWidget);
+    expect(find.text('Cod cameră'), findsOneWidget);
+    await tester.tap(find.text('Link Google account'));
+    await tester.pumpAndSettle();
+    await passParentGate(tester);
+    expect(credentialCalls, 1);
+    expect(account.user?.googleLinked, isTrue);
+    expect(
+      find.text('Contul Google a fost conectat la acest dispozitiv.'),
+      findsOneWidget,
+    );
+    await closeDialogContaining(tester, 'Cont Google');
+    expect(find.text('Google conectat'), findsOneWidget);
+    await tester.tap(find.text('ÎNCHIDE'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings deletes account behind parent gate and confirm', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final cloud = FakeCloud();
+    final account = OnlineAccount(FakeAuth(cloud), cloud);
+    OnlinePlay.services = OnlinePlayServices(
+      account: account,
+      rooms: RoomService(cloud),
+      googleCredential: () async => null,
+    );
+    addTearDown(() => OnlinePlay.services = null);
+    final p = Player(await SharedPreferences.getInstance())
+      ..name = 'Local'
+      ..trophies = 840
+      ..coins = 1210
+      ..cat = 'Custom'
+      ..owned = {'bow'}
+      ..claims = {300}
+      ..photo =
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    await p.save();
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await openSettings(tester);
+    await tester.tap(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('parentGateOk')), findsOneWidget);
+    await tester.tap(find.text('Renunță'));
+    await tester.pumpAndSettle();
+    expect(account.user, isNull);
+    expect(p.trophies, 840);
+    await tester.tap(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await passParentGate(tester);
+    expect(find.text('Șterge contul?'), findsOneWidget);
+    expect(account.user, isNull);
+    await tester.tap(find.text('ȘTERGE CONTUL'));
+    await tester.pumpAndSettle();
+    expect(account.user, isNull);
+    expect(cloud.users, isEmpty);
+    expect(cloud.profiles, isEmpty);
+    expect(p.name, 'Alex');
+    expect(p.trophies, 0);
+    expect(p.coins, 500);
+    expect(p.cat, 'Tzuki');
+    expect(p.owned, isEmpty);
+    expect(p.claims, isEmpty);
+    expect(p.photo, isNull);
+    expect(
+      find.text('Contul și datele locale au fost șterse.'),
+      findsOneWidget,
+    );
+    await closeDialogContaining(tester, 'Cont șters');
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings joins a room with typed code variants', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final cloud = FakeCloud();
+    final account = OnlineAccount(FakeAuth(cloud), cloud);
+    final rooms = RoomService(cloud);
+    OnlinePlay.services = OnlinePlayServices(
+      account: account,
+      rooms: rooms,
+      googleCredential: () async => null,
+    );
+    addTearDown(() => OnlinePlay.services = null);
+    final hostRoom = await rooms.createRoom('host-uid');
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await openSettings(tester);
+    final typed =
+        '${hostRoom.code.substring(0, 3).toLowerCase()}-${hostRoom.code.substring(3).toLowerCase()}';
+    await tester.enterText(find.byType(TextField), typed);
+    await tester.pump();
+    await tester.ensureVisible(find.text('Join room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Join room'));
+    await tester.pumpAndSettle();
+    expect(account.user, isNotNull);
+    expect(cloud.rooms, isEmpty);
+    expect(find.text('Camera ${hostRoom.code} a fost găsită.'), findsOneWidget);
+    await closeDialogContaining(
+      tester,
+      'Camera ${hostRoom.code} a fost găsită.',
+    );
+    expect(tester.takeException(), isNull);
   });
 }

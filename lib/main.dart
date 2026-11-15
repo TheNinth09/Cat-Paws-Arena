@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'boot_screen.dart';
+import 'online/online_config.dart';
+import 'online/online_errors.dart';
 import 'profile.dart';
+import 'shell/online_play.dart';
 import 'ui_widgets.dart';
 
 export 'boot_screen.dart' show Boot, StudioSplash;
@@ -14,6 +17,26 @@ export 'match_screen.dart' show MatchScreen;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  OnlineServices? online;
+  try {
+    online = await OnlineServices.start();
+  } catch (_) {
+    online = null;
+  }
+  if (online != null) {
+    OnlinePlay.services = OnlinePlayServices(
+      account: online.account,
+      rooms: online.rooms,
+      googleCredential: () async {
+        try {
+          return await online!.google.pick();
+        } on OnlineException catch (error) {
+          if (error.code == OnlineErrorCode.cancelled) return null;
+          rethrow;
+        }
+      },
+    );
+  }
   final player = Player(await SharedPreferences.getInstance());
   runApp(CatPawsApp(player: player));
 }

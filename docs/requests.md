@@ -113,26 +113,31 @@ Status: answered — `arena_engine` path dependency is retained in `pubspec.yaml
 ```text
 Lane: orchestrator
 Blocking PR: lane-5 Firebase backend
-Request: In lib/main.dart, after WidgetsFlutterBinding.ensureInitialized(), call `final online = await OnlineServices.start();` (lib/online/online_config.dart) and pass `online` (nullable) down to the shell. It returns null unless the build sets --dart-define=CPA_ONLINE_BACKEND=firebase (or fake in debug), so default builds are unchanged and never contact Firebase.
+Request: In lib/main.dart, after WidgetsFlutterBinding.ensureInitialized(), call `final online = await OnlineServices.start();` (lib/online/online_config.dart) and set `OnlinePlay.services` from it (lib/shell/online_play.dart) so settings show online controls only when configured.
 Reason: Firebase must be initialized before any online call; lib/main.dart is orchestrator-owned.
-Status: open
+Status: open — orchestrator will wire `OnlineServices.start()` -> `OnlinePlay.services` in lib/main.dart after this merge.
 ```
 
 ```text
 Lane: 4
 Blocking PR: lane-5 Firebase backend (follow-up to the slice 3a request above)
-Request: In settings, wire the online account UI to `OnlineServices` (null = keep "unavailable"):
-- "Link Google": `final ok = await showParentGate(context, english: player.english);` then, only if ok != null, `services.account.linkGoogle(await services.google.pick(), ok)`. Same gate before "Restore with Google" (`restoreWithGoogle`).
-- "Delete account" behind the parent gate and a confirmation, calling `services.account.deleteAccount()`; on `OnlineErrorCode.requiresRecentLogin` ask for Google again and retry; then clear local data.
-- Join room: a 6-character code field calling `services.rooms.joinRoom(code, uid)`; host: `createRoom` then `waitForGuest`.
+Request: In settings, wire the online account UI to `OnlineServices` (null = keep "unavailable"): parent gate via `showParentGate` returning `ParentGateApproval`, `account.linkGoogle(cred, approval)`, `restoreWithGoogle`, `account.deleteAccount()`, `rooms.joinRoom` and `createRoom` + `waitForGuest` for host.
 Reason: lane 5 cannot edit lane-4 screens; the parent gate is required by docs/contract.md §7 before Google sign-in.
-Status: open
+Status: answered — orchestrator updated the merged lane-4 settings UI to the lane-5 API during integration.
 ```
 
 ```text
 Lane: owner
 Blocking PR: lane-5 Firebase backend
-Request: (1) Deploy rules and functions from backend/ (`firebase deploy --only firestore:rules,functions`) after review; (2) TTL policy on rooms.expiresAt; (3) for Google linking: enable the Google provider, add SHA-1/SHA-256 of the debug, upload and Play signing keys, and commit the re-downloaded google-services.json (the current one has no OAuth client). Details: backend/FIREBASE_SWITCH.md §6.
-Reason: lane 5 never deploys; Google sign-in fails with googleUnavailable until the OAuth client exists.
-Status: open
+Request: (1) Deploy rules and functions from backend/ (`firebase deploy --only firestore:rules,functions`) after review; (2) TTL policy on rooms.expiresAt — WAIVED, expiry is enforced client-side and by the rules, no billing TTL; (3) Google linking: Google provider enabled, SHA-1/SHA-256 added and google-services.json with OAuth client committed (2705454); still add Play App Signing SHA-1/SHA-256 after first publish.
+Reason: lane 5 never deploys; Google sign-in needs the OAuth client (now present) and Play signing fingerprints later.
+Status: partially done — google-services.json with OAuth client and keystore secrets are in place; owner still deploys firestore.rules/functions and adds Play SHA fingerprints at publish time.
+```
+
+```text
+Lane: 4
+Blocking PR: lane-4 slice 4 (settings UI for online account and rooms)
+Request: Set `OnlinePlay.services` once during app bootstrap (lib/main.dart before runApp) from `OnlineServices.start()`; leave it null until online is configured.
+Reason: The settings section is gated by `OnlinePlay.services != null`; lane 4 cannot edit lib/main.dart.
+Status: open — orchestrator will wire `OnlineServices.start()` -> `OnlinePlay.services` in lib/main.dart after this merge.
 ```

@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'cat_avatar.dart';
+import 'online/online_errors.dart';
+import 'online/parent_gate.dart';
 import 'profile.dart';
+import 'shell/online_play.dart';
 import 'ui_widgets.dart';
 
 Future<void> showAppDialog(BuildContext context, String title, Widget child) =>
@@ -244,6 +247,29 @@ Future<void> showSettings(BuildContext context, Player p) => showAppDialog(
               p.save();
             },
           ),
+        if (OnlinePlay.services != null)
+          _OnlineSettings(player: p, services: OnlinePlay.services!)
+        else
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.cloud_off, color: Color(0xffa97153), size: 26),
+            title: Text(
+              'Joc online',
+              style: TextStyle(
+                color: ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
+            subtitle: Text(
+              'Indisponibil',
+              style: TextStyle(
+                color: Color(0xff8a6a52),
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
         const SizedBox(height: 6),
         const Text(
           'Preferințele sunt salvate local. Muzica și livrarea notificărilor necesită conținut și servicii suplimentare.',
@@ -259,6 +285,278 @@ Future<void> showSettings(BuildContext context, Player p) => showAppDialog(
     ),
   ),
 );
+
+class _OnlineSettings extends StatefulWidget {
+  const _OnlineSettings({required this.player, required this.services});
+
+  final Player player;
+  final OnlinePlayServices services;
+
+  @override
+  State<_OnlineSettings> createState() => _OnlineSettingsState();
+}
+
+class _OnlineSettingsState extends State<_OnlineSettings> {
+  final roomCode = TextEditingController();
+  bool busy = false;
+  String? notice;
+
+  OnlinePlayServices get services => widget.services;
+  Player get player => widget.player;
+
+  @override
+  void dispose() {
+    roomCode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _linkGoogle() async {
+    if (busy) return;
+    final approval = await showParentGate(context, english: player.english);
+    if (approval == null || !mounted) return;
+    setState(() => busy = true);
+    try {
+      final credential = await services.googleCredential();
+      if (credential == null) return;
+      await services.account.start();
+      await services.account.linkGoogle(credential, approval);
+      if (!mounted) return;
+      setState(() {});
+      await showAppDialog(
+        context,
+        'Cont Google',
+        const Text('Contul Google a fost conectat la acest dispozitiv.'),
+      );
+    } catch (error) {
+      if (mounted) setState(() => notice = _onlineErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    if (busy) return;
+    if (await showParentGate(context, english: player.english) == null ||
+        !mounted) {
+      return;
+    }
+    final confirmed = await _showDeleteConfirmation(context);
+    if (confirmed != true || !mounted) return;
+    setState(() => busy = true);
+    try {
+      await services.account.start();
+      await services.account.deleteAccount();
+      await _clearLocalData(player);
+      if (!mounted) return;
+      setState(() {});
+      await showAppDialog(
+        context,
+        'Cont șters',
+        const Text('Contul și datele locale au fost șterse.'),
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) setState(() => notice = _onlineErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _joinRoom() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      notice = null;
+    });
+    try {
+      final user = await services.account.start();
+      final joined = await services.rooms.joinRoom(roomCode.text, user.uid);
+      if (!mounted) return;
+      roomCode.clear();
+      await showAppDialog(
+        context,
+        'Join room',
+        Text('Camera ${joined.code} a fost găsită.'),
+      );
+    } catch (error) {
+      if (mounted) setState(() => notice = _onlineErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  OutlineInputBorder fieldBorder(Color color, {double width = 1.2}) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: color, width: width),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final user = services.account.user;
+    return panel(
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          label('CONT ȘI CAMERĂ', size: 18, color: ink),
+          const SizedBox(height: 8),
+          Text(
+            user == null
+                ? 'Neconectat'
+                : user.googleLinked
+                ? 'Google conectat'
+                : 'Anonim',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xff8a6a52),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          ArenaButton(
+            text: 'Link Google account',
+            secondary: true,
+            onPressed: busy || user?.googleLinked == true ? null : _linkGoogle,
+          ),
+          ArenaButton(
+            text: 'Delete account',
+            danger: true,
+            onPressed: busy ? null : _deleteAccount,
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: roomCode,
+            textCapitalization: TextCapitalization.characters,
+            decoration: InputDecoration(
+              labelText: 'Cod cameră',
+              hintText: 'ABC-23K',
+              filled: true,
+              fillColor: const Color(0xfffffbec),
+              border: fieldBorder(const Color(0xffd9b98c)),
+              enabledBorder: fieldBorder(const Color(0xffd9b98c)),
+              focusedBorder: fieldBorder(const Color(0xffc98f3f), width: 1.6),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ArenaButton(
+            text: 'Join room',
+            green: true,
+            onPressed: busy ? null : _joinRoom,
+          ),
+          if (notice != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              notice!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xff8a6242),
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+Future<bool> _showDeleteConfirmation(BuildContext context) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: const Color(0xfffff4d8),
+      surfaceTintColor: Colors.transparent,
+      elevation: 14,
+      shadowColor: const Color(0x7751312d),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+      title: const Text(
+        'Șterge contul?',
+        style: TextStyle(color: ink, fontSize: 20, fontWeight: FontWeight.w900),
+      ),
+      content: const Text(
+        'Se vor șterge datele cloud și datele locale ale acestui dispozitiv. Această acțiune nu poate fi anulată.',
+        style: TextStyle(
+          color: Color(0xff6b4a35),
+          fontSize: 14,
+          height: 1.4,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('ANULEAZĂ'),
+        ),
+        ArenaButton(
+          text: 'ȘTERGE CONTUL',
+          danger: true,
+          singleLine: true,
+          onPressed: () => Navigator.pop(dialogContext, true),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
+Future<void> _clearLocalData(Player p) async {
+  await p.prefs.clear();
+  final fresh = Player(p.prefs);
+  p
+    ..name = fresh.name
+    ..trophies = fresh.trophies
+    ..coins = fresh.coins
+    ..cat = fresh.cat
+    ..accessory = fresh.accessory
+    ..daily = fresh.daily
+    ..owned = {...fresh.owned}
+    ..claims = {...fresh.claims}
+    ..fur = fresh.fur
+    ..eyes = fresh.eyes
+    ..ears = fresh.ears
+    ..pattern = fresh.pattern
+    ..power = fresh.power
+    ..sfx = fresh.sfx
+    ..music = fresh.music
+    ..english = fresh.english
+    ..notifications = fresh.notifications
+    ..photo = fresh.photo;
+  await p.save();
+}
+
+String _onlineErrorMessage(Object error) {
+  if (error is OnlineException) {
+    return switch (error.code) {
+      OnlineErrorCode.notSignedIn => 'Conectează-te din nou.',
+      OnlineErrorCode.credentialInUse =>
+        'Acest cont Google este deja conectat la alt jucător.',
+      OnlineErrorCode.noLinkedAccount => 'Nu există un cont Google asociat.',
+      OnlineErrorCode.invalidRoomCode => 'Codul camerei nu este valid.',
+      OnlineErrorCode.roomNotFound =>
+        'Camera nu a fost găsită sau nu mai este disponibilă.',
+      OnlineErrorCode.roomExpired => 'Camera a expirat.',
+      OnlineErrorCode.ownRoom => 'Nu te poți alătura propriei camere.',
+      OnlineErrorCode.roomCodeExhausted =>
+        'Nu s-a putut genera codul camerei. Încearcă din nou.',
+      OnlineErrorCode.invalidCloudSave => 'Datele cloud nu sunt valide.',
+      OnlineErrorCode.saveConflict =>
+        'Datele s-au schimbat pe alt dispozitiv. Încearcă din nou.',
+      OnlineErrorCode.requiresRecentLogin =>
+        'Este nevoie de o nouă confirmare Google. Încearcă din nou.',
+      OnlineErrorCode.googleUnavailable =>
+        'Google nu este disponibilă în această versiune.',
+      OnlineErrorCode.cancelled => 'Ai renunțat la conectarea Google.',
+      OnlineErrorCode.notInMatch => 'Nu ești participant la acest meci.',
+      OnlineErrorCode.backend =>
+        'Serviciul online nu a răspuns. Încearcă din nou.',
+    };
+  }
+  return 'Serviciul online nu a răspuns. Încearcă din nou.';
+}
 
 Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
   context,
