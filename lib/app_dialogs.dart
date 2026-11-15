@@ -279,11 +279,9 @@ Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
         const SizedBox(height: 10),
         for (final entry in [
           (0, 'Living'),
-          (200, 'Echipă'),
-          (250, 'Evenimente'),
-          (300, 'Holul Principal • Speed Rush'),
-          (800, 'Bucătăria • Survival'),
-          (1500, 'Dormitor • Ranked'),
+          (300, 'Holul Principal'),
+          (800, 'Bucătăria'),
+          (1500, 'Dormitorul Stăpânului'),
         ])
           panel(
             Column(

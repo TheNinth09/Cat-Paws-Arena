@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'app_dialogs.dart';
 import 'cat_avatar.dart';
-import 'catalog.dart';
 import 'cats_screen.dart';
-import 'events_screen.dart';
 import 'lobby_screen.dart';
 import 'match_screen.dart';
 import 'profile.dart';
+import 'shell/app_info.dart';
 import 'shop_screen.dart';
-import 'team_screen.dart';
 import 'ui_widgets.dart';
 
 class Home extends StatefulWidget {
@@ -22,7 +20,7 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   final scaffold = GlobalKey<ScaffoldState>();
   final pages = PageController(initialPage: 2);
-  int tab = 2, mode = 0;
+  int tab = 2;
   Player get p => widget.player;
   @override
   void dispose() {
@@ -40,27 +38,6 @@ class _HomeState extends State<Home> {
   }
 
   void unavailable(String feature) => showUnavailable(context, feature);
-  void chooseMode() => showAppDialog(
-    context,
-    'Mod de joc',
-    Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < modeNames.length; i++)
-          ArenaButton(
-            text:
-                '${modeNames[i]}${i > p.tier ? ' • ${modeThresholds[i]} trofee' : ''}',
-            onPressed: i <= p.tier
-                ? () {
-                    setState(() => mode = i);
-                    Navigator.pop(context);
-                  }
-                : null,
-          ),
-      ],
-    ),
-  );
   void menu(String item) {
     Navigator.pop(context);
     switch (item) {
@@ -70,37 +47,8 @@ class _HomeState extends State<Home> {
         showAppDialog(
           context,
           item,
-          const Text(
-            'Versiunea 1.0.3 • Design premium, echipă și evenimente locale simulate, font rotunjit și UI modular.',
-          ),
-        );
-      case 'Clasamente':
-        showAppDialog(
-          context,
-          item,
-          DefaultTabController(
-            length: 2,
-            child: SizedBox(
-              height: 180,
-              child: Column(
-                children: [
-                  const TabBar(
-                    tabs: [
-                      Tab(text: 'Global'),
-                      Tab(text: 'Local'),
-                    ],
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        'Clasamentele online nu sunt conectate.\n${p.name}: ${p.trophies} trofee',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          Text(
+            'Versiunea $appVersion • Trei tab-uri, un singur mod de joc și identitate One Ear Games.',
           ),
         );
       default:
@@ -118,30 +66,38 @@ class _HomeState extends State<Home> {
         child: SafeArea(
           child: ListView(
             children: [
-              const DrawerHeader(
-                child: Column(
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Color(0x3320130e), width: 1),
+                  ),
+                ),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(Icons.pets, size: 42, color: ink),
-                    SizedBox(height: 10),
+                    SizedBox(height: 8),
                     Text(
-                      'PAWS & CLAWS',
+                      studioName,
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
-                        fontSize: 24,
+                        fontSize: 22,
+                      ),
+                    ),
+                    Text(
+                      appName,
+                      style: TextStyle(
+                        color: Color(0xff8a5a3b),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
-              for (final item in [
-                'Google Play / Facebook Cloud Sync',
-                'Prieteni',
-                'Setări',
-                'Suport',
-                'Noutăți',
-                'Clasamente',
-              ])
+              for (final item in ['Setări', 'Suport', 'Noutăți'])
                 ListTile(
                   title: Text(item),
                   trailing: const Icon(Icons.chevron_right),
@@ -183,28 +139,13 @@ class _HomeState extends State<Home> {
                         CatsScreen(player: p, onShop: () => select(0)),
                         LobbyScreen(
                           player: p,
-                          mode: mode,
-                          onMode: chooseMode,
-                          onRoad: () => showTrophyRoad(context, p),
                           onBattle: () => Navigator.push(
                             context,
                             MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  MatchScreen(player: p, mode: mode),
+                              builder: (_) => MatchScreen(player: p, mode: 0),
                             ),
                           ),
-                        ),
-                        TeamScreen(player: p, onUnavailable: unavailable),
-                        EventsScreen(
-                          player: p,
-                          onUnavailable: unavailable,
-                          onBattle: (battleMode) => Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  MatchScreen(player: p, mode: battleMode),
-                            ),
-                          ),
+                          onRoad: () => showTrophyRoad(context, p),
                         ),
                       ],
                     ),

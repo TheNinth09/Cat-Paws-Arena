@@ -8,6 +8,7 @@ import 'cat_avatar.dart';
 import 'catalog.dart';
 import 'home_screen.dart';
 import 'profile.dart';
+import 'shell/app_info.dart';
 import 'ui_widgets.dart';
 
 class Boot extends StatefulWidget {
@@ -110,7 +111,7 @@ class _BootState extends State<Boot> {
                                   label('CAT PAWS', size: 40),
                                   label('ARENA', size: 52, color: gold),
                                   label(
-                                    'Paws & Claws',
+                                    studioName,
                                     size: 16,
                                     color: const Color(0xffe8c9a0),
                                   ),
@@ -269,53 +270,31 @@ class StudioSplash extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 20),
-      Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text: 'PAWS & ',
-              style: TextStyle(
-                color: cream,
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.2,
-                shadows: const [
-                  Shadow(
-                    color: Color(0x66000000),
-                    offset: Offset(0, 3),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-            ),
-            TextSpan(
-              text: 'CLAWS',
-              style: TextStyle(
-                color: gold,
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.2,
-                shadows: const [
-                  Shadow(
-                    color: Color(0x66000000),
-                    offset: Offset(0, 3),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
+      Text(
+        appName.toUpperCase(),
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: gold,
+          fontSize: 30,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.2,
+          shadows: [
+            Shadow(
+              color: Color(0x66000000),
+              offset: Offset(0, 3),
+              blurRadius: 8,
             ),
           ],
         ),
-        textAlign: TextAlign.center,
       ),
       const SizedBox(height: 6),
-      const Text(
-        'GAME STUDIO',
-        style: TextStyle(
+      Text(
+        studioName,
+        style: const TextStyle(
           color: Color(0xffe8c9a0),
-          fontSize: 12,
+          fontSize: 14,
           fontWeight: FontWeight.w800,
-          letterSpacing: 6,
+          letterSpacing: 4,
         ),
       ),
       const SizedBox(height: 22),
@@ -338,14 +317,14 @@ class StudioSplash extends StatelessWidget {
         ],
       ),
       const SizedBox(height: 14),
-      const Row(
+      Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.pets, size: 15, color: Color(0xffd8b48f)),
-          SizedBox(width: 6),
+          const Icon(Icons.pets, size: 15, color: Color(0xffd8b48f)),
+          const SizedBox(width: 6),
           Text(
-            'CAT PAWS ARENA • v1.0.2',
-            style: TextStyle(
+            'v$appVersion',
+            style: const TextStyle(
               color: Color(0xffd8b48f),
               fontSize: 10.5,
               fontWeight: FontWeight.w800,

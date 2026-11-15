@@ -14,4 +14,10 @@ Reason: <dependency or integration need>
 Status: open
 ```
 
-No requests yet.
+```text
+Lane: 4
+Blocking PR: lane-4 branch (Slice 1 freeze)
+Request: In lib/match_screen.dart, remove the unused top-level `_goldGradient` declaration at line 26 (or use it) so `flutter analyze` is clean.
+Reason: `flutter analyze` currently fails with `unused_element` on `_goldGradient`; the file is lane-2 owned and lane 4 cannot edit it. Slice 1 done-when requires a clean analyzer.
+Status: open
+```

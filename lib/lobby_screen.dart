@@ -23,14 +23,11 @@ class LobbyScreen extends StatelessWidget {
   const LobbyScreen({
     super.key,
     required this.player,
-    required this.mode,
-    required this.onMode,
     required this.onBattle,
     required this.onRoad,
   });
   final Player player;
-  final int mode;
-  final VoidCallback onMode, onBattle, onRoad;
+  final VoidCallback onBattle, onRoad;
   Widget progress() => Padding(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
     child: Material(
@@ -65,8 +62,6 @@ class LobbyScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        ArenaButton(text: 'MOD: ${modeNames[mode]}', onPressed: onMode),
-        const SizedBox(height: 4),
         ArenaButton(
           text: player.english ? 'BATTLE • PRACTICE' : 'LUPTĂ • ANTRENAMENT',
           onPressed: onBattle,
@@ -81,10 +76,12 @@ class LobbyScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0x55ffc63c), width: 1),
           ),
-          child: const Text(
-            'Antrenament offline • adversar bot',
+          child: Text(
+            player.english
+                ? '1v1 Arena • offline practice • bot opponent'
+                : '1v1 Arena • antrenament offline • adversar bot',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: cream,
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -98,7 +95,6 @@ class LobbyScreen extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
-      final strip = _ModeStrip(player: player, mode: mode, onTap: onMode);
       if (constraints.maxHeight < 580 || textScale > 1.3) {
         return ListView(
           key: const PageStorageKey('lobby-scroll'),
@@ -106,8 +102,6 @@ class LobbyScreen extends StatelessWidget {
           children: [
             progress(),
             const SizedBox(height: 4),
-            strip,
-            const SizedBox(height: 10),
             Center(child: hero()),
             const SizedBox(height: 8),
             controls(),
@@ -117,7 +111,6 @@ class LobbyScreen extends StatelessWidget {
       return Column(
         children: [
           progress(),
-          strip,
           Expanded(
             child: Center(
               child: FittedBox(fit: BoxFit.scaleDown, child: hero()),
@@ -359,106 +352,6 @@ class _PowerPill extends StatelessWidget {
           ),
         ),
       ],
-    ),
-  );
-}
-
-class _ModeStrip extends StatelessWidget {
-  const _ModeStrip({
-    required this.player,
-    required this.mode,
-    required this.onTap,
-  });
-  final Player player;
-  final int mode;
-  final VoidCallback onTap;
-
-  static const _icons = [
-    Icons.group,
-    Icons.bolt,
-    Icons.hourglass_empty,
-    Icons.emoji_events,
-  ];
-  static const _tags = ['1V1', 'RUSH', 'SURV', 'RANK'];
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(14, 4, 14, 2),
-    child: Row(
-      children: [
-        for (var i = 0; i < _icons.length; i++)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: _ModeTile(
-                icon: _icons[i],
-                tag: _tags[i],
-                selected: i == mode,
-                locked: i > player.tier,
-                onTap: onTap,
-              ),
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
-class _ModeTile extends StatelessWidget {
-  const _ModeTile({
-    required this.icon,
-    required this.tag,
-    required this.selected,
-    required this.locked,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String tag;
-  final bool selected, locked;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        decoration: BoxDecoration(
-          gradient: selected ? _goldGradient : null,
-          color: selected ? null : const Color(0x663b2a24),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? ink : const Color(0x77ffc63c),
-            width: selected ? 2 : 1.2,
-          ),
-        ),
-        child: Opacity(
-          opacity: locked ? 0.55 : 1,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                locked ? Icons.lock_outline : icon,
-                size: 19,
-                color: selected ? ink : cream,
-              ),
-              const SizedBox(height: 3),
-              Text(
-                tag,
-                style: TextStyle(
-                  color: selected ? ink : cream,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     ),
   );
 }
