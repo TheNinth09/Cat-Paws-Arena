@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Firestore rules tests for Cat Paws Arena. Runs only against the local emulator.",
   "scripts": {
-    "test:rules": "firebase emulators:exec --only firestore --project demo-cat-paws-arena \"node --test test/\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-cat-paws-arena \"node --test test/rules.test.js\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "6.0.0",
