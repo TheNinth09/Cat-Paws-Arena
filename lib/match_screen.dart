@@ -1,15 +1,22 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'app_dialogs.dart';
+import 'board_game.dart';
 import 'cat_avatar.dart';
 import 'catalog.dart';
+import 'duel_audio.dart';
+import 'duel_events.dart';
 import 'match_controller.dart';
 import 'profile.dart';
 import 'ui_widgets.dart';
+
+/// Compile-time switch for the frame-time profiling overlay. Build a release
+/// APK/AAB with `--dart-define=CPA_FRAME_PROBE=true` to profile on device.
+const kFrameProbeEnabled = bool.fromEnvironment('CPA_FRAME_PROBE');
 
 const _muted = Color(0xffe8c9a0);
 const _faint = Color(0xffd8b48f);
@@ -22,11 +29,6 @@ const _barGradient = LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
   colors: [Color(0xff8a5a44), Color(0xff54342a)],
-);
-const _goldGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xfffff3c4), gold, Color(0xffe8961f)],
 );
 const _modeIcons = [Icons.group, Icons.bolt, Icons.shield, Icons.emoji_events];
 const _powerShort = ['ZOOMIES', 'SHADOW POUNCE', 'LASER CHASE'];
@@ -45,12 +47,16 @@ class MatchScreen extends StatefulWidget {
 }
 
 class _MatchScreenState extends State<MatchScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   late final ArenaMatchController match;
   late final AnimationController fx;
+  late final DuelAudio _audio;
+  late final AnimationController _momentFx;
+  final _boardKey = GlobalKey<BoardViewState>();
   Timer? emoteTimer;
   String emote = '';
   bool showingDialog = false;
+  PowerKind? _momentPower;
   Player get p => widget.player;
   int get power {
     final raw = p.cat == 'Tzuki'
@@ -69,6 +75,14 @@ class _MatchScreenState extends State<MatchScreen>
   void initState() {
     super.initState();
     match = ArenaMatchController(p, widget.mode);
+    match.eventSink = (events) {
+      _boardKey.currentState?.play(events);
+    };
+    _audio = DuelAudio(enabled: () => p.sfx);
+    _momentFx = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    );
     fx = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -85,9 +99,21 @@ class _MatchScreenState extends State<MatchScreen>
   void dispose() {
     emoteTimer?.cancel();
     fx.dispose();
+    _momentFx.dispose();
+    _audio.dispose();
     WidgetsBinding.instance.removeObserver(this);
     match.dispose();
     super.dispose();
+  }
+
+  /// Sound + haptic feedback and the full-screen power moment, fired as each
+  /// contract event's animation starts on the board.
+  void _onBoardEvent(BoardEvent event) {
+    _audio.play(event);
+    if (event is PowerFired) {
+      setState(() => _momentPower = event.power);
+      _momentFx.forward(from: 0);
+    }
   }
 
   Future<void> surrender() async {
@@ -214,7 +240,8 @@ class _MatchScreenState extends State<MatchScreen>
   );
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
+  Widget build(BuildContext context) {
+    final content = AnimatedBuilder(
     animation: match,
     builder: (context, _) => PopScope(
       canPop: match.phase == MatchPhase.finished,
@@ -223,50 +250,68 @@ class _MatchScreenState extends State<MatchScreen>
       },
       child: Scaffold(
         body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 540),
-              child: Column(
-                children: [
-                  if (match.phase != MatchPhase.playing)
-                    PlayerHud(
-                      avatar: CatAvatar(p, size: 46),
-                      name: p.name,
-                      trophies: p.trophies,
-                      coins: p.coins,
-                      onProfile: () => showPlayerProfile(context, p),
-                      onRoad: () => showTrophyRoad(context, p),
-                      onShop: () => showAppDialog(
-                        context,
-                        'Lăbuțe',
-                        const Text(
-                          'Pachetele sunt disponibile în fila Magazin din ecranul principal.',
+          child: Stack(
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 540),
+                  child: Column(
+                    children: [
+                      if (match.phase != MatchPhase.playing)
+                        PlayerHud(
+                          avatar: CatAvatar(p, size: 46),
+                          name: p.name,
+                          trophies: p.trophies,
+                          coins: p.coins,
+                          onProfile: () => showPlayerProfile(context, p),
+                          onRoad: () => showTrophyRoad(context, p),
+                          onShop: () => showAppDialog(
+                            context,
+                            'Lăbuțe',
+                            const Text(
+                              'Pachetele sunt disponibile în fila Magazin din ecranul principal.',
+                            ),
+                          ),
+                          onMenu: () => showSettings(context, p),
+                        ),
+                      Expanded(
+                        child: RoomBackground(
+                          tier: p.tier,
+                          dim: true,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                            child: switch (match.phase) {
+                              MatchPhase.searching => versus(),
+                              MatchPhase.playing => battle(),
+                              MatchPhase.finished => result(),
+                            },
+                          ),
                         ),
                       ),
-                      onMenu: () => showSettings(context, p),
-                    ),
-                  Expanded(
-                    child: RoomBackground(
-                      tier: p.tier,
-                      dim: true,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                        child: switch (match.phase) {
-                          MatchPhase.searching => versus(),
-                          MatchPhase.playing => battle(),
-                          MatchPhase.finished => result(),
-                        },
+                    ],
+                  ),
+                ),
+              ),
+              if (_momentPower != null)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedBuilder(
+                      animation: _momentFx,
+                      builder: (context, _) => PowerMoment(
+                        power: _momentPower!,
+                        t: _momentFx.value,
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
         ),
       ),
     ),
-  );
+    );
+    return kFrameProbeEnabled ? FrameTimeOverlay(child: content) : content;
+  }
 
   Widget versus() => ListView(
     padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
@@ -348,7 +393,7 @@ class _MatchScreenState extends State<MatchScreen>
         ),
         const SizedBox(height: 8),
         _rewardLine('icon_trophy', 'Victorie', '+30 trofee'),
-        _rewardLine('icon_paw_coin', 'Bonus', '+150 lăpuțe'),
+        _rewardLine('icon_paw_coin', 'Bonus', '+150 lăbuțe'),
         const SizedBox(height: 6),
         const Text(
           'Egalitate: 0 trofee • Înfrângere: -25 trofee',
@@ -501,7 +546,7 @@ class _MatchScreenState extends State<MatchScreen>
         Expanded(
           child: _ScoreChip(
             avatar: const _BotHead(size: 36),
-            name: 'Bubble Bot',
+            name: 'Bubble Bot · BOT',
             score: match.botScore,
           ),
         ),
@@ -537,7 +582,18 @@ class _MatchScreenState extends State<MatchScreen>
             borderRadius: BorderRadius.circular(13),
             child: Stack(
               children: [
-                Positioned.fill(child: GameWidget(game: match.game)),
+                Positioned.fill(
+                  child: BoardView(
+                    key: _boardKey,
+                    initial: match.initialSnapshot,
+                    onSwapAttempt: match.tryMove,
+                    onEvent: _onBoardEvent,
+                    onIdle: match.onBoardIdle,
+                    inputEnabled: match.acceptingInput,
+                    active: match.phase != MatchPhase.finished,
+                    suspended: match.paused,
+                  ),
+                ),
                 if (emote.isNotEmpty)
                   Positioned(
                     right: 6,
@@ -610,7 +666,7 @@ class _MatchScreenState extends State<MatchScreen>
                   spriteName: powers[power],
                   singleLine: true,
                   onPressed: match.board.charge >= 100
-                      ? () => match.game.power(power)
+                      ? () => match.firePower(power)
                       : null,
                 ),
               ),
@@ -711,7 +767,7 @@ class _MatchScreenState extends State<MatchScreen>
             Flexible(
               child: Text(
                 win
-                    ? '+30 Trofee • +150 Lăpuțe'
+                    ? '+30 Trofee • +150 Lăbuțe'
                     : loss
                     ? '-25 Trofee'
                     : '0 Trofee',
@@ -1347,5 +1403,218 @@ class _EmoteCard extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+/// Full-screen moment for a fired power: golden ZOOM! trail for Zoomies, a
+/// purple vortex for Shadow Pounce, a sweeping red laser dot for Laser Chase.
+/// Driven by [t] in 0..1 from the caller's animation controller.
+class PowerMoment extends StatelessWidget {
+  const PowerMoment({super.key, required this.power, required this.t});
+
+  final PowerKind power;
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    // Fade in fast, hold, fade out over the last third.
+    final opacity = (t / 0.12).clamp(0.0, 1.0) * ((1 - t) / 0.3).clamp(0.0, 1.0);
+    if (opacity <= 0) return const SizedBox.shrink();
+    return Opacity(
+      opacity: opacity,
+      key: Key('power-moment-${power.name}'),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CustomPaint(painter: _MomentPainter(power: power, t: t)),
+          if (power == PowerKind.zoomies)
+            Center(
+              child: Transform.scale(
+                scale: 0.7 + 0.5 * Curves.easeOutBack.transform(t),
+                child: const Text(
+                  'ZOOM!',
+                  style: TextStyle(
+                    color: Color(0xffffd166),
+                    fontSize: 84,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 4,
+                    shadows: [
+                      Shadow(color: Color(0xaa7a4a00), blurRadius: 18),
+                      Shadow(color: Color(0x66000000), offset: Offset(0, 3)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MomentPainter extends CustomPainter {
+  _MomentPainter({required this.power, required this.t});
+
+  final PowerKind power;
+  final double t;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide;
+    switch (power) {
+      case PowerKind.zoomies:
+        // Golden radial streaks racing outward.
+        final paint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = r * 0.012
+          ..strokeCap = StrokeCap.round;
+        for (var i = 0; i < 14; i++) {
+          final a = i * math.pi / 7 + t * math.pi * 0.6;
+          final reach = r * (0.18 + 0.5 * ((t + i * 0.07) % 1));
+          paint.color = Color.lerp(
+            const Color(0xffffe08a),
+            const Color(0xffc8862a),
+            (i / 14),
+          )!.withValues(alpha: 0.75 * (1 - t * 0.6));
+          canvas.drawLine(
+            c + Offset(math.cos(a), math.sin(a)) * r * 0.08,
+            c + Offset(math.cos(a), math.sin(a)) * reach,
+            paint,
+          );
+        }
+      case PowerKind.shadowPounce:
+        // Purple vortex: spiral arms winding inward.
+        final paint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = r * 0.02
+          ..strokeCap = StrokeCap.round;
+        for (var arm = 0; arm < 3; arm++) {
+          final path = Path();
+          for (var s = 0; s <= 40; s++) {
+            final u = s / 40;
+            final ang = arm * math.pi * 2 / 3 + u * math.pi * 3 + t * math.pi * 4;
+            final rad = r * (0.5 - 0.42 * u) * (1 - t * 0.25);
+            final pt = c + Offset(math.cos(ang), math.sin(ang)) * rad;
+            if (s == 0) {
+              path.moveTo(pt.dx, pt.dy);
+            } else {
+              path.lineTo(pt.dx, pt.dy);
+            }
+          }
+          paint.color = const Color(0xffb46bff).withValues(
+            alpha: 0.8 * (1 - t * 0.5),
+          );
+          canvas.drawPath(path, paint);
+        }
+        paint.style = PaintingStyle.fill;
+        paint.color = const Color(0xff4a1d8f).withValues(alpha: 0.35);
+        canvas.drawCircle(c, r * 0.16 * (1 - t * 0.4), paint);
+      case PowerKind.laserChase:
+        // Red laser dot sweeping a beam across the screen.
+        final sweep = (math.sin(t * math.pi * 2) + 1) / 2;
+        final dotX = size.width * sweep;
+        final beam = Paint()
+          ..color = const Color(0xffff3b30).withValues(alpha: 0.5)
+          ..strokeWidth = r * 0.008;
+        canvas.drawLine(
+          Offset(dotX, 0),
+          Offset(dotX, size.height),
+          beam,
+        );
+        final dot = Paint()
+          ..color = const Color(0xffff5040).withValues(alpha: 0.95)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+        canvas.drawCircle(Offset(dotX, size.height * (0.3 + 0.4 * sweep)), r * 0.05, dot);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MomentPainter old) => old.t != t || old.power != power;
+}
+
+/// Debug-only frame-time probe: shows FPS and worst frame ms so a human can
+/// profile a release build on a real phone. Enabled at compile time with
+/// `--dart-define=CPA_FRAME_PROBE=true`; hidden entirely otherwise.
+class FrameTimeOverlay extends StatefulWidget {
+  const FrameTimeOverlay({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<FrameTimeOverlay> createState() => _FrameTimeOverlayState();
+}
+
+class _FrameTimeOverlayState extends State<FrameTimeOverlay>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker = createTicker(_onTick);
+  Duration _last = Duration.zero;
+  Duration _windowStart = Duration.zero;
+  int _frames = 0;
+  double _worstMs = 0;
+  double _fps = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker.start();
+  }
+
+  void _onTick(Duration elapsed) {
+    if (elapsed < _last) {
+      _last = elapsed;
+      return;
+    }
+    final dt = elapsed - _last;
+    _last = elapsed;
+    if (_windowStart == Duration.zero) _windowStart = elapsed;
+    _frames++;
+    final ms = dt.inMicroseconds / 1000;
+    if (ms > _worstMs) _worstMs = ms;
+    final windowMs = (elapsed - _windowStart).inMicroseconds / 1000;
+    if (windowMs >= 500) {
+      _fps = _frames * 1000 / windowMs;
+      _frames = 0;
+      _worstMs = 0;
+      _windowStart = elapsed;
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      widget.child,
+      Positioned(
+        top: 2,
+        right: 6,
+        child: IgnorePointer(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xcc000000),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${_fps.toStringAsFixed(0)} FPS · ${_worstMs.toStringAsFixed(1)} ms',
+              key: const Key('frame-probe'),
+              style: const TextStyle(
+                color: Color(0xff2e7d32),
+                fontFamily: 'monospace',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
   );
 }

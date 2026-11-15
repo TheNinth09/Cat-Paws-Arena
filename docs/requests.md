@@ -69,3 +69,11 @@ Request: In lib/profile.dart, change `Player.result` so a win adds 30 trophies, 
 Reason: Slice 2 gates House Tour rooms by trophies; lane 4 cannot edit orchestrator-owned `lib/profile.dart`.
 Status: answered — implemented on main in 31a26b1 (`Player.result` floors trophies at `[0, 300, 800, 1500]` with +30/-10 deltas).
 ```
+
+```text
+Lane: 2
+Blocking PR: lane-2-slice-3 (slice 3: feel)
+Request: Add `- assets/audio/` under `flutter: assets:` in pubspec.yaml.
+Reason: Lane 2 owns assets/audio/ and ships 16 synthesized SFX WAVs plus CREDITS.md there. Without the assets entry they are not bundled and AudioPlayer cannot load them at runtime; cues fail silently until this lands.
+Status: open — note: superseded on lane-2-s2 where the SFX moved to assets/generated/audio/ (no pubspec line needed).
+```
