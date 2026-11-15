@@ -1,11 +1,63 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:cat_paws_arena/cat_avatar.dart';
 import 'package:cat_paws_arena/main.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
+
+class _CatRender {
+  const _CatRender(this.width, this.height, this.png, this.rgba);
+  final int width, height;
+  final Uint8List png, rgba;
+}
+
+/// Renders [child] inside a repaint boundary and returns the captured PNG
+/// and raw RGBA pixels. The boundary isolates the cat, so the background
+/// stays transparent.
+Future<_CatRender> _renderCat(
+  WidgetTester tester,
+  Widget child, {
+  double pixelRatio = 1,
+}) async {
+  final key = UniqueKey();
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(child: RepaintBoundary(key: key, child: child)),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(key),
+  );
+  final render = await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: pixelRatio);
+    final png = await image.toByteData(format: ui.ImageByteFormat.png);
+    final rgba = await image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    );
+    final result = _CatRender(
+      image.width,
+      image.height,
+      png!.buffer.asUint8List(),
+      rgba!.buffer.asUint8List(),
+    );
+    image.dispose();
+    return result;
+  });
+  return render!;
+}
+
+int _alphaAt(_CatRender render, int x, int y) =>
+    render.rgba[(y * render.width + x) * 4 + 3];
 
 void main() {
   testWidgets('runtime bundle contains only sprites and fonts', (tester) async {
@@ -24,6 +76,105 @@ void main() {
     );
     await tester.pumpWidget(const MaterialApp(home: StudioSplash()));
     expectCleanArtwork(tester);
+  });
+
+  testWidgets('Tzuki and Bubble render from layers at 48, 120 and 320 px', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final player = Player(prefs);
+    for (final cat in ['Tzuki', 'Bubble']) {
+      player.cat = cat;
+      for (final size in [48.0, 120.0, 320.0]) {
+        final render = await _renderCat(tester, CatAvatar(player, size: size));
+        expect(render.width, size.round(), reason: '$cat at $size');
+        expect(render.height, size.round(), reason: '$cat at $size');
+        expect(
+          render.png.length,
+          greaterThan(200),
+          reason: '$cat at $size produced a real image',
+        );
+        // The avatar must be painted by the layer compositor.
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is CustomPaint && widget.painter is CatLayersPainter,
+          ),
+          findsWidgets,
+          reason: '$cat at $size uses layered rendering',
+        );
+        // Transparent corner, opaque centre: the cat is really drawn.
+        expect(_alphaAt(render, 0, 0), 0, reason: '$cat at $size corner');
+        expect(
+          _alphaAt(render, render.width ~/ 2, render.height * 3 ~/ 5),
+          255,
+          reason: '$cat at $size centre',
+        );
+      }
+    }
+  });
+
+  testWidgets('swapping the ear layer changes nothing else', (tester) async {
+    const specTwoEars = CatSpec(
+      fur: Color(0xff99938b),
+      pattern: 1,
+      eyes: Color(0xff69f0ae),
+      ears: 0,
+    );
+    const specLeftEar = CatSpec(
+      fur: Color(0xff99938b),
+      pattern: 1,
+      eyes: Color(0xff69f0ae),
+      ears: 1,
+    );
+    final withoutEars = CatLayerKind.values
+        .where((kind) => kind != CatLayerKind.ears)
+        .toSet();
+    final onlyEars = {CatLayerKind.ears};
+
+    // Every non-ear layer is pixel-identical between the two specs.
+    final baseA = await _renderCat(
+      tester,
+      CatSpecAvatar(specTwoEars, onlyLayers: withoutEars),
+    );
+    final baseB = await _renderCat(
+      tester,
+      CatSpecAvatar(specLeftEar, onlyLayers: withoutEars),
+    );
+    expect(baseA.rgba, baseB.rgba);
+
+    // The ear layer itself does change.
+    final earsA = await _renderCat(
+      tester,
+      CatSpecAvatar(specTwoEars, onlyLayers: onlyEars),
+    );
+    final earsB = await _renderCat(
+      tester,
+      CatSpecAvatar(specLeftEar, onlyLayers: onlyEars),
+    );
+    expect(earsA.rgba, isNot(earsB.rgba));
+
+    // The full cat changes, and only inside the ear region (top-right of
+    // the head, above the eyes).
+    final fullA = await _renderCat(tester, CatSpecAvatar(specTwoEars));
+    final fullB = await _renderCat(tester, CatSpecAvatar(specLeftEar));
+    expect(fullA.rgba, isNot(fullB.rgba));
+    var diffs = 0, outside = 0;
+    for (var y = 0; y < fullA.height; y++) {
+      for (var x = 0; x < fullA.width; x++) {
+        final i = (y * fullA.width + x) * 4;
+        if (fullA.rgba[i] != fullB.rgba[i] ||
+            fullA.rgba[i + 1] != fullB.rgba[i + 1] ||
+            fullA.rgba[i + 2] != fullB.rgba[i + 2] ||
+            fullA.rgba[i + 3] != fullB.rgba[i + 3]) {
+          diffs++;
+          if (y > fullA.height * 0.4 || x < fullA.width * 0.5) outside++;
+        }
+      }
+    }
+    expect(diffs, greaterThan(0));
+    expect(outside, 0, reason: 'ear swap must not touch the rest of the cat');
   });
 
   test('rewards, daily limits, purchases, tiers and persistence', () async {

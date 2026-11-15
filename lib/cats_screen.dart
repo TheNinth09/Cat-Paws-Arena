@@ -518,16 +518,10 @@ class _CatPickCard extends StatelessWidget {
 
   Widget _face() {
     if (cat == 'Custom') return CatAvatar(player, size: 72);
-    return CustomPaint(
-      size: const Size(72, 72),
-      painter: CatPainter(
-        cat == 'Bubble' ? const Color(0xff292b3c) : const Color(0xff99938b),
-        cat == 'Tzuki' ? 1 : 0,
-        cat == 'Bubble'
-            ? gold
-            : [Colors.greenAccent, Colors.lightBlueAccent, gold][player.eyes],
-        cat == 'Tzuki' ? 1 : player.pattern,
-      ),
+    return CatSpecAvatar(
+      catSpecFor(cat, player),
+      size: 72,
+      showAccessory: false,
     );
   }
 }
