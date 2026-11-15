@@ -20,21 +20,23 @@ import 'online_errors.dart';
 /// Reads the project from `android/app/google-services.json`.
 Future<void> initializeFirebase() => Firebase.initializeApp();
 
+OnlineException _authError(FirebaseAuthException e) => switch (e.code) {
+  'credential-already-in-use' ||
+  'email-already-in-use' ||
+  'provider-already-linked' => const OnlineException(
+    OnlineErrorCode.credentialInUse,
+  ),
+  'requires-recent-login' => const OnlineException(
+    OnlineErrorCode.requiresRecentLogin,
+  ),
+  _ => OnlineException(OnlineErrorCode.backend, e.code),
+};
+
 Future<T> _guard<T>(Future<T> Function() body) async {
   try {
     return await body();
   } on FirebaseAuthException catch (e) {
-    throw switch (e.code) {
-      'credential-already-in-use' ||
-      'email-already-in-use' ||
-      'provider-already-linked' => const OnlineException(
-        OnlineErrorCode.credentialInUse,
-      ),
-      'requires-recent-login' => const OnlineException(
-        OnlineErrorCode.requiresRecentLogin,
-      ),
-      _ => OnlineException(OnlineErrorCode.backend, e.code),
-    };
+    throw _authError(e);
   } on FirebaseException catch (e) {
     throw OnlineException(OnlineErrorCode.backend, e.code);
   }
@@ -85,9 +87,27 @@ class FirebaseAuthBackend implements AuthBackend {
 
   @override
   Future<OnlineUser> signInWithGoogle(GoogleCredential credential) async {
-    final result = await _guard(
-      () => _auth.signInWithCredential(_google(credential)),
-    );
+    var google = _google(credential);
+    final current = _auth.currentUser;
+    if (current != null && current.isAnonymous) {
+      // Probe with a link first, so a Google account that was never linked
+      // does not replace (and lose) the current anonymous session.
+      AuthCredential? linkedElsewhere;
+      try {
+        await current.linkWithCredential(google);
+      } on FirebaseAuthException catch (e) {
+        if (e.code != 'credential-already-in-use' || e.credential == null) {
+          throw _authError(e);
+        }
+        linkedElsewhere = e.credential;
+      }
+      if (linkedElsewhere == null) {
+        await _guard(() => current.unlink('google.com'));
+        throw const OnlineException(OnlineErrorCode.noLinkedAccount);
+      }
+      google = linkedElsewhere;
+    }
+    final result = await _guard(() => _auth.signInWithCredential(google));
     if (result.additionalUserInfo?.isNewUser ?? false) {
       // Google was never linked: do not create a second account.
       await _guard(() async => result.user?.delete());
