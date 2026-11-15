@@ -73,8 +73,14 @@ jobs:
           flutter pub get
           flutter test
 
+      # Friend duels are required in the first release (docs/contract.md §7).
       - name: flutter build apk --release
-        run: flutter build apk --release
+        run: |
+          test -f android/app/google-services.json || {
+            echo "android/app/google-services.json is missing; online play cannot ship." >&2
+            exit 1
+          }
+          flutter build apk --release --dart-define=CPA_ONLINE_BACKEND=firebase
 
       - name: Verify APK identity and signature
         run: |

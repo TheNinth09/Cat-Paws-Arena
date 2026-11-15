@@ -109,3 +109,30 @@ Request: Keep `arena_engine: path: packages/arena_engine` in pubspec.yaml when t
 Reason: The vendored engine package is lane-1 code; the analyzer lints live there, not in lane-2 files.
 Status: answered — `arena_engine` path dependency is retained in `pubspec.yaml`; SFX are under `assets/generated/audio/` with no extra pubspec line; the two `unnecessary_const` infos in `packages/arena_engine/lib/src/engine.dart` were fixed by the orchestrator during merge.
 ```
+
+```text
+Lane: orchestrator
+Blocking PR: lane-5 Firebase backend
+Request: In lib/main.dart, after WidgetsFlutterBinding.ensureInitialized(), call `final online = await OnlineServices.start();` (lib/online/online_config.dart) and pass `online` (nullable) down to the shell. It returns null unless the build sets --dart-define=CPA_ONLINE_BACKEND=firebase (or fake in debug), so default builds are unchanged and never contact Firebase.
+Reason: Firebase must be initialized before any online call; lib/main.dart is orchestrator-owned.
+Status: open
+```
+
+```text
+Lane: 4
+Blocking PR: lane-5 Firebase backend (follow-up to the slice 3a request above)
+Request: In settings, wire the online account UI to `OnlineServices` (null = keep "unavailable"):
+- "Link Google": `final ok = await showParentGate(context, english: player.english);` then, only if ok != null, `services.account.linkGoogle(await services.google.pick(), ok)`. Same gate before "Restore with Google" (`restoreWithGoogle`).
+- "Delete account" behind the parent gate and a confirmation, calling `services.account.deleteAccount()`; on `OnlineErrorCode.requiresRecentLogin` ask for Google again and retry; then clear local data.
+- Join room: a 6-character code field calling `services.rooms.joinRoom(code, uid)`; host: `createRoom` then `waitForGuest`.
+Reason: lane 5 cannot edit lane-4 screens; the parent gate is required by docs/contract.md §7 before Google sign-in.
+Status: open
+```
+
+```text
+Lane: owner
+Blocking PR: lane-5 Firebase backend
+Request: (1) Deploy rules and functions from backend/ (`firebase deploy --only firestore:rules,functions`) after review; (2) TTL policy on rooms.expiresAt; (3) for Google linking: enable the Google provider, add SHA-1/SHA-256 of the debug, upload and Play signing keys, and commit the re-downloaded google-services.json (the current one has no OAuth client). Details: backend/FIREBASE_SWITCH.md §6.
+Reason: lane 5 never deploys; Google sign-in fails with googleUnavailable until the OAuth client exists.
+Status: open
+```

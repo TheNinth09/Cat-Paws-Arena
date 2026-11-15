@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "724370470624",
+    "project_id": "cat-paws-arena",
+    "storage_bucket": "cat-paws-arena.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:724370470624:android:19ea66d9d1c531353d4285",
+        "android_client_info": {
+          "package_name": "games.oneear.catpawsarena"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJOfWZn4sCoMeYeyOdWs3BeeNFvp-GMg0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

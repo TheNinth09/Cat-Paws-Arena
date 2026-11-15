@@ -21,8 +21,9 @@ who did the step, never by an agent for a human gate.
 
 ## B. Code on `main`
 
-- [ ] Firebase backend implemented behind `CPA_ONLINE_BACKEND=firebase`
-      (`backend/FIREBASE_SWITCH.md`), with emulator tests passing.
+- [ ] Firebase backend behind `CPA_ONLINE_BACKEND=firebase`
+      (`backend/FIREBASE_SWITCH.md`), rules tests passing, and
+      `OnlineServices.start()` called from `lib/main.dart`.
 - [ ] Friend match done-when checks of lane 5 slice 3 pass (100 simulated
       matches agree; tampered log flagged; restart restore; reinstall
       restore).
@@ -41,8 +42,10 @@ who did the step, never by an agent for a human gate.
 - [ ] Indexes deployed.
 - [ ] TTL policies: `rooms.expiresAt` (24 h), matches 30 days after end,
       events 90 days.
-- [ ] Functions deployed in `europe-west1`: `deleteAccount`, push on move,
-      deadline forfeit.
+- [ ] Functions deployed in `europe-west1`: `onUserDeleted`,
+      `onMoveCreated`, and the deadline forfeit (match slice).
+- [ ] Google provider enabled, SHA fingerprints added, and
+      `google-services.json` re-downloaded with the OAuth web client.
 - [ ] Two real phones finish a friend match against the deployed backend
       (list of two-phone checks comes with slice 3).
 
@@ -80,7 +83,7 @@ who did the step, never by an agent for a human gate.
 ## F. Known gaps today
 
 - No release has ever run: the signing secrets are not configured.
-- The workflow does not yet pass `CPA_ONLINE_BACKEND=firebase` or provide
-  `google-services.json`; that comes with the Firebase switch.
+- Google linking cannot work yet: the Google provider and OAuth client are
+  not configured in the Firebase project.
 - Players with the old `com.pawsandclaws.cat_paws_arena` app get the new ID
   as a separate app; there is no data migration between them.

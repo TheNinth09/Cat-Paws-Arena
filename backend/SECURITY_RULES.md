@@ -1,10 +1,9 @@
 # Firestore security rules checklist (lane 5)
 
-Status: **checklist only.** No `firestore.rules` file is deployed or
-committed yet. The rules are written and tested against the Firebase
-emulator in the PR that turns Firebase on (`backend/FIREBASE_SWITCH.md`),
-and the owner deploys them. Every line below must have a passing emulator
-test before that PR is ready for review.
+Status: `backend/firestore.rules` implements every section through
+emotes; `backend/test/rules.test.js` tests them on the emulator (20 tests).
+Moves, match results and events come with later slices and are denied
+until then. Nothing is deployed; the owner deploys (FIREBASE_SWITCH.md §6).
 
 Binding source: `docs/contract.md` §7 — only the two participants touch a
 match, moves are create-only/ordered/type-checked, peer-visible strings are
@@ -34,13 +33,14 @@ preset IDs only.
 - [ ] `revision == resource.data.revision + 1` on update; `1` on create.
 - [ ] No name, photo, email, or free-text field exists in the allowed keys.
 - [ ] `presetDisplayName` (when added) must be an ID from the preset list.
-- [ ] Delete only through the `deleteAccount` function (Admin SDK); clients
-      cannot delete.
+- [ ] The owner may delete their own document (in-app deletion); the
+      `onUserDeleted` function removes anything left.
 
 ## `users/{uid}/devices/{installId}` — push tokens
 
 - [ ] Read/write only by the owner.
-- [ ] Fields: FCM token, app version, platform, `updatedAt == request.time`.
+- [ ] Fields: `fid` (Firebase installation ID), `platform == 'android'`,
+      `updatedAt == request.time`; install ID is 20 lowercase letters/digits.
 - [ ] Never readable by the other player; the push function reads it with
       the Admin SDK.
 
@@ -48,13 +48,13 @@ preset IDs only.
 
 - [ ] `code` matches `^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$`.
 - [ ] Create: `hostUid == request.auth.uid`, `createdAt == request.time`,
-      `expiresAt == request.time + duration.value(24, 'h')`.
+      `expiresAt` within 23–25 h of `request.time` (TTL only; expiry is
+      `createdAt + 24h`).
 - [ ] No update.
 - [ ] `get` by any signed-in user; `list` denied (no enumerating codes).
-- [ ] Delete by the host, or by the guest only inside the claim
-      transaction: `getAfter(/matches/<id>)` exists with
-      `guestUid == request.auth.uid` and `hostUid == resource.data.hostUid`,
-      and `request.time < resource.data.expiresAt`.
+- [ ] Delete by the host, by anyone once expired, or by the guest only
+      inside the claim transaction: `getAfter(/matches/{code}_{createdAtMillis})`
+      exists with `guestUid == request.auth.uid`.
 - [ ] Guest cannot claim their own room (`hostUid != request.auth.uid`).
 - [ ] Firestore TTL policy on `expiresAt` (owner deploys).
 - [ ] Emulator test: three guests claim at once, exactly one match exists.
@@ -63,9 +63,11 @@ preset IDs only.
 
 - [ ] Read and write only if
       `request.auth.uid in [resource.data.hostUid, resource.data.guestUid]`.
-- [ ] Create only inside the room claim (see above): seed, `MatchConfig`,
-      engine and contract versions, both slots, both loadout snapshots,
-      `opponentKind == 'friend'`, `createdAt == request.time`.
+- [ ] Create only inside the room claim: ID `{code}_{room createdAt millis}`,
+      exactly `roomCode`, `hostUid` (from the room), `guestUid == auth.uid`,
+      `createdAt == request.time`, room still live and deleted in the same
+      commit. Seed, `MatchConfig`, versions and loadouts are added by the
+      match slice.
 - [ ] Seed, config, versions, slots and loadouts are immutable after create
       (`diff(resource.data).affectedKeys()` excludes them).
 - [ ] A player may update only their own final hashes, their own
@@ -111,9 +113,9 @@ preset IDs only.
 
 ## Functions (Admin SDK bypasses rules, so check these in review)
 
-- [ ] `deleteAccount` (callable, `europe-west1`): only for `context.auth.uid`;
-      deletes user, devices, rooms and events, anonymizes matches, then
-      deletes the Auth user.
+- [ ] `onUserDeleted` (Auth trigger, `europe-west1`): deletes what is left
+      of the user, devices, clock and rooms, and writes `deleted` in place of
+      the uid in matches and emotes. The app deletes the profile first.
 - [ ] Push on move create: payload carries only the match ID, no names.
 - [ ] Deadline forfeit (scheduled): uses server time, writes only
       `roundDeadline`/forfeit fields.
