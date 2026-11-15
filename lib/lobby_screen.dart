@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'cat_avatar.dart';
 import 'catalog.dart';
 import 'profile.dart';
+import 'shell/daily_board.dart';
+import 'shell/house_tour.dart';
+import 'shell/reward_calendar.dart';
 import 'ui_widgets.dart';
 
 const _cardGradient = LinearGradient(
@@ -27,7 +30,8 @@ class LobbyScreen extends StatelessWidget {
     required this.onRoad,
   });
   final Player player;
-  final VoidCallback onBattle, onRoad;
+  final void Function(HouseCat cat) onBattle;
+  final VoidCallback onRoad;
   Widget progress() => Padding(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
     child: Material(
@@ -56,36 +60,43 @@ class LobbyScreen extends StatelessWidget {
       ),
     ],
   );
-  Widget controls() => Padding(
+  Widget controls(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        ArenaButton(
-          text: player.english ? 'BATTLE • PRACTICE' : 'LUPTĂ • ANTRENAMENT',
-          onPressed: onBattle,
-          green: true,
-          spriteName: 'btn_play_paw',
+        _HouseTourCard(player: player, onBattle: onBattle),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _ReturnButton(
+                title: 'CADOU ZILNIC',
+                subtitle: '7 zile',
+                onTap: () => showRewardCalendar(context, player),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ReturnButton(
+                title: 'TABLA ZILEI',
+                subtitle: 'scor zilnic',
+                onTap: () => showDailyBoard(context, player),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: const Color(0x553b2a24),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0x55ffc63c), width: 1),
-          ),
-          child: Text(
-            player.english
-                ? '1v1 Arena • offline practice • bot opponent'
-                : '1v1 Arena • antrenament offline • adversar bot',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: cream,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
+        Text(
+          player.english
+              ? 'House cats are labelled bots; matches stay local practice.'
+              : 'Pisicile casei sunt boți etichetați; meciurile rămân antrenament local.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: cream,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -104,7 +115,7 @@ class LobbyScreen extends StatelessWidget {
             const SizedBox(height: 4),
             Center(child: hero()),
             const SizedBox(height: 8),
-            controls(),
+            controls(context),
           ],
         );
       }
@@ -116,7 +127,7 @@ class LobbyScreen extends StatelessWidget {
               child: FittedBox(fit: BoxFit.scaleDown, child: hero()),
             ),
           ),
-          controls(),
+          controls(context),
         ],
       );
     },
@@ -308,6 +319,206 @@ class _HeroStage extends StatelessWidget {
               ),
             ),
             CatCharacter(player, height: 235),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _HouseTourCard extends StatelessWidget {
+  const _HouseTourCard({required this.player, required this.onBattle});
+
+  final Player player;
+  final void Function(HouseCat cat) onBattle;
+
+  @override
+  Widget build(BuildContext context) {
+    final room = houseRoomForTrophies(player.trophies);
+    final roomIndex = houseRooms.indexOf(room);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        gradient: _cardGradient,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ink, width: 2.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x6651312d),
+            offset: Offset(0, 4),
+            blurRadius: 5,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Turul casei • ${room.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                'Camera ${roomIndex + 1}/${houseRooms.length}',
+                style: const TextStyle(
+                  color: Color(0xff8a5a3b),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            player.english
+                ? 'Choose a labelled house-cat bot'
+                : 'Alege o pisică-bot din casă',
+            style: const TextStyle(
+              color: Color(0xff8a5a3b),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              for (final cat in room.cats)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: _HouseCatButton(
+                      player: player,
+                      cat: cat,
+                      onBattle: onBattle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HouseCatButton extends StatelessWidget {
+  const _HouseCatButton({
+    required this.player,
+    required this.cat,
+    required this.onBattle,
+  });
+
+  final Player player;
+  final HouseCat cat;
+  final void Function(HouseCat cat) onBattle;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0x66ffffff),
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      onTap: () => onBattle(cat),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ink, width: 1.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CatAvatar(houseCatPlayer(player.prefs, cat), size: 42),
+            const SizedBox(height: 4),
+            Text(
+              cat.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: ink,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            Text(
+              'Nv ${cat.level}',
+              style: const TextStyle(
+                color: Color(0xff8a5a3b),
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const Text(
+              'BOT',
+              style: TextStyle(
+                color: gold,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _ReturnButton extends StatelessWidget {
+  const _ReturnButton({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final String title, subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0x553b2a24),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0x55ffc63c), width: 1),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: cream,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xffe8c9a0),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       ),
