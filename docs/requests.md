@@ -109,3 +109,11 @@ Request: Keep `arena_engine: path: packages/arena_engine` in pubspec.yaml when t
 Reason: The vendored engine package is lane-1 code; the analyzer lints live there, not in lane-2 files.
 Status: answered — `arena_engine` path dependency is retained in `pubspec.yaml`; SFX are under `assets/generated/audio/` with no extra pubspec line; the two `unnecessary_const` infos in `packages/arena_engine/lib/src/engine.dart` were fixed by the orchestrator during merge.
 ```
+
+```text
+Lane: 4
+Blocking PR: lane-4 slice 4 (settings UI for online account and rooms)
+Request: When lane 5 replaces `FakeCloud`/`FakeAuth` with configured Firebase backends and provides the Google credential flow, set `OnlinePlay.services` once during app bootstrap (for example in `lib/main.dart` before `runApp`) to `OnlinePlayServices(account: OnlineAccount(auth, store), rooms: RoomService(store), googleCredential: ...)`; leave it null until then.
+Reason: The new settings section is gated by `OnlinePlay.services != null` in `lib/shell/online_play.dart`. Without a bootstrap wiring point the account/room controls stay hidden even after online services are configured, and lane 4 cannot edit `lib/main.dart` (orchestrator-owned) or lane-5 backend files.
+Status: open
+```
