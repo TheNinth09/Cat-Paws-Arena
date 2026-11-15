@@ -14,4 +14,18 @@ Reason: <dependency or integration need>
 Status: open
 ```
 
-No requests yet.
+```text
+Lane: 5
+Blocking PR: lane-5 (slice 1: CI and release hygiene)
+Request: Lane 2 removes the unused `_goldGradient` declaration in `lib/match_screen.dart:26`.
+Reason: `flutter analyze` exits 1 on this pre-existing warning (see docs/baseline.md). CI runs `flutter analyze --no-fatal-warnings` until it is fixed; lane 5 will then make warnings fatal again in `.github/workflows/ci.yml`.
+Status: open
+```
+
+```text
+Lane: 5
+Blocking PR: lane-5 (slice 1: CI and release hygiene)
+Request: Owner adds the repository secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD (upload key), and the orchestrator notes in README.md that releases come from pushing a `vX.Y.Z` tag matching `pubspec.yaml`.
+Reason: The APK is no longer tracked. `.github/workflows/release.yml` needs these secrets to sign; it refuses to publish a debug-signed APK.
+Status: open
+```
