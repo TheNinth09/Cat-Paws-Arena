@@ -71,7 +71,7 @@ class _HomeState extends State<Home> {
           context,
           item,
           const Text(
-            'Versiunea 1.0.2 • Ecrane construite din widgets, magazin în grilă, avatar vectorial și navigare adaptivă.',
+            'Versiunea 1.0.3 • Design premium, echipă și evenimente locale simulate, font rotunjit și UI modular.',
           ),
         );
       case 'Clasamente':
@@ -195,7 +195,17 @@ class _HomeState extends State<Home> {
                           ),
                         ),
                         TeamScreen(player: p, onUnavailable: unavailable),
-                        EventsScreen(player: p, onUnavailable: unavailable),
+                        EventsScreen(
+                          player: p,
+                          onUnavailable: unavailable,
+                          onBattle: (battleMode) => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  MatchScreen(player: p, mode: battleMode),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),

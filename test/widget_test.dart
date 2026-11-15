@@ -21,16 +21,18 @@ void main() {
     );
   }
 
-  testWidgets('runtime bundle contains only individual sprite assets', (
-    tester,
-  ) async {
+  testWidgets('runtime bundle contains only sprites and fonts', (tester) async {
     final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
     final artwork = manifest.listAssets().where(
       (name) => name.startsWith('assets/'),
     );
     expect(artwork, isNotEmpty);
     expect(
-      artwork.where((name) => !name.startsWith('assets/generated/')),
+      artwork.where(
+        (name) =>
+            !name.startsWith('assets/generated/') &&
+            !name.startsWith('assets/fonts/'),
+      ),
       isEmpty,
     );
     await tester.pumpWidget(const MaterialApp(home: StudioSplash()));

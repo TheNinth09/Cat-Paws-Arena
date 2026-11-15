@@ -28,7 +28,7 @@ class CatPawsApp extends StatelessWidget {
     theme: ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: gold),
       scaffoldBackgroundColor: ink,
-      fontFamily: 'sans-serif',
+      fontFamily: 'Nunito',
       textTheme: const TextTheme(
         bodyMedium: TextStyle(color: ink, fontWeight: FontWeight.w600),
       ),
