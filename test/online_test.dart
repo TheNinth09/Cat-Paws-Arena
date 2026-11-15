@@ -294,6 +294,26 @@ void main() {
     });
   });
 
+  group('account deletion refused', () {
+    test('a stale Google session deletes nothing', () async {
+      final cloud = FakeCloud();
+      final auth = FakeAuth(cloud);
+      final account = OnlineAccount(auth, cloud);
+      final user = await account.start();
+      await account.save(CloudProfile.fromPlayer(await freshPlayer()));
+      await account.linkGoogle(const GoogleCredential('g-old'), approve());
+      final room = await RoomService(cloud).createRoom(user.uid);
+      auth.requireRecentLogin = true;
+      await expectLater(
+        account.deleteAccount(),
+        throwsOnline(OnlineErrorCode.requiresRecentLogin),
+      );
+      expect(cloud.profiles.keys, [user.uid]);
+      expect(cloud.rooms.keys, [room.code]);
+      expect(account.user?.uid, user.uid);
+    });
+  });
+
   group('cloud save parsing', () {
     Future<Map<String, Object?>> valid() async =>
         CloudProfile.fromPlayer(await freshPlayer()).toJson();

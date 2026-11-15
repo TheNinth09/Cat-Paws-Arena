@@ -277,23 +277,6 @@ class FirestoreCloudStore implements CloudStore {
           if (emote != null && from is String) yield EmoteEvent(from, emote);
         }
       });
-
-  @override
-  Future<void> deleteUserData(String uid) => _guard(() async {
-    final batch = _db.batch();
-    final devices = await _users.doc(uid).collection('devices').get();
-    for (final doc in devices.docs) {
-      batch.delete(doc.reference);
-    }
-    final rooms = await _rooms.where('hostUid', isEqualTo: uid).get();
-    for (final doc in rooms.docs) {
-      batch.delete(doc.reference);
-    }
-    batch
-      ..delete(_users.doc(uid))
-      ..delete(_db.collection('clocks').doc(uid));
-    await batch.commit();
-  });
 }
 
 /// Google account picker. Needs the Google provider enabled in Firebase and
