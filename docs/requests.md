@@ -19,7 +19,7 @@ Lane: 4
 Blocking PR: lane-4 branch (Slice 1 freeze)
 Request: In lib/match_screen.dart, remove the unused top-level `_goldGradient` declaration at line 26 (or use it) so `flutter analyze` is clean.
 Reason: `flutter analyze` currently fails with `unused_element` on `_goldGradient`; the file is lane-2 owned and lane 4 cannot edit it. Slice 1 done-when requires a clean analyzer.
-Status: answered — assigned to lane-2; pre-existing warning documented in docs/baseline.md; CI runs analyze non-fatally until lane-2 fixes it. Does not block lane-4 (merged).
+Status: answered — lane-2 removed `_goldGradient` in the arena-engine duel merge; it is absent on main.
 ```
 
 ```text
@@ -27,7 +27,7 @@ Lane: 5
 Blocking PR: lane-5 (slice 1: CI and release hygiene)
 Request: Lane 2 removes the unused `_goldGradient` declaration in `lib/match_screen.dart:26`.
 Reason: `flutter analyze` exits 1 on this pre-existing warning (see docs/baseline.md). CI runs `flutter analyze --no-fatal-warnings` until it is fixed; lane 5 will then make warnings fatal again in `.github/workflows/ci.yml`.
-Status: answered — lane-2 owns `lib/match_screen.dart` and should remove or use `_goldGradient` in its duel PR; orchestrator will switch CI back to fatal warnings after that lands.
+Status: answered — `_goldGradient` is removed on main; orchestrator will restore fatal-warning analyze once `flutter analyze` is verified clean.
 ```
 
 ```text
@@ -39,7 +39,6 @@ Status: open — orchestrator documented the tag-release flow in README.md; stil
 ```
 
 ```text
-<<<<<<< HEAD
 Lane: 4
 Blocking PR: lane-5 (slice 3a: room codes, account and cloud save over a fake transport)
 Request: In lib/app_dialogs.dart settings, add "Link Google account" and "Delete account" entries (delete behind a parent gate and a confirm step) that call `OnlineAccount.linkGoogle` and `OnlineAccount.deleteAccount` from `lib/online/online_account.dart`, then clear local data. Add a join-room field that passes the typed code to `RoomService.joinRoom` (it already accepts lower case, spaces and dashes). Show both only when online play is configured; until then keep the existing "unavailable" label.
@@ -60,7 +59,7 @@ Lane: 4
 Blocking PR: lane-4 slice 2 (House Tour)
 Request: Lane 2 adds an optional house-cat opponent (name, trophies, avatar fields) to `MatchScreen` and `ArenaMatchController` so a match can start against the selected `HouseCat` instead of always `Bubble Bot`.
 Reason: Lane-4 lobby offers named resident house cats; lane-4 cannot edit lane-2 match files. Orchestrator forwards lane-4's request to lane-2.
-Status: open — assigned to lane-2; does not block lane-5 slice 3a.
+Status: answered on the lane-2 side and merged — `MatchScreen(opponent: HouseCat)` + `ArenaMatchController(opponent: BotOpponent)` are on main; remaining step is lane-4 wiring the selected cat through `onBattle` in `lib/home_screen.dart`.
 ```
 
 ```text
@@ -75,6 +74,22 @@ Status: answered — implemented on main in 31a26b1 (`Player.result` floors trop
 Lane: 1
 Blocking PR: lane-1-s3 (slice 3: bots and luck harness)
 Request: Add a path dependency on the engine to the root `pubspec.yaml` (orchestrator-owned): `arena_engine: { path: packages/arena_engine }` under `dependencies:`.
-Reason: Lanes 2 and 4 must `import 'package:arena_engine/arena_engine.dart'` to drive matches with the real engine instead of provisional contract types (lane 2 already carries `lib/duel_events.dart` workarounds because the package is not yet a dependency). The package is pure Dart with no Flutter imports, so the path dependency is safe for all consumers once `lane-1` merges to `main`.
+Reason: Lanes 2 and 4 must `import 'package:arena_engine/arena_engine.dart'` to drive matches with the real engine instead of provisional contract types. The package is pure Dart with no Flutter imports, so the path dependency is safe for all consumers once `lane-1` merges to `main`.
 Status: answered — orchestrator added the `arena_engine` path dependency to root `pubspec.yaml`.
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2-slice-3 (slice 3: feel)
+Request: Resolved in lane-2-s2 — the 16 SFX WAVs and CREDITS.md moved to assets/generated/audio/ (bundled via the existing assets/generated/ entry), so no pubspec audio line is needed and other lanes' bundle-whitelist tests stay green.
+Reason: Lane 2 owns the audio assets; keeping them under assets/generated/ matches the AGENTS.md runtime-bundle rule ("assets/generated/ individual sprites/audio") and avoids editing lane-3/lane-4 test whitelists.
+Status: answered — merged on main under `assets/generated/audio/`.
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2-s2 (slice 2: arena engine duel)
+Request: Keep `arena_engine: path: packages/arena_engine` in pubspec.yaml when this branch merges — slice 2 cannot compile without the local package dependency. The slice-3 SFX moved from assets/audio/ to assets/generated/audio/ so the runtime bundle stays inside the assets/generated/ + assets/fonts/ whitelist without touching other lanes' tests; pubspec needs no audio line. Also: lane 1 fixes two `unnecessary_const` infos in packages/arena_engine/lib/src/engine.dart:61,63 (or the orchestrator excludes packages/** from the root analyzer), otherwise `flutter analyze` reports 2 info issues owned by lane 1.
+Reason: The vendored engine package is lane-1 code; the analyzer lints live there, not in lane-2 files.
+Status: answered — `arena_engine` path dependency is retained in `pubspec.yaml`; SFX are under `assets/generated/audio/` with no extra pubspec line; the two `unnecessary_const` infos in `packages/arena_engine/lib/src/engine.dart` were fixed by the orchestrator during merge.
 ```

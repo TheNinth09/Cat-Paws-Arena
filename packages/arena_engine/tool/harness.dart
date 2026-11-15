@@ -204,7 +204,7 @@ Future<void> main(List<String> args) async {
   out.writeln();
   out.writeln('| setting | matches | first wins | second wins | draws | '
       'mean score P1 | mean score P2 | median score gap | '
-      'median \|diff\|/mean | mean plies |');
+      'median |diff|/mean | mean plies |');
   out.writeln('|---|---|---|---|---|---|---|---|---|---|');
   for (final r in results) {
     final meanDiff = median(r.scoreDiffs);

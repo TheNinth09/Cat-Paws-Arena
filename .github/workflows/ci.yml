@@ -36,11 +36,9 @@ jobs:
         working-directory: packages/arena_engine
         run: dart pub get
 
-      # Warnings are reported but not fatal until lane 2 removes the
-      # pre-existing unused _goldGradient (see docs/requests.md).
-      # Errors and lints still fail the job.
+      # Analyzer is clean on main; keep warnings and infos fatal.
       - name: flutter analyze
-        run: flutter analyze --no-fatal-warnings
+        run: flutter analyze
 
       - name: flutter test
         run: flutter test

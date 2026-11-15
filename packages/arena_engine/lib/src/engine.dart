@@ -58,9 +58,9 @@ EngineResult<MatchState> newMatch(int seed, MatchConfig config) {
 /// when the state cannot accept a move (a finished match or a player with
 /// no moves left).
 EngineResult<List<Move>> legalMoves(MatchState state) {
-  if (state.isFinished) return const EngineOk(const []);
+  if (state.isFinished) return const EngineOk([]);
   final slot = state.activePlayer;
-  if (state.movesLeft(slot) <= 0) return const EngineOk(const []);
+  if (state.movesLeft(slot) <= 0) return const EngineOk([]);
   final board = MutableBoard.fromState(state.boardOf(slot));
   final pairs = legalSwapPairs(board);
   final w = board.width;
