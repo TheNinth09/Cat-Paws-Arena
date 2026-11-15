@@ -43,6 +43,8 @@ class RoomRecord {
   final DateTime expiresAt;
 }
 
+enum RoomClaim { joined, notFound, expired, ownRoom }
+
 abstract interface class CloudStore {
   /// Server time. Device clocks are never authoritative.
   DateTime serverNow();
@@ -53,6 +55,11 @@ abstract interface class CloudStore {
   Future<bool> createRoom(RoomRecord room);
   Future<RoomRecord?> readRoom(String code);
   Future<void> deleteRoom(String code);
+
+  /// Atomically claims [code] for [guestUid] (a Firestore transaction in
+  /// production), so only one guest can join. The room is deleted when the
+  /// claim is [RoomClaim.joined] or [RoomClaim.expired].
+  Future<(RoomClaim, RoomRecord?)> claimRoom(String code, String guestUid);
 
   /// Server-side deletion: profile, devices and open rooms of [uid].
   Future<void> deleteUserData(String uid);

@@ -45,17 +45,21 @@ class RoomService {
     if (code == null) {
       throw const OnlineException(OnlineErrorCode.invalidRoomCode);
     }
-    final room = await store.readRoom(code);
-    if (room == null) throw const OnlineException(OnlineErrorCode.roomNotFound);
-    if (!store.serverNow().isBefore(room.expiresAt)) {
-      await store.deleteRoom(code);
-      throw const OnlineException(OnlineErrorCode.roomExpired);
-    }
-    if (room.hostUid == guestUid) {
-      throw const OnlineException(OnlineErrorCode.ownRoom);
-    }
-    await store.deleteRoom(code);
-    return JoinedRoom(code: code, hostUid: room.hostUid, guestUid: guestUid);
+    final (claim, room) = await store.claimRoom(code, guestUid);
+    return switch (claim) {
+      RoomClaim.joined => JoinedRoom(
+        code: code,
+        hostUid: room!.hostUid,
+        guestUid: guestUid,
+      ),
+      RoomClaim.notFound => throw const OnlineException(
+        OnlineErrorCode.roomNotFound,
+      ),
+      RoomClaim.expired => throw const OnlineException(
+        OnlineErrorCode.roomExpired,
+      ),
+      RoomClaim.ownRoom => throw const OnlineException(OnlineErrorCode.ownRoom),
+    };
   }
 
   Future<void> cancelRoom(RoomRecord room) => store.deleteRoom(room.code);

@@ -51,6 +51,22 @@ class FakeCloud implements CloudStore {
   Future<void> deleteRoom(String code) async => rooms.remove(code);
 
   @override
+  Future<(RoomClaim, RoomRecord?)> claimRoom(
+    String code,
+    String guestUid,
+  ) async {
+    final room = rooms[code];
+    if (room == null) return (RoomClaim.notFound, null);
+    if (!serverNow().isBefore(room.expiresAt)) {
+      rooms.remove(code);
+      return (RoomClaim.expired, room);
+    }
+    if (room.hostUid == guestUid) return (RoomClaim.ownRoom, room);
+    rooms.remove(code);
+    return (RoomClaim.joined, room);
+  }
+
+  @override
   Future<void> deleteUserData(String uid) async {
     profiles.remove(uid);
     rooms.removeWhere((_, room) => room.hostUid == uid);

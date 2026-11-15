@@ -101,6 +101,22 @@ void main() {
       expect(cloud.rooms, isEmpty);
     });
 
+    test('two friends joining at once: only one gets the room', () async {
+      final rooms = RoomService(cloud, random: Random(5));
+      final room = await rooms.createRoom('host');
+      final results = await Future.wait([
+        for (final guest in ['g1', 'g2', 'g3'])
+          rooms
+              .joinRoom(room.code, guest)
+              .then<Object>((j) => j, onError: (Object e) => e),
+      ]);
+      expect(results.whereType<JoinedRoom>(), hasLength(1));
+      expect(
+        results.whereType<OnlineException>().map((e) => e.code),
+        everyElement(OnlineErrorCode.roomNotFound),
+      );
+    });
+
     test('a code collision picks a new code', () async {
       final first = await RoomService(cloud, random: Random(9)).createRoom('a');
       final second = await RoomService(
