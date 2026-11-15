@@ -37,3 +37,19 @@ Request: Owner adds the repository secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYS
 Reason: The APK is no longer tracked. `.github/workflows/release.yml` needs these secrets to sign; it refuses to publish a debug-signed APK.
 Status: open — orchestrator documented the tag-release flow in README.md; still requires the owner to add the four Android signing secrets before the first tagged release.
 ```
+
+```text
+Lane: 4
+Blocking PR: lane-4 slice 2 (House Tour)
+Request: In lib/profile.dart, change `Player.result` so a win adds 30 trophies, a loss subtracts 10 (currently 25), and trophies never fall below the floor of the highest House Tour room already reached. Exact change: before applying `outcome`, compute `floor` as the greatest House Tour threshold (`0`, `300`, `800`, `1500`) that is `<= trophies`; then set `trophies = (trophies + delta).clamp(floor, 1000000)` where `delta` is `+30` for a win and `-10` for a loss.
+Reason: Slice 2 gates House Tour rooms by trophies; lane 4 cannot edit orchestrator-owned `lib/profile.dart`.
+Status: open
+```
+
+```text
+Lane: 4
+Blocking PR: lane-4 slice 2 (House Tour)
+Request: In lib/match_screen.dart and lib/match_controller.dart, accept an optional house-cat opponent (name, trophies, and avatar fields) so `MatchScreen` can start against the selected `HouseCat` instead of always using `Bubble Bot`. Minimal change: add an optional opponent/player parameter to `MatchScreen`, pass it to `ArenaMatchController`, and use `opponent.name`/`opponent.trophies` for the bot label and `botTrophies`.
+Reason: Slice 2 lobby offers named resident house cats; lane 4 owns lobby/home but cannot edit lane-2 match files.
+Status: open
+```
