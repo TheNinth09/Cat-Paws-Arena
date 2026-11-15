@@ -23,7 +23,7 @@ class CatPawsApp extends StatelessWidget {
   final Player player;
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Cat Paws Arena • Paws & Claws',
+    title: 'Cat Paws Arena • One Ear Games',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: gold),
