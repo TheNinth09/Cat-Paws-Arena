@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import 'app_dialogs.dart';
+import 'board_game.dart';
 import 'cat_avatar.dart';
 import 'catalog.dart';
 import 'match_controller.dart';
@@ -22,11 +22,6 @@ const _barGradient = LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
   colors: [Color(0xff8a5a44), Color(0xff54342a)],
-);
-const _goldGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xfffff3c4), gold, Color(0xffe8961f)],
 );
 const _modeIcons = [Icons.group, Icons.bolt, Icons.shield, Icons.emoji_events];
 const _powerShort = ['ZOOMIES', 'SHADOW POUNCE', 'LASER CHASE'];
@@ -48,6 +43,7 @@ class _MatchScreenState extends State<MatchScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final ArenaMatchController match;
   late final AnimationController fx;
+  final _boardKey = GlobalKey<BoardViewState>();
   Timer? emoteTimer;
   String emote = '';
   bool showingDialog = false;
@@ -69,6 +65,9 @@ class _MatchScreenState extends State<MatchScreen>
   void initState() {
     super.initState();
     match = ArenaMatchController(p, widget.mode);
+    match.eventSink = (events) {
+      _boardKey.currentState?.play(events);
+    };
     fx = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -348,7 +347,7 @@ class _MatchScreenState extends State<MatchScreen>
         ),
         const SizedBox(height: 8),
         _rewardLine('icon_trophy', 'Victorie', '+30 trofee'),
-        _rewardLine('icon_paw_coin', 'Bonus', '+150 lăpuțe'),
+        _rewardLine('icon_paw_coin', 'Bonus', '+150 lăbuțe'),
         const SizedBox(height: 6),
         const Text(
           'Egalitate: 0 trofee • Înfrângere: -25 trofee',
@@ -501,7 +500,7 @@ class _MatchScreenState extends State<MatchScreen>
         Expanded(
           child: _ScoreChip(
             avatar: const _BotHead(size: 36),
-            name: 'Bubble Bot',
+            name: 'Bubble Bot · BOT',
             score: match.botScore,
           ),
         ),
@@ -537,7 +536,17 @@ class _MatchScreenState extends State<MatchScreen>
             borderRadius: BorderRadius.circular(13),
             child: Stack(
               children: [
-                Positioned.fill(child: GameWidget(game: match.game)),
+                Positioned.fill(
+                  child: BoardView(
+                    key: _boardKey,
+                    initial: match.initialSnapshot,
+                    onSwapAttempt: match.tryMove,
+                    onIdle: match.onBoardIdle,
+                    inputEnabled: match.acceptingInput,
+                    active: match.phase != MatchPhase.finished,
+                    suspended: match.paused,
+                  ),
+                ),
                 if (emote.isNotEmpty)
                   Positioned(
                     right: 6,
@@ -610,7 +619,7 @@ class _MatchScreenState extends State<MatchScreen>
                   spriteName: powers[power],
                   singleLine: true,
                   onPressed: match.board.charge >= 100
-                      ? () => match.game.power(power)
+                      ? () => match.firePower(power)
                       : null,
                 ),
               ),
@@ -711,7 +720,7 @@ class _MatchScreenState extends State<MatchScreen>
             Flexible(
               child: Text(
                 win
-                    ? '+30 Trofee • +150 Lăpuțe'
+                    ? '+30 Trofee • +150 Lăbuțe'
                     : loss
                     ? '-25 Trofee'
                     : '0 Trofee',
