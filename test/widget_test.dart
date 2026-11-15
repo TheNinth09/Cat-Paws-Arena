@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cat_paws_arena/arena.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/ui_widgets.dart';
+import 'package:cat_paws_arena/match_controller.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   void expectCleanArtwork(WidgetTester tester) {
@@ -14,15 +16,48 @@ void main() {
         .whereType<AssetImage>()
         .map((image) => image.assetName);
     expect(
-      assets.where(
-        (name) =>
-            name.startsWith('assets/ui_') ||
-            name.contains('loading_screen_clean'),
-      ),
+      assets.where((name) => !name.startsWith('assets/generated/')),
       isEmpty,
     );
   }
 
+  testWidgets('runtime bundle contains only individual sprite assets', (
+    tester,
+  ) async {
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final artwork = manifest.listAssets().where(
+      (name) => name.startsWith('assets/'),
+    );
+    expect(artwork, isNotEmpty);
+    expect(
+      artwork.where((name) => !name.startsWith('assets/generated/')),
+      isEmpty,
+    );
+    await tester.pumpWidget(const MaterialApp(home: StudioSplash()));
+    expectCleanArtwork(tester);
+  });
+  testWidgets('match pause reasons compose and results reward only once', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    final match = ArenaMatchController(p, 0);
+    await tester.pump(const Duration(seconds: 3));
+    expect(match.phase, MatchPhase.playing);
+    match.pause(modal: true);
+    match.pause(background: true);
+    match.pause(background: false);
+    await tester.pump(const Duration(seconds: 5));
+    expect(match.remaining, 90);
+    match.pause(modal: false);
+    await tester.pump(const Duration(seconds: 1));
+    expect(match.remaining, 89);
+    match.finish(1);
+    match.finish(1);
+    expect(p.trophies, 30);
+    expect(p.coins, 650);
+    match.dispose();
+  });
   for (final size in [
     const Size(320, 568),
     const Size(360, 640),
@@ -67,6 +102,30 @@ void main() {
       });
     }
   }
+  testWidgets('profile edits close safely and preserve the player name', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.tap(
+      find.descendant(of: find.byType(PlayerHud), matching: find.text('Alex')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find
+          .descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(TextField),
+          )
+          .first,
+      'Mimi',
+    );
+    await tester.tap(find.text('SALVEAZĂ'));
+    await tester.pumpAndSettle();
+    expect(p.name, 'Mimi');
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('shop reward and IAP cards are real interactive widgets', (
     tester,
   ) async {
@@ -94,6 +153,19 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('8.99 LEI').hitTestable(), findsOneWidget);
+    final bottoms = [
+      for (final price in ['8.99 LEI', '22.99 LEI', '44.99 LEI'])
+        tester
+            .getBottomLeft(
+              find.ancestor(
+                of: find.text(price),
+                matching: find.byType(ArenaButton),
+              ),
+            )
+            .dy,
+    ];
+    expect(bottoms[1], closeTo(bottoms[0], 0.1));
+    expect(bottoms[2], closeTo(bottoms[0], 0.1));
     await tester.tap(find.text('8.99 LEI'));
     await tester.pumpAndSettle();
     expect(find.text('Google Play Billing'), findsOneWidget);

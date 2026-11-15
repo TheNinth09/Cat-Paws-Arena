@@ -62,11 +62,21 @@ class ArenaButton extends StatelessWidget {
     required this.onPressed,
     this.green = false,
     this.spriteName,
+    this.singleLine = false,
   });
   final String text;
   final VoidCallback? onPressed;
-  final bool green;
+  final bool green, singleLine;
   final String? spriteName;
+  Widget caption() => Text(
+    text,
+    textAlign: TextAlign.center,
+    style: const TextStyle(
+      color: ink,
+      fontSize: 16,
+      fontWeight: FontWeight.w900,
+    ),
+  );
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
@@ -117,15 +127,9 @@ class ArenaButton extends StatelessWidget {
                         const SizedBox(width: 8),
                       ],
                       Flexible(
-                        child: Text(
-                          text,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: ink,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
+                        child: singleLine
+                            ? FittedBox(fit: BoxFit.scaleDown, child: caption())
+                            : caption(),
                       ),
                     ],
                   ),
@@ -229,12 +233,13 @@ class PlayerHud extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: Row(
               children: [
-                stat('icon_trophy', '$trophies', onRoad),
-                const SizedBox(height: 5),
-                stat('icon_paw_coin', '$coins', onShop, plus: true),
+                Expanded(child: stat('icon_trophy', '$trophies', onRoad)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: stat('icon_paw_coin', '$coins', onShop, plus: true),
+                ),
               ],
             ),
           ),
@@ -356,45 +361,84 @@ class ProductCard extends StatelessWidget {
   final VoidCallback? onPressed;
   @override
   Widget build(BuildContext context) => panel(
-    LayoutBuilder(
-      builder: (context, constraints) {
-        final info = Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            sprite(spriteName, size: 58),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: ink,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  if (subtitle != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 5),
-                      child: Text(subtitle!),
-                    ),
-                ],
+    Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(child: sprite(spriteName, size: 64)),
+        const SizedBox(height: 8),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: ink,
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        if (subtitle != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Text(subtitle!, textAlign: TextAlign.center),
+          ),
+        const SizedBox(height: 8),
+        ArenaButton(text: buttonText, onPressed: onPressed, green: true),
+      ],
+    ),
+  );
+}
+
+class SectionHeading extends StatelessWidget {
+  const SectionHeading(this.title, {super.key});
+  final String title;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    child: label(title, size: 25),
+  );
+}
+
+class AdaptiveCardGrid extends StatelessWidget {
+  const AdaptiveCardGrid({
+    super.key,
+    required this.children,
+    this.minWidth = 140,
+    this.maxColumns = 3,
+  });
+  final List<Widget> children;
+  final double minWidth;
+  final int maxColumns;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      final columns = ((constraints.maxWidth + 10) / (minWidth * scale + 10))
+          .floor()
+          .clamp(1, maxColumns);
+      return Column(
+        children: [
+          for (var start = 0; start < children.length; start += columns)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var col = 0; col < columns; col++) ...[
+                      if (col > 0) const SizedBox(width: 10),
+                      Expanded(
+                        child: start + col < children.length
+                            ? children[start + col]
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
-          ],
-        );
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            info,
-            const SizedBox(height: 8),
-            ArenaButton(text: buttonText, onPressed: onPressed, green: true),
-          ],
-        );
-      },
-    ),
+        ],
+      );
+    },
   );
 }
 
