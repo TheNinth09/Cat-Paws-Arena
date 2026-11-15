@@ -48,11 +48,13 @@ jobs:
           done
           keystore="$RUNNER_TEMP/upload-keystore.jks"
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          # java.util.Properties treats backslashes as escapes.
+          escape() { printf '%s' "${1//\\/\\\\}"; }
           {
-            echo "storeFile=$keystore"
-            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
-            echo "keyAlias=$ANDROID_KEY_ALIAS"
-            echo "keyPassword=$ANDROID_KEY_PASSWORD"
+            echo "storeFile=$(escape "$keystore")"
+            echo "storePassword=$(escape "$ANDROID_KEYSTORE_PASSWORD")"
+            echo "keyAlias=$(escape "$ANDROID_KEY_ALIAS")"
+            echo "keyPassword=$(escape "$ANDROID_KEY_PASSWORD")"
           } > android/key.properties
 
       - uses: actions/setup-java@v4
