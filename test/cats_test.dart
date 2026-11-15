@@ -5,8 +5,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cat_paws_arena/cat_avatar.dart';
+import 'package:cat_paws_arena/cats_screen.dart';
 import 'package:cat_paws_arena/main.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:cat_paws_arena/ui_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
@@ -201,5 +203,134 @@ void main() {
     expect(restored.coins, p.coins);
     expect(restored.owned, contains('hat'));
     expect(restored.daily, p.today);
+  });
+
+  test('preset cat names cover at least 200 unique entries', () {
+    expect(catPresetNames.length, greaterThanOrEqualTo(200));
+    expect(catPresetNames.toSet().length, catPresetNames.length);
+  });
+
+  testWidgets('all 480 creator combinations render without exceptions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Wrap(
+              children: [
+                for (var fur = 0; fur < catFurColours.length; fur++)
+                  for (var pattern = 0; pattern < catPatternCount; pattern++)
+                    for (var eyes = 0; eyes < catEyeColours.length; eyes++)
+                      for (var ears = 0; ears < catEarCount; ears++)
+                        CatSpecAvatar(
+                          CatSpec.custom(
+                            fur: fur,
+                            pattern: pattern,
+                            eyes: eyes,
+                            ears: ears,
+                          ),
+                          size: 24,
+                        ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byType(CatSpecAvatar),
+      findsNWidgets(catFurColours.length *
+          catPatternCount *
+          catEyeColours.length *
+          catEarCount),
+    );
+  });
+
+  testWidgets('a fixed sample of 30 combinations produces real images', (
+    tester,
+  ) async {
+    final signatures = <int>{};
+    for (var i = 0; i < 30; i++) {
+      final spec = CatSpec.custom(
+        fur: i % catFurColours.length,
+        pattern: (i * 7) % catPatternCount,
+        eyes: (i * 3) % catEyeColours.length,
+        ears: (i * 5) % catEarCount,
+      );
+      final render = await _renderCat(tester, CatSpecAvatar(spec, size: 64));
+      expect(render.png.length, greaterThan(200), reason: 'combo $i');
+      expect(
+        _alphaAt(render, render.width ~/ 2, render.height * 3 ~/ 5),
+        255,
+        reason: 'combo $i centre is painted',
+      );
+      signatures.add(render.rgba.fold(0, (h, b) => (h * 31 + b) & 0x7fffffff));
+    }
+    expect(
+      signatures.length,
+      greaterThan(10),
+      reason: 'the sample must cover visually distinct cats',
+    );
+  });
+
+  testWidgets('creator builds a cat, saves it, and restores on reopen', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final player = Player(prefs);
+    tester.view.physicalSize = const Size(900, 1900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(home: CatsScreen(player: player, onShop: () {})),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Creează-ți Pisica'));
+    await tester.pumpAndSettle();
+    expect(player.cat, 'Custom');
+
+    await tester.tap(find.text('Negru'));
+    await tester.pumpAndSettle();
+    expect(player.fur, 4);
+
+    await tester.tap(find.text('Calico'));
+    await tester.pumpAndSettle();
+    expect(player.pattern, 3);
+
+    await tester.tap(find.text('Albaștri'));
+    await tester.pumpAndSettle();
+    expect(player.eyes, 1);
+
+    await tester.tap(find.text('Smocuri'));
+    await tester.pumpAndSettle();
+    expect(player.ears, 3);
+
+    await tester.tap(find.widgetWithText(ArenaButton, 'ECHIPEAZĂ').first);
+    await tester.pumpAndSettle();
+    expect(player.power, 1);
+
+    final savedName = prefs.getString(catCustomNameKey);
+    expect(savedName, isNotNull);
+    expect(catPresetNames, contains(savedName));
+    expect(player.cat, 'Custom');
+
+    final restored = Player(prefs);
+    expect(restored.cat, 'Custom');
+    expect(restored.fur, 4);
+    expect(restored.pattern, 3);
+    expect(restored.eyes, 1);
+    expect(restored.ears, 3);
+    expect(restored.power, 1);
+
+    await tester.pumpWidget(
+      MaterialApp(home: CatsScreen(player: restored, onShop: () {})),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('CREATOR'), findsOneWidget);
+    expect(find.text(savedName!), findsOneWidget);
   });
 }

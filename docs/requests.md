@@ -14,4 +14,10 @@ Reason: <dependency or integration need>
 Status: open
 ```
 
-No requests yet.
+```text
+Lane: 3
+Blocking PR: lane-3 slice 2 (creator)
+Request: Stop selling powers in the shop. In lib/shop_screen.dart remove `...powers` from the 'ACCESORII & PUTERI' grid (line ~100) and stop granting `powers[0]` in `buyCombo` (line ~37); if catalog.dart pricing treats powers as buyable items, mark them non-purchasable. Powers must stay free for every cat, per contract decision 4 and the Families policy.
+Reason: The contract states "Three free powers of equal strength; none is sold." Lane 3's creator already lets the custom cat equip any of the three powers for free, but the shop still lists them at 300 paws, which contradicts the contract.
+Status: open
+```
