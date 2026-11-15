@@ -39,6 +39,7 @@ Status: open — orchestrator documented the tag-release flow in README.md; stil
 ```
 
 ```text
+<<<<<<< HEAD
 Lane: 4
 Blocking PR: lane-5 (slice 3a: room codes, account and cloud save over a fake transport)
 Request: In lib/app_dialogs.dart settings, add "Link Google account" and "Delete account" entries (delete behind a parent gate and a confirm step) that call `OnlineAccount.linkGoogle` and `OnlineAccount.deleteAccount` from `lib/online/online_account.dart`, then clear local data. Add a join-room field that passes the typed code to `RoomService.joinRoom` (it already accepts lower case, spaces and dashes). Show both only when online play is configured; until then keep the existing "unavailable" label.
@@ -68,4 +69,12 @@ Blocking PR: lane-4 slice 2 (House Tour)
 Request: In lib/profile.dart, change `Player.result` so a win adds 30 trophies, a loss subtracts 10, and trophies never fall below the floor of the highest House Tour room already reached.
 Reason: Slice 2 gates House Tour rooms by trophies; lane 4 cannot edit orchestrator-owned `lib/profile.dart`.
 Status: answered — implemented on main in 31a26b1 (`Player.result` floors trophies at `[0, 300, 800, 1500]` with +30/-10 deltas).
+```
+
+```text
+Lane: 1
+Blocking PR: lane-1-s3 (slice 3: bots and luck harness)
+Request: Add a path dependency on the engine to the root `pubspec.yaml` (orchestrator-owned): `arena_engine: { path: packages/arena_engine }` under `dependencies:`.
+Reason: Lanes 2 and 4 must `import 'package:arena_engine/arena_engine.dart'` to drive matches with the real engine instead of provisional contract types (lane 2 already carries `lib/duel_events.dart` workarounds because the package is not yet a dependency). The package is pure Dart with no Flutter imports, so the path dependency is safe for all consumers once `lane-1` merges to `main`.
+Status: open — orchestrator will add the `arena_engine` path dependency to root `pubspec.yaml` after this engine merge.
 ```
