@@ -139,11 +139,15 @@ class _HomeState extends State<Home> {
                         CatsScreen(player: p, onShop: () => select(0)),
                         LobbyScreen(
                           player: p,
-                          onBattle: (_) {
+                          onBattle: (cat) {
                             Navigator.push(
                               context,
                               MaterialPageRoute<void>(
-                                builder: (_) => MatchScreen(player: p, mode: 0),
+                                builder: (_) => MatchScreen(
+                                  player: p,
+                                  mode: 0,
+                                  opponent: cat,
+                                ),
                               ),
                             );
                           },
