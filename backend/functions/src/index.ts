@@ -31,9 +31,10 @@ export const onUserDeleted = v1
     for (const field of ["hostUid", "guestUid"]) {
       const matches = await db.collection("matches").where(field, "==", uid).get();
       for (const match of matches.docs) {
-        await match.ref.update({ [field]: DELETED });
+        // Emotes first: once the match says `deleted`, a retry cannot find it.
         const emotes = await match.ref.collection("emotes").where("from", "==", uid).get();
         await Promise.all(emotes.docs.map((e) => e.ref.update({ from: DELETED })));
+        await match.ref.update({ [field]: DELETED });
       }
     }
   });
