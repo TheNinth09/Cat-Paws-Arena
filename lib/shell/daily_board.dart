@@ -70,9 +70,10 @@ class _DailyBoardPanelState extends State<DailyBoardPanel> {
   ];
 
   late final store = DailyBoardStore(widget.player.prefs);
-  late final seed = DailyBoardStore.seedFor(DateTime.now());
+  late final openedAt = DateTime.now();
+  late final seed = DailyBoardStore.seedFor(openedAt);
   late final targets = DailyBoardStore.targetsForSeed(seed);
-  late int best = store.bestScore(DateTime.now());
+  late int best = store.bestScore(openedAt);
 
   int index = 0, score = 0, misses = 0;
   bool finished = false;
@@ -87,7 +88,7 @@ class _DailyBoardPanelState extends State<DailyBoardPanel> {
     index++;
     if (index >= targets.length) {
       finished = true;
-      best = await store.recordScore(score, DateTime.now());
+      best = await store.recordScore(score, openedAt);
     }
     if (mounted) setState(() {});
   }
