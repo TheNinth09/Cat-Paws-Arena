@@ -1,0 +1,14 @@
+name: arena_engine
+description: >-
+  Pure Dart game engine for Cat Paws Arena duels. Deterministic seeded
+  boards, legal-move queries, event-returning transitions, replay and
+  state hashing. No Flutter, Flame, dart:io, dart:ui, timers, platform
+  channels, network clients, wall-clock reads or ambient randomness.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.5
+
+dev_dependencies:
+  test: ^1.26.0
