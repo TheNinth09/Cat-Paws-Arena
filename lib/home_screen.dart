@@ -139,12 +139,14 @@ class _HomeState extends State<Home> {
                         CatsScreen(player: p, onShop: () => select(0)),
                         LobbyScreen(
                           player: p,
-                          onBattle: () => Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => MatchScreen(player: p, mode: 0),
-                            ),
-                          ),
+                          onBattle: (_) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => MatchScreen(player: p, mode: 0),
+                              ),
+                            );
+                          },
                           onRoad: () => showTrophyRoad(context, p),
                         ),
                       ],

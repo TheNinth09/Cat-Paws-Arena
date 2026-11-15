@@ -61,3 +61,11 @@ Request: Lane 2 adds an optional house-cat opponent (name, trophies, avatar fiel
 Reason: Lane-4 lobby offers named resident house cats; lane-4 cannot edit lane-2 match files. Orchestrator forwards lane-4's request to lane-2.
 Status: open — assigned to lane-2; does not block lane-5 slice 3a.
 ```
+
+```text
+Lane: 4
+Blocking PR: lane-4 slice 2 (House Tour)
+Request: In lib/profile.dart, change `Player.result` so a win adds 30 trophies, a loss subtracts 10, and trophies never fall below the floor of the highest House Tour room already reached.
+Reason: Slice 2 gates House Tour rooms by trophies; lane 4 cannot edit orchestrator-owned `lib/profile.dart`.
+Status: answered — implemented on main in 31a26b1 (`Player.result` floors trophies at `[0, 300, 800, 1500]` with +30/-10 deltas).
+```

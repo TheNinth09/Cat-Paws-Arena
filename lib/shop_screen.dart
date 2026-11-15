@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'catalog.dart';
 import 'profile.dart';
+import 'shell/cosmetic_offers.dart';
+import 'shell/purchase_service.dart';
 import 'ui_widgets.dart';
 
 const _cardGradient = LinearGradient(
@@ -24,18 +25,24 @@ class ShopScreen extends StatelessWidget {
     required this.player,
     required this.onUnavailable,
     required this.onMessage,
+    this.purchaseService = const UnavailablePurchaseService(),
   });
   final Player player;
   final ValueChanged<String> onUnavailable;
   final void Function(String, String) onMessage;
-  void buyCombo() {
-    if (player.coins < 650) {
-      onMessage('Oferta zilei', 'Nu ai suficiente Lăbuțe.');
+  final PurchaseService purchaseService;
+
+  bool ownsOffer(CosmeticOffer offer) =>
+      offer.items.every(player.owned.contains);
+
+  Future<void> buyOffer(CosmeticOffer offer) async {
+    final result = await purchaseService.purchase(offer.id);
+    if (result.success) {
+      player.owned.addAll(offer.items);
+      await player.save();
       return;
     }
-    player.coins -= 650;
-    player.owned.addAll(['daily_combo', accessories[0], powers[0]]);
-    player.save();
+    onMessage('Magazin', result.message);
   }
 
   @override
@@ -44,72 +51,40 @@ class ShopScreen extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
     children: [
       const _ShopBanner(),
-      const SectionHeading('ZONA DE OFERTE'),
+      const SectionHeading('CADOU ZILNIC'),
       AdaptiveCardGrid(
         minWidth: 150,
         maxColumns: 2,
         children: [
           ShopOfferCard(
-            title: 'RECOMPENSĂ ZILNICĂ',
+            title: 'CADOU ZILNIC',
             art: 'icon_chest',
-            subtitle: 'Cadoul de azi',
+            subtitle: 'Un cadou gratuit în fiecare zi',
             badge: player.daily == player.today ? '' : 'GRATUIT',
             buttonText: player.daily == player.today
                 ? 'REVENDICAT'
                 : '+200 Lăbuțe',
             onPressed: player.daily == player.today ? null : player.claimDaily,
           ),
-          ShopOfferCard(
-            title: 'DAILY DEAL',
-            art: 'acc_pirate_bandana',
-            extraArt: 'vfx_zoomies',
-            subtitle: 'Pachet special',
-            badge: player.owned.contains('daily_combo') ? '' : 'DEAL ZILNIC',
-            buttonText: player.owned.contains('daily_combo')
-                ? 'DEȚINUT'
-                : '650 Lăbuțe',
-            onPressed: player.owned.contains('daily_combo') ? null : buyCombo,
-          ),
         ],
       ),
-      const SectionHeading('PACHETE LĂBUȚE'),
+      const SectionHeading('PACHETE COSMETICE'),
       const _BillingNote(),
       AdaptiveCardGrid(
-        key: const ValueKey('coin-bundle-grid'),
-        minWidth: 96,
-        maxColumns: 3,
-        children: [
-          for (var i = 0; i < coinBundles.length; i++)
-            ShopOfferCard(
-              key: ValueKey('coin-bundle-$i'),
-              title: coinBundles[i].$1,
-              subtitle: 'LĂBUȚE',
-              art: i >= 4 ? 'icon_chest' : 'icon_paw_coin',
-              badge: coinBundles[i].$3,
-              buttonText: '${coinBundles[i].$2} LEI',
-              onPressed: () => onUnavailable('Google Play Billing'),
-              compact: true,
-            ),
-        ],
-      ),
-      const SectionHeading('ACCESORII & PUTERI'),
-      AdaptiveCardGrid(
-        minWidth: 150,
+        minWidth: 180,
         maxColumns: 2,
         children: [
-          for (final item in [...accessories, ...powers])
+          for (final offer in cosmeticOffers)
             ShopOfferCard(
-              title: itemName(item),
-              art: item,
-              buttonText: player.owned.contains(item)
-                  ? 'DEȚINUT'
-                  : '300 Lăbuțe',
-              onPressed: player.owned.contains(item)
+              title: offer.title,
+              art: offer.art,
+              extraArt: offer.extraArt,
+              subtitle: offer.subtitle,
+              buttonText: ownsOffer(offer) ? 'DEȚINUT' : offer.leiPrice,
+              onPressed: ownsOffer(offer)
                   ? null
                   : () {
-                      if (!player.buy(item, 300)) {
-                        onMessage('Lăbuțe', 'Nu ai suficiente Lăbuțe.');
-                      }
+                      buyOffer(offer);
                     },
             ),
         ],
@@ -148,7 +123,7 @@ class _ShopBanner extends StatelessWidget {
               label('MAGAZINUL', size: 26),
               const SizedBox(height: 2),
               Text(
-                'Oferte noi în fiecare zi',
+                'Cosmetice pentru pisica ta',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -184,7 +159,7 @@ class _BillingNote extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Achizițiile reale necesită Google Play Billing.',
+            'Plățile sunt opționale; nu există cronometre sau oferte limitate.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: ink,
