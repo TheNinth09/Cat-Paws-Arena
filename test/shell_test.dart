@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cat_paws_arena/events_screen.dart';
 import 'package:cat_paws_arena/main.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:cat_paws_arena/shop_screen.dart';
 import 'package:cat_paws_arena/shell/app_info.dart';
 import 'package:cat_paws_arena/shell/daily_board.dart';
 import 'package:cat_paws_arena/shell/economy.dart';
@@ -177,7 +178,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shop reward and IAP cards are real interactive widgets', (
+  testWidgets('shop sells only cosmetic LEI bundles with no countdown', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -185,41 +186,59 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Home(player: p)));
     await tester.tap(find.byKey(const ValueKey('nav-0')));
     await tester.pumpAndSettle();
+    final shop = find.byType(ShopScreen);
     await tester.tap(find.text('+200 Lăbuțe'));
     await tester.pumpAndSettle();
     expect(p.coins, 700);
-    await tester.scrollUntilVisible(
-      find.text('8.99 LEI'),
-      300,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).first,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await Scrollable.ensureVisible(
-      tester.element(find.text('8.99 LEI')),
-      alignment: 0.3,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('8.99 LEI').hitTestable(), findsOneWidget);
-    final bottoms = [
-      for (final price in ['8.99 LEI', '22.99 LEI', '44.99 LEI'])
-        tester
-            .getBottomLeft(
-              find.ancestor(
-                of: find.text(price),
-                matching: find.byType(ArenaButton),
-              ),
+    for (final removed in [
+      'DAILY DEAL',
+      'PACHETE LĂBUȚE',
+      'ACCESORII & PUTERI',
+      'The Midnight Zoomies',
+      'Shadow Pounce',
+      'Laser Chase',
+      '650 Lăbuțe',
+      'Google Play Billing',
+    ]) {
+      expect(
+        find.descendant(of: shop, matching: find.text(removed)),
+        findsNothing,
+      );
+    }
+    for (final price in ['14.99 LEI', '17.99 LEI']) {
+      await tester.scrollUntilVisible(
+        find.text(price),
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView).first,
+              matching: find.byType(Scrollable),
             )
-            .dy,
-    ];
-    expect(bottoms[1], closeTo(bottoms[0], 0.1));
-    expect(bottoms[2], closeTo(bottoms[0], 0.1));
-    await tester.tap(find.text('8.99 LEI'));
+            .first,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.text(price)),
+        alignment: 0.3,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(price).hitTestable(), findsOneWidget);
+    }
+    for (final pressure in ['EXPIRĂ', 'LIMITATĂ', 'COUNTDOWN']) {
+      expect(
+        find.descendant(of: shop, matching: find.textContaining(pressure)),
+        findsNothing,
+      );
+    }
+    expect(
+      find.descendant(
+        of: shop,
+        matching: find.textContaining(RegExp(r'\b\d{1,2}:\d{2}\b')),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.text('14.99 LEI'));
     await tester.pumpAndSettle();
-    expect(find.text('Google Play Billing'), findsOneWidget);
+    expect(find.text('Achizițiile nu sunt disponibile încă.'), findsOneWidget);
     expect(p.coins, 700);
     expect(tester.takeException(), isNull);
   });
