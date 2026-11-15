@@ -4,6 +4,10 @@ import 'package:cat_paws_arena/events_screen.dart';
 import 'package:cat_paws_arena/main.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/shell/app_info.dart';
+import 'package:cat_paws_arena/shell/daily_board.dart';
+import 'package:cat_paws_arena/shell/economy.dart';
+import 'package:cat_paws_arena/shell/house_tour.dart';
+import 'package:cat_paws_arena/shell/reward_calendar.dart';
 import 'package:cat_paws_arena/team_screen.dart';
 import 'package:cat_paws_arena/ui_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -218,5 +222,72 @@ void main() {
     expect(find.text('Google Play Billing'), findsOneWidget);
     expect(p.coins, 700);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('house tour opens room two at 300 trophies', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance())
+      ..trophies = 300
+      ..english = true;
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Turul casei • Hall'), findsOneWidget);
+    for (final name in ['Nori', 'Kiko', 'Biscuit']) {
+      expect(find.text(name), findsOneWidget);
+    }
+    expect(houseRoomForTrophies(299).name, 'Living');
+    expect(houseRoomForTrophies(300).name, 'Hall');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'daily board seed is stable per UTC day and best score persists',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final day = DateTime.utc(2026, 3, 4, 23, 30);
+      final sameDay = DateTime.utc(2026, 3, 4, 1, 5);
+      final nextDay = DateTime.utc(2026, 3, 5, 0, 5);
+      expect(DailyBoardStore.seedFor(day), DailyBoardStore.seedFor(sameDay));
+      expect(
+        DailyBoardStore.seedFor(day),
+        isNot(DailyBoardStore.seedFor(nextDay)),
+      );
+      final store = DailyBoardStore(prefs);
+      expect(await store.recordScore(7, day), 7);
+      expect(store.bestScore(day), 7);
+      expect(await store.recordScore(4, day), 7);
+      expect(store.bestScore(nextDay), 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'reward calendar resets after a missed day and never pays twice',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final p = Player(await SharedPreferences.getInstance());
+      final calendar = RewardCalendar(p);
+      final day1 = DateTime.utc(2026, 4, 1, 12);
+      final day2 = DateTime.utc(2026, 4, 2, 12);
+      final day4 = DateTime.utc(2026, 4, 4, 12);
+      expect(calendar.claim(day1), RewardCalendar.rewards[0]);
+      expect(calendar.claim(day1), isNull);
+      expect(calendar.claim(day2), RewardCalendar.rewards[1]);
+      expect(calendar.claim(day4), RewardCalendar.rewards[0]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  test('economy table takes at least 30 days for launch cosmetics', () {
+    expect(launchCosmetics, isNotEmpty);
+    expect(expectedEarnedPawsPerDay, greaterThan(0));
+    expect(daysToEarnEveryLaunchCosmetic, greaterThanOrEqualTo(30));
   });
 }
