@@ -333,4 +333,69 @@ void main() {
     expect(find.text('CREATOR'), findsOneWidget);
     expect(find.text(savedName!), findsOneWidget);
   });
+
+  testWidgets('share card renders to a fixed-size PNG', (tester) async {
+    const spec = CatSpec(
+      fur: Color(0xff292b3c),
+      pattern: 1,
+      eyes: Color(0xffffc63c),
+      ears: 0,
+    );
+    final render = await _renderCat(
+      tester,
+      const CatShareCard(
+        spec: spec,
+        catName: 'Luna',
+        room: 'Living',
+      ),
+      pixelRatio: 3,
+    );
+    expect(render.width, 1080);
+    expect(render.height, 1350);
+    expect(render.png.length, greaterThan(1000));
+  });
+
+  testWidgets('share card holds only cat, name, room and game name', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final player = Player(prefs);
+    player.name = 'Alex';
+    player.photo = 'aGVsbG8='; // would decode to bytes if ever rendered
+    final spec = catSpecForPlayer(player);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: CatShareCard(
+              spec: spec,
+              catName: 'Luna',
+              room: player.room,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final texts = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byType(CatShareCard),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data)
+        .toSet();
+    expect(texts, {'Luna', 'CAMERA • ${player.room}', 'Cat Paws Arena'});
+    expect(find.text('Alex'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Image && widget.image is MemoryImage,
+      ),
+      findsNothing,
+      reason: 'the card must not contain a photo',
+    );
+  });
 }

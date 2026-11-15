@@ -1,6 +1,9 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cat_avatar.dart';
@@ -408,6 +411,58 @@ class _CatsScreenState extends State<CatsScreen> {
     );
   }
 
+  /// Renders [CatShareCard] offstage, captures it as a PNG and hands it to
+  /// the platform share sheet. The card carries only the cat, its preset
+  /// name, the room and the game name — never the player's name or photo.
+  Future<void> _shareCard() async {
+    final spec = catSpecForPlayer(player);
+    final catName = player.cat == 'Custom'
+        ? (_catName ?? 'Pisică')
+        : player.cat;
+    final boundaryKey = GlobalKey();
+    final overlay = Overlay.of(context);
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => Positioned(
+        left: -4000,
+        top: -4000,
+        child: RepaintBoundary(
+          key: boundaryKey,
+          child: CatShareCard(
+            spec: spec,
+            catName: catName,
+            room: player.room,
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      final boundary =
+          boundaryKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (data == null) return;
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              data.buffer.asUint8List(),
+              mimeType: 'image/png',
+            ),
+          ],
+          fileNameOverrides: const ['pisica_mea.png'],
+        ),
+      );
+    } finally {
+      entry.remove();
+    }
+  }
+
   Widget choices(
     String title,
     List<String> names,
@@ -549,6 +604,12 @@ class _CatsScreenState extends State<CatsScreen> {
     children: [
       const _CatsBanner(),
       _CatStage(player: player, catName: _catName),
+      const SizedBox(height: 8),
+      ArenaButton(
+        text: 'DISTRUIE CARDUL',
+        onPressed: _shareCard,
+        secondary: true,
+      ),
       const SectionHeading('ALEGE PISICA'),
       AdaptiveCardGrid(
         minWidth: 104,
@@ -1157,6 +1218,135 @@ class _EquipCard extends StatelessWidget {
           const SizedBox(height: 6),
           ArenaButton(text: buttonText, onPressed: onPressed, green: green),
         ],
+      ),
+    ),
+  );
+}
+
+/// Fixed-size card shared through the platform share sheet: the cat, its
+/// preset name, its room and the game name — nothing else. It never shows
+/// the player's name, photo, or any other personal data.
+class CatShareCard extends StatelessWidget {
+  const CatShareCard({
+    super.key,
+    required this.spec,
+    required this.catName,
+    required this.room,
+    this.gameName = 'Cat Paws Arena',
+    this.width = 360,
+    this.height = 450,
+  });
+
+  /// Visual description of the cat to draw (see [catSpecForPlayer]).
+  final CatSpec spec;
+
+  /// Preset cat name — never typed text.
+  final String catName;
+
+  /// Room label (see [Player.room]).
+  final String room;
+
+  /// Game title shown at the bottom of the card.
+  final String gameName;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: Container(
+      decoration: BoxDecoration(
+        gradient: _stageGradient,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: ink, width: 3),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x6651312d),
+            offset: Offset(0, 6),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 14,
+              left: 16,
+              child: Opacity(
+                opacity: 0.22,
+                child: sprite('tile_paw', size: 34),
+              ),
+            ),
+            Positioned(
+              bottom: 14,
+              right: 16,
+              child: Opacity(
+                opacity: 0.22,
+                child: sprite('tile_paw', size: 34),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: CatSpecAvatar(
+                        spec,
+                        size: 205,
+                        showAccessory: false,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    catName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: ink,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0x66ffffff),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: ink, width: 1.4),
+                    ),
+                    child: Text(
+                      'CAMERA • $room',
+                      style: const TextStyle(
+                        color: Color(0xff6b4a32),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    gameName,
+                    style: const TextStyle(
+                      color: ink,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );
