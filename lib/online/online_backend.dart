@@ -1,7 +1,9 @@
 /// Interfaces the online layer needs from a backend. The approved backend
-/// is Firebase (docs/contract.md §7); [FakeCloud] implements them in memory
-/// until the Firebase project exists.
+/// is Firebase (docs/contract.md §7, `firebase_backend.dart`); [FakeCloud]
+/// implements them in memory for tests.
 library;
+
+import 'emotes.dart';
 
 class OnlineUser {
   const OnlineUser({required this.uid, required this.googleLinked});
@@ -10,11 +12,12 @@ class OnlineUser {
   bool get isAnonymous => !googleLinked;
 }
 
-/// Result of the platform Google sign-in flow. Only the stable Google
-/// account ID is used here.
+/// Result of the platform Google sign-in flow. [idToken] is what Firebase
+/// needs; the fake only uses [googleUserId].
 class GoogleCredential {
-  const GoogleCredential(this.googleUserId);
+  const GoogleCredential(this.googleUserId, {this.idToken});
   final String googleUserId;
+  final String? idToken;
 }
 
 abstract interface class AuthBackend {
@@ -30,37 +33,96 @@ abstract interface class AuthBackend {
   Future<void> deleteCurrentUser();
 }
 
+/// Shows the platform Google account picker.
+abstract interface class GoogleAccountPicker {
+  Future<GoogleCredential> pick();
+  Future<void> signOut();
+}
+
+/// Your-turn push registration. Pushes carry only a match ID.
+abstract interface class PushRegistration {
+  /// Asks for notification permission and stores this device's token.
+  /// Returns false when the player declined.
+  Future<bool> enable(String uid);
+
+  /// Removes this device's token.
+  Future<void> disable(String uid);
+
+  /// Match IDs from notifications the player tapped.
+  Stream<String> get openedMatchIds;
+}
+
 class RoomRecord {
   const RoomRecord({
     required this.code,
     required this.hostUid,
     required this.createdAt,
-    required this.expiresAt,
   });
+
+  /// A room lives 24 hours (server time) or until a friend joins it.
+  static const lifetime = Duration(hours: 24);
+
   final String code;
   final String hostUid;
+
+  /// Server time the room was created.
   final DateTime createdAt;
-  final DateTime expiresAt;
+  DateTime get expiresAt => createdAt.add(lifetime);
+
+  /// The match a claim of this room creates. Both phones can derive it, and
+  /// the security rules check it.
+  String get matchId => '${code}_${createdAt.millisecondsSinceEpoch}';
 }
 
 enum RoomClaim { joined, notFound, expired, ownRoom }
+
+/// The two players of a friend match created from a room.
+class MatchLink {
+  const MatchLink({
+    required this.matchId,
+    required this.roomCode,
+    required this.hostUid,
+    required this.guestUid,
+  });
+  final String matchId, roomCode, hostUid, guestUid;
+}
+
+class EmoteEvent {
+  const EmoteEvent(this.senderUid, this.emote);
+  final String senderUid;
+  final Emote emote;
+}
 
 abstract interface class CloudStore {
   /// Server time. Device clocks are never authoritative.
   DateTime serverNow();
   Future<Map<String, Object?>?> readProfile(String uid);
+
+  /// Writes [data] only if its `revision` is the stored revision + 1 (1 when
+  /// nothing is stored); otherwise throws [OnlineErrorCode.saveConflict].
   Future<void> writeProfile(String uid, Map<String, Object?> data);
 
-  /// Returns false when a room with this code already exists.
-  Future<bool> createRoom(RoomRecord room);
+  /// Creates `rooms/{code}` stamped with server time; null when the code
+  /// is taken.
+  Future<RoomRecord?> createRoom(String code, String hostUid);
   Future<RoomRecord?> readRoom(String code);
   Future<void> deleteRoom(String code);
 
-  /// Atomically claims [code] for [guestUid] (a Firestore transaction in
-  /// production), so only one guest can join. The room is deleted when the
-  /// claim is [RoomClaim.joined] or [RoomClaim.expired].
+  /// Atomically claims [code] for [guestUid] (a Firestore transaction), so
+  /// only one guest can join. On [RoomClaim.joined] the same transaction
+  /// creates the match `room.matchId` and deletes the room; an expired room
+  /// is deleted too.
   Future<(RoomClaim, RoomRecord?)> claimRoom(String code, String guestUid);
 
-  /// Server-side deletion: profile, devices and open rooms of [uid].
+  /// Emits once a guest has claimed [room].
+  Stream<MatchLink> watchJoin(RoomRecord room);
+
+  /// Only preset [Emote]s exist; there is no way to send text.
+  Future<void> sendEmote(String matchId, String senderUid, Emote emote);
+  Stream<EmoteEvent> emotes(String matchId);
+
+  /// Deletes what the client may delete: profile, devices and open rooms
+  /// of [uid]. Matches are anonymized server-side when the Auth user is
+  /// deleted (backend/functions).
   Future<void> deleteUserData(String uid);
 }

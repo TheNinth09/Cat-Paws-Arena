@@ -1,19 +1,30 @@
+import 'dart:io';
 import 'dart:math';
 
+import 'package:cat_paws_arena/catalog.dart';
 import 'package:cat_paws_arena/online/cloud_profile.dart';
 import 'package:cat_paws_arena/online/emotes.dart';
 import 'package:cat_paws_arena/online/fake_backend.dart';
 import 'package:cat_paws_arena/online/online_account.dart';
 import 'package:cat_paws_arena/online/online_backend.dart';
+import 'package:cat_paws_arena/online/online_config.dart';
 import 'package:cat_paws_arena/online/online_errors.dart';
+import 'package:cat_paws_arena/online/parent_gate.dart';
 import 'package:cat_paws_arena/online/room_code.dart';
 import 'package:cat_paws_arena/online/rooms.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Matcher throwsOnline(OnlineErrorCode code) =>
     throwsA(isA<OnlineException>().having((e) => e.code, 'code', code));
+
+/// What a grown-up gets by answering the gate.
+ParentGateApproval approve() {
+  final challenge = ParentGateChallenge.random(Random(1));
+  return challenge.answer('${challenge.a * challenge.b}')!;
+}
 
 Future<Player> freshPlayer() async {
   SharedPreferences.setMockInitialValues({});
@@ -72,6 +83,7 @@ void main() {
       final joined = await rooms.joinRoom(room.code.toLowerCase(), 'guest');
       expect(joined.hostUid, 'host');
       expect(joined.guestUid, 'guest');
+      expect(joined.matchId, room.matchId);
       expect(
         () => rooms.joinRoom(room.code, 'third'),
         throwsOnline(OnlineErrorCode.roomNotFound),
@@ -165,7 +177,7 @@ void main() {
       final saved = await account.save(CloudProfile.fromPlayer(player));
       expect(saved.revision, 1);
       const google = GoogleCredential('google-123');
-      final linked = await account.linkGoogle(google);
+      final linked = await account.linkGoogle(google, approve());
       expect(linked.uid, anon.uid);
       expect(linked.googleLinked, isTrue);
 
@@ -178,7 +190,7 @@ void main() {
       final reinstalled = await freshPlayer();
       expect(reinstalled.trophies, 0);
       final again = OnlineAccount(FakeAuth(cloud), cloud);
-      final restored = await again.restoreWithGoogle(google);
+      final restored = await again.restoreWithGoogle(google, approve());
       expect(again.user!.uid, anon.uid);
       await restored!.applyTo(reinstalled);
 
@@ -216,11 +228,11 @@ void main() {
       const google = GoogleCredential('g');
       final first = OnlineAccount(FakeAuth(cloud), cloud);
       await first.start();
-      await first.linkGoogle(google);
+      await first.linkGoogle(google, approve());
       final second = OnlineAccount(FakeAuth(cloud), cloud);
       await second.start();
       await expectLater(
-        second.linkGoogle(google),
+        second.linkGoogle(google, approve()),
         throwsOnline(OnlineErrorCode.credentialInUse),
       );
     });
@@ -231,7 +243,7 @@ void main() {
         OnlineAccount(
           FakeAuth(cloud),
           cloud,
-        ).restoreWithGoogle(const GoogleCredential('none')),
+        ).restoreWithGoogle(const GoogleCredential('none'), approve()),
         throwsOnline(OnlineErrorCode.noLinkedAccount),
       );
     });
@@ -258,7 +270,9 @@ void main() {
       final account = OnlineAccount(FakeAuth(cloud), cloud);
       final user = await account.start();
       await account.save(CloudProfile.fromPlayer(await freshPlayer()));
-      await account.linkGoogle(google);
+      await account.linkGoogle(google, approve());
+      final played = await RoomService(cloud).createRoom(user.uid);
+      await RoomService(cloud).joinRoom(played.code, 'friend');
       await RoomService(cloud).createRoom(user.uid);
       await RoomService(cloud).createRoom('someone-else');
 
@@ -268,8 +282,13 @@ void main() {
       expect(cloud.googleToUid, isEmpty);
       expect(cloud.users.contains(user.uid), isFalse);
       expect(cloud.rooms.values.map((r) => r.hostUid), ['someone-else']);
+      final match = cloud.matches[played.matchId]!;
+      expect([match.hostUid, match.guestUid], ['deleted', 'friend']);
       await expectLater(
-        OnlineAccount(FakeAuth(cloud), cloud).restoreWithGoogle(google),
+        OnlineAccount(
+          FakeAuth(cloud),
+          cloud,
+        ).restoreWithGoogle(google, approve()),
         throwsOnline(OnlineErrorCode.noLinkedAccount),
       );
     });
@@ -331,6 +350,170 @@ void main() {
       final profile = CloudProfile.fromJson(json);
       expect(profile.toJson(), json);
     });
+  });
+
+  group('friend match link and emotes', () {
+    test('the host learns the match the guest created', () async {
+      final cloud = FakeCloud();
+      final rooms = RoomService(cloud);
+      final room = await rooms.createRoom('host');
+      final waiting = rooms.waitForGuest(room);
+      final joined = await rooms.joinRoom(room.code, 'guest');
+      final link = await waiting;
+      expect(link.matchId, joined.matchId);
+      expect([link.hostUid, link.guestUid], ['host', 'guest']);
+      // Late listeners (e.g. after a restart) still get it.
+      expect((await rooms.waitForGuest(room)).matchId, joined.matchId);
+    });
+
+    test('match ID is the code plus the server creation time', () {
+      final room = RoomRecord(
+        code: 'ABC234',
+        hostUid: 'h',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          1763208000123,
+          isUtc: true,
+        ),
+      );
+      expect(room.matchId, 'ABC234_1763208000123');
+      expect(room.expiresAt, room.createdAt.add(const Duration(hours: 24)));
+    });
+
+    test('players exchange preset emotes; outsiders cannot', () async {
+      final cloud = FakeCloud();
+      final rooms = RoomService(cloud);
+      final joined = await rooms.joinRoom(
+        (await rooms.createRoom('host')).code,
+        'guest',
+      );
+      final seen = <EmoteEvent>[];
+      final sub = cloud.emotes(joined.matchId).listen(seen.add);
+      await cloud.sendEmote(joined.matchId, 'guest', Emote.purr);
+      await cloud.sendEmote(joined.matchId, 'host', Emote.goodGame);
+      await expectLater(
+        cloud.sendEmote(joined.matchId, 'stranger', Emote.hello),
+        throwsOnline(OnlineErrorCode.notInMatch),
+      );
+      await pumpEventQueue();
+      expect(seen.map((e) => (e.senderUid, e.emote)), [
+        ('guest', Emote.purr),
+        ('host', Emote.goodGame),
+      ]);
+      await sub.cancel();
+      final replay = await cloud.emotes(joined.matchId).take(2).toList();
+      expect(replay.map((e) => e.emote), [Emote.purr, Emote.goodGame]);
+    });
+  });
+
+  group('parent gate', () {
+    test('only the right product passes', () {
+      final c = ParentGateChallenge.random(Random(7));
+      expect(c.a, inInclusiveRange(6, 12));
+      expect(c.b, inInclusiveRange(6, 12));
+      expect(c.answer('${c.a * c.b}'), isNotNull);
+      expect(c.answer(' ${c.a * c.b} '), isNotNull);
+      for (final wrong in ['', 'abc', '${c.a + c.b}', '${c.a * c.b + 1}']) {
+        expect(c.answer(wrong), isNull, reason: wrong);
+      }
+      expect(c.prompt(english: true), contains('${c.a} × ${c.b}'));
+      expect(c.prompt(english: false), startsWith('Doar pentru adulți'));
+    });
+
+    testWidgets('dialog returns approval only for the right answer', (
+      tester,
+    ) async {
+      final results = <ParentGateApproval?>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async => results.add(
+                await showParentGate(context, english: true, random: Random(2)),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      final c = ParentGateChallenge.random(Random(2));
+      for (final input in ['1', '${c.a * c.b}']) {
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('parentGateAnswer')),
+          input,
+        );
+        await tester.tap(find.byKey(const Key('parentGateOk')));
+        await tester.pumpAndSettle();
+      }
+      expect(results, hasLength(2));
+      expect(results.first, isNull);
+      expect(results.last, isNotNull);
+    });
+  });
+
+  group('cloud save conflicts', () {
+    test('a stale install cannot overwrite a newer save', () async {
+      final cloud = FakeCloud();
+      final account = OnlineAccount(FakeAuth(cloud), cloud);
+      final user = await account.start();
+      final profile = CloudProfile.fromPlayer(await freshPlayer());
+      await account.save(profile);
+      await expectLater(
+        cloud.writeProfile(user.uid, profile.withRevision(1).toJson()),
+        throwsOnline(OnlineErrorCode.saveConflict),
+      );
+      expect((await account.save(profile)).revision, 2);
+    });
+  });
+
+  group('configured backend flag', () {
+    test('only firebase and (debug) fake turn online on', () {
+      expect(OnlineMode.parse('', release: false), OnlineMode.none);
+      expect(OnlineMode.parse('none', release: false), OnlineMode.none);
+      expect(OnlineMode.parse('firebase', release: true), OnlineMode.firebase);
+      expect(OnlineMode.parse('fake', release: false), OnlineMode.fake);
+      expect(OnlineMode.parse('fake', release: true), OnlineMode.none);
+      expect(OnlineMode.parse('Firebase', release: false), OnlineMode.none);
+      expect(OnlineMode.configured, OnlineMode.none);
+    });
+
+    test('none starts nothing; fake signs in anonymously', () async {
+      expect(await OnlineServices.start(OnlineMode.none), isNull);
+      final services = (await OnlineServices.start(OnlineMode.fake))!;
+      expect(services.auth.currentUser!.isAnonymous, isTrue);
+      expect(services.push, isNull);
+      final credential = await services.google.pick();
+      final linked = await services.account.linkGoogle(credential, approve());
+      expect(linked.googleLinked, isTrue);
+    });
+  });
+
+  test('Firestore rules allow the same values as the app', () async {
+    final rules = File('backend/firestore.rules').readAsStringSync();
+    int count(String field) => int.parse(
+      RegExp('inRange\\(d\\.$field, (\\d+)\\)').firstMatch(rules)!.group(1)!,
+    );
+    expect(count('fur'), CloudProfile.furCount);
+    expect(count('eyes'), CloudProfile.eyesCount);
+    expect(count('ears'), CloudProfile.earsCount);
+    expect(count('pattern'), CloudProfile.patternCount);
+    expect(count('power'), powers.length);
+    for (final cat in CloudProfile.cats) {
+      expect(rules, contains("'$cat'"));
+    }
+    final emotes = RegExp(r"emote in\s*\[([^\]]*)\]")
+        .firstMatch(rules)!
+        .group(1)!;
+    expect(
+      RegExp(r"'([a-z_]+)'").allMatches(emotes).map((m) => m.group(1)).toSet(),
+      Emote.values.map((e) => e.wire).toSet(),
+    );
+    for (final key in CloudProfile.fromPlayer(
+      await freshPlayer(),
+    ).toJson().keys) {
+      expect(rules, contains("'$key'"), reason: key);
+    }
   });
 
   test('only preset emotes are accepted', () {

@@ -21,12 +21,16 @@ release APK before a GitHub Release is published.
 
 ## Current Android permissions
 
-- Main manifest: no permission requested; `AD_ID` explicitly removed.
-- Debug/profile manifests: `INTERNET` (Flutter tooling), not in release.
-- Will be added with Firebase (`backend/FIREBASE_SWITCH.md` §5):
-  `INTERNET`, and `POST_NOTIFICATIONS` asked only when a slow match starts.
-- Libraries can merge more; the merged manifest of the release APK is the
-  source of truth for the Data safety form, not this list.
+- Main manifest: `INTERNET` and `POST_NOTIFICATIONS` (asked at runtime only
+  when a slow match starts); `AD_ID` explicitly removed.
+- The Firebase libraries merge more (see the PR that added them for the
+  debug APK list). The merged manifest of the release APK is the source of
+  truth for the Data safety form, not this list.
+- Manifest metadata: `firebase_messaging_auto_init_enabled=false` (no FCM
+  registration until the player opts in),
+  `firebase_analytics_collection_deactivated=true` and
+  `google_analytics_adid_collection_enabled=false` (no Analytics library is
+  included; these are a second lock).
 
 ## Current dependencies to keep an eye on
 
@@ -37,10 +41,11 @@ release APK before a GitHub Release is published.
 - `image_picker`: only for the parked photo avatar. The contract says it
   must be removed before release and no photo is ever uploaded. Removal is
   the orchestrator's change in `pubspec.yaml` (plus the parked code owner).
-- Firebase (not added yet): `firebase_core`, `firebase_auth`,
-  `cloud_firestore`, `firebase_messaging`, `google_sign_in`. When they land,
-  re-run the CI check and read the merged manifest; `AD_ID` must still be
-  absent and no `play-services-measurement*` may appear.
+- Firebase: `firebase_core`, `firebase_auth`, `cloud_firestore`,
+  `firebase_messaging`, `google_sign_in`. The CI check runs on the APK with
+  them merged; `AD_ID` must stay absent and no `play-services-measurement*`
+  may appear.
+- Pushes carry only the match ID; titles come from app resources.
 
 ## Text between players
 

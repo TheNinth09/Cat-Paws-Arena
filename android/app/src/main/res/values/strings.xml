@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Your-turn push. The FCM payload carries only the match ID and these
+         keys; no player names or text from another player. -->
+    <string name="cpa_turn_channel" translatable="false">your_turn</string>
+    <string name="cpa_turn_title">Cat Paws Arena</string>
+    <string name="cpa_turn_body">It\'s your turn!</string>
+</resources>
