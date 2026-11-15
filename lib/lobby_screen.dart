@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'cat_avatar.dart';
 import 'catalog.dart';
 import 'profile.dart';
+import 'shell/daily_board.dart';
+import 'shell/house_tour.dart';
+import 'shell/reward_calendar.dart';
 import 'ui_widgets.dart';
 
 const _cardGradient = LinearGradient(
@@ -23,14 +26,12 @@ class LobbyScreen extends StatelessWidget {
   const LobbyScreen({
     super.key,
     required this.player,
-    required this.mode,
-    required this.onMode,
     required this.onBattle,
     required this.onRoad,
   });
   final Player player;
-  final int mode;
-  final VoidCallback onMode, onBattle, onRoad;
+  final void Function(HouseCat cat) onBattle;
+  final VoidCallback onRoad;
   Widget progress() => Padding(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
     child: Material(
@@ -59,36 +60,43 @@ class LobbyScreen extends StatelessWidget {
       ),
     ],
   );
-  Widget controls() => Padding(
+  Widget controls(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        ArenaButton(text: 'MOD: ${modeNames[mode]}', onPressed: onMode),
-        const SizedBox(height: 4),
-        ArenaButton(
-          text: player.english ? 'BATTLE • PRACTICE' : 'LUPTĂ • ANTRENAMENT',
-          onPressed: onBattle,
-          green: true,
-          spriteName: 'btn_play_paw',
+        _HouseTourCard(player: player, onBattle: onBattle),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _ReturnButton(
+                title: 'CADOU ZILNIC',
+                subtitle: '7 zile',
+                onTap: () => showRewardCalendar(context, player),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ReturnButton(
+                title: 'TABLA ZILEI',
+                subtitle: 'scor zilnic',
+                onTap: () => showDailyBoard(context, player),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: const Color(0x553b2a24),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0x55ffc63c), width: 1),
-          ),
-          child: const Text(
-            'Antrenament offline • adversar bot',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: cream,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
+        Text(
+          player.english
+              ? 'House cats are labelled bots; matches stay local practice.'
+              : 'Pisicile casei sunt boți etichetați; meciurile rămân antrenament local.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: cream,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -98,7 +106,6 @@ class LobbyScreen extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
-      final strip = _ModeStrip(player: player, mode: mode, onTap: onMode);
       if (constraints.maxHeight < 580 || textScale > 1.3) {
         return ListView(
           key: const PageStorageKey('lobby-scroll'),
@@ -106,24 +113,21 @@ class LobbyScreen extends StatelessWidget {
           children: [
             progress(),
             const SizedBox(height: 4),
-            strip,
-            const SizedBox(height: 10),
             Center(child: hero()),
             const SizedBox(height: 8),
-            controls(),
+            controls(context),
           ],
         );
       }
       return Column(
         children: [
           progress(),
-          strip,
           Expanded(
             child: Center(
               child: FittedBox(fit: BoxFit.scaleDown, child: hero()),
             ),
           ),
-          controls(),
+          controls(context),
         ],
       );
     },
@@ -322,6 +326,206 @@ class _HeroStage extends StatelessWidget {
   );
 }
 
+class _HouseTourCard extends StatelessWidget {
+  const _HouseTourCard({required this.player, required this.onBattle});
+
+  final Player player;
+  final void Function(HouseCat cat) onBattle;
+
+  @override
+  Widget build(BuildContext context) {
+    final room = houseRoomForTrophies(player.trophies);
+    final roomIndex = houseRooms.indexOf(room);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        gradient: _cardGradient,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ink, width: 2.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x6651312d),
+            offset: Offset(0, 4),
+            blurRadius: 5,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Turul casei • ${room.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                'Camera ${roomIndex + 1}/${houseRooms.length}',
+                style: const TextStyle(
+                  color: Color(0xff8a5a3b),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            player.english
+                ? 'Choose a labelled house-cat bot'
+                : 'Alege o pisică-bot din casă',
+            style: const TextStyle(
+              color: Color(0xff8a5a3b),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              for (final cat in room.cats)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: _HouseCatButton(
+                      player: player,
+                      cat: cat,
+                      onBattle: onBattle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HouseCatButton extends StatelessWidget {
+  const _HouseCatButton({
+    required this.player,
+    required this.cat,
+    required this.onBattle,
+  });
+
+  final Player player;
+  final HouseCat cat;
+  final void Function(HouseCat cat) onBattle;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0x66ffffff),
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      onTap: () => onBattle(cat),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ink, width: 1.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CatAvatar(houseCatPlayer(player.prefs, cat), size: 42),
+            const SizedBox(height: 4),
+            Text(
+              cat.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: ink,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            Text(
+              'Nv ${cat.level}',
+              style: const TextStyle(
+                color: Color(0xff8a5a3b),
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const Text(
+              'BOT',
+              style: TextStyle(
+                color: gold,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _ReturnButton extends StatelessWidget {
+  const _ReturnButton({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final String title, subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0x553b2a24),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0x55ffc63c), width: 1),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: cream,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xffe8c9a0),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class _PowerPill extends StatelessWidget {
   const _PowerPill(this.text);
   final String text;
@@ -359,106 +563,6 @@ class _PowerPill extends StatelessWidget {
           ),
         ),
       ],
-    ),
-  );
-}
-
-class _ModeStrip extends StatelessWidget {
-  const _ModeStrip({
-    required this.player,
-    required this.mode,
-    required this.onTap,
-  });
-  final Player player;
-  final int mode;
-  final VoidCallback onTap;
-
-  static const _icons = [
-    Icons.group,
-    Icons.bolt,
-    Icons.hourglass_empty,
-    Icons.emoji_events,
-  ];
-  static const _tags = ['1V1', 'RUSH', 'SURV', 'RANK'];
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(14, 4, 14, 2),
-    child: Row(
-      children: [
-        for (var i = 0; i < _icons.length; i++)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: _ModeTile(
-                icon: _icons[i],
-                tag: _tags[i],
-                selected: i == mode,
-                locked: i > player.tier,
-                onTap: onTap,
-              ),
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
-class _ModeTile extends StatelessWidget {
-  const _ModeTile({
-    required this.icon,
-    required this.tag,
-    required this.selected,
-    required this.locked,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String tag;
-  final bool selected, locked;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        decoration: BoxDecoration(
-          gradient: selected ? _goldGradient : null,
-          color: selected ? null : const Color(0x663b2a24),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? ink : const Color(0x77ffc63c),
-            width: selected ? 2 : 1.2,
-          ),
-        ),
-        child: Opacity(
-          opacity: locked ? 0.55 : 1,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                locked ? Icons.lock_outline : icon,
-                size: 19,
-                color: selected ? ink : cream,
-              ),
-              const SizedBox(height: 3),
-              Text(
-                tag,
-                style: TextStyle(
-                  color: selected ? ink : cream,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     ),
   );
 }

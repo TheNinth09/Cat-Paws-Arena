@@ -169,3 +169,22 @@ These checks define review evidence, not human gate approval.
 5. Online/release: friend code and bot label are explicit; preset emotes only; no ad SDK/advertising ID; no arbitrary peer text; no APK committed or release published by a lane.
 
 The orchestrator reviews each PR against these checks and the lane file list. Human playtests and release approval remain separate and are never marked passed by an agent.
+
+## 7. Orchestrator backend decision — friend duels
+
+Decision after reviewing `backend/PROPOSAL.md`: **Firebase is approved for friend-code duels and slow play only** — one project, Firestore in `europe-west1`, anonymous Auth by default, FCM push carrying only the match ID, and Cloud Functions for deadlines, push fan-out and account deletion. This approves the architecture and data list for implementation; it is not a compliance certification. Supabase remains the documented fallback if Firebase fails human policy review.
+
+Approved data and retention: preset display-name IDs, friend/room codes, cat loadout, progress, device/FCM tokens, rooms (24h TTL), match records (30 days after match end), preset emotes, and enum-only product events (90 days). Local typed names, photo avatars, the advertising ID, contacts, location and free text are never uploaded. Account deletion removes user data and anonymizes match records.
+
+Binding conditions for lane 5 and later lanes:
+
+- No ad SDKs, no analytics SDKs, no advertising ID; the merged manifest strips `AD_ID` and CI fails if it or ad/analytics dependencies appear.
+- Security rules limit matches to the two participants, moves are create-only/ordered/type-checked, and peer-visible strings are preset IDs only.
+- Clients replay opponent moves with `arena_engine` and flag mismatches; a flagged match awards no trophies or paws. Server-side validation remains parked; no cheat-proof claim.
+- Google sign-in is optional, behind a parent gate, and must be reviewed or disabled for child accounts if policy requires; anonymous play must remain sufficient for friend duels.
+- `image_picker` may remain only while the parked photo-avatar code remains; it must be removed before release and no photo is ever uploaded.
+- Human review is still required for COPPA/GDPR/Play Families SDK compliance, request-log retention, the Play data-deletion form, and the parent gate.
+
+Owner actions before the first online build: create the Firebase project (Blaze plan, budget alert) and provide `google-services.json` for `games.oneear.catpawsarena`; add the Android signing secrets before tagging a release.
+
+Release gate: the owner requires friend duels in the first public APK. Until the Firebase project, `google-services.json`, and signing secrets exist, lane 5 may implement and test `lib/online/`, `backend/`, and Android wiring against fakes/emulator, but must not deploy functions, publish a backend, build a release APK, or tag a release. No release may ship without the approved backend reachable and the human gates approved.

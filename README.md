@@ -19,3 +19,5 @@ Use the Flutter/Dart installation and Android toolchain documented in `AGENTS.md
 ## Release status
 
 No release candidate or Gate 1 playtest has been approved by this setup. Production signing, store declarations, billing configuration, privacy review, and backend approval remain explicit release prerequisites. Existing local/offline behavior must not be presented as live multiplayer, cloud sync, or a completed purchase flow.
+
+Release automation is in `.github/workflows/release.yml`. The orchestrator triggers a release by pushing an annotated tag `vX.Y.Z` that matches `pubspec.yaml`; CI builds the signed APK and attaches it to a GitHub Release. The APK is never committed to the repository. The workflow requires repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`, and refuses to publish a debug-signed APK.

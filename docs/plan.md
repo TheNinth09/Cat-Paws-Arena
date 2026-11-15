@@ -54,7 +54,7 @@ Friends join using a six-character code. House cats are visibly labelled as bots
 
 A duel needs an explicit accepted session, both players' agreed loadouts, the match seed/config, an ordered move log per round, pause/disconnect handling, and a result that both clients can reproduce. Both players need to know whether they are playing a friend or a house cat before committing moves.
 
-The online lane proposes the backend and transport; the orchestrator reviews and approves that proposal before it becomes an integration dependency. This plan does not select a hosted vendor or claim that a backend already exists. Device clocks, client scores, and client-generated rewards are not authoritative.
+The online lane proposed Firebase and the orchestrator approved it for friend duels (contract §7). The owner requires friend duels in the first public release, so the Firebase project on Blaze, `google-services.json`, and the Android signing secrets are release prerequisites. Development and tests may proceed against fakes/emulator, but no backend deployment, function publish, or release APK may happen until those exist. Device clocks, client scores, and client-generated rewards are not authoritative.
 
 Friend invitations, friend lists, and reconnect behavior are required for the friend-loop acceptance scenario. Merely displaying a code entry field or an online-looking badge is insufficient.
 
@@ -72,7 +72,7 @@ The orchestrator owns integration, contract changes, shared-file changes, and re
 
 Every pull request must state its scope, tests, changed files, known limitations, and dependency on other lanes. Cross-lane integration is explicit and reviewed, not hidden in a screen file. New dependencies require justification and a compatible license/version; a lane cannot change another lane's files to make its own tests pass.
 
-The release candidate must use the approved application ID, real billing configuration only if monetization is in scope, privacy disclosures matching actual data flows, and a signed artifact produced by the orchestrator. The existing debug-signed APK and APK committed to `main` are historical artifacts, not the delivery mechanism for this plan. Only the orchestrator builds a release APK and attaches it to a GitHub Release; it is never committed to the repository.
+The release candidate must use the approved application ID, real billing configuration only if monetization is in scope, privacy disclosures matching actual data flows, and a signed artifact produced by the orchestrator. Because friend duels are required in the first release, the approved Firebase project (Blaze) and `google-services.json` must exist and the backend must be deployed before a release candidate is built. Owner rule: do not hand the owner any APK until every in-scope page/feature is integrated on `main` and verified; interim test APKs are not provided. The existing debug-signed APK and APK committed to `main` are historical artifacts, not the delivery mechanism for this plan. Only the orchestrator builds a release APK and attaches it to a GitHub Release; it is never committed to the repository.
 
 A physical-device performance check is required for release readiness, but passing frame-rate measurements still does not mark a human gate as passed. The team records evidence and limitations instead of claiming an unmeasured guarantee.
 
@@ -124,7 +124,7 @@ Parked: ranked matchmaking; server-side validation as a separate deliverable bey
 
 ## 13. Decisions still requiring an explicit owner
 
-- The backend proposal and its approval are pending lane 5 and orchestrator review. No vendor, hosting budget, account system, or data-retention policy is selected here.
+- The backend architecture is approved as Firebase (contract §7), but the owner has not yet created the Blaze project or provided `google-services.json`; friend duels are required in the first release, so publication waits for that project, the signing secrets, and human policy review.
 - Family-policy compliance, store data-safety declarations, and account/deletion obligations need qualified human review before release.
 - Production signing credentials, store listing assets, supported device range beyond the existing Android configuration, and release timing require owner input.
 - Art direction beyond the agreed audience and readable presentation, exact reward amounts, and cosmetic catalog contents need product decisions; they must not be inferred from old prices or trophies.
