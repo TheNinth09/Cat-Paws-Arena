@@ -12,10 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'arena.dart';
 import 'board_game.dart';
 import 'profile.dart';
+import 'ui_widgets.dart';
 
-const ink = Color(0xff51312d),
-    cream = Color(0xffffedbb),
-    gold = Color(0xffffc63c);
 const accessories = [
   'acc_pirate_bandana',
   'acc_witch_hat',
@@ -30,62 +28,6 @@ Future<void> main() async {
   final player = Player(await SharedPreferences.getInstance());
   runApp(CatPawsApp(player: player));
 }
-
-Widget sprite(String name, {double size = 40}) => Image.asset(
-  'assets/generated/$name.png',
-  width: size,
-  height: size,
-  fit: BoxFit.contain,
-);
-Widget label(String text, {double size = 22, Color color = cream}) => Text(
-  text,
-  textAlign: TextAlign.center,
-  style: TextStyle(
-    fontSize: size,
-    color: color,
-    fontWeight: FontWeight.w900,
-    shadows: const [Shadow(color: ink, offset: Offset(1, 2), blurRadius: 2)],
-  ),
-);
-Widget panel(Widget child, {EdgeInsets padding = const EdgeInsets.all(14)}) =>
-    Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: padding,
-      decoration: BoxDecoration(
-        color: const Color(0xf0fff0cf),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ink, width: 3),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x55000000),
-            offset: Offset(0, 4),
-            blurRadius: 3,
-          ),
-        ],
-      ),
-      child: child,
-    );
-Widget action(String text, VoidCallback? onTap, {bool green = false}) =>
-    Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: green ? const Color(0xff8bc74c) : gold,
-          foregroundColor: ink,
-          minimumSize: const Size(100, 48),
-          side: const BorderSide(color: ink, width: 2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
-        ),
-      ),
-    );
 
 class CatPawsApp extends StatelessWidget {
   const CatPawsApp({super.key, required this.player});
@@ -158,25 +100,6 @@ class _BootState extends State<Boot> {
       if (!mounted) return;
       setState(() => progress = (i + 1) / (assets.length + 1));
     }
-    for (final name in [
-      'ui_lobby_lupta',
-      'ui_magazin',
-      'ui_pisici_creator',
-      'ui_echipa',
-      'ui_evenimente',
-      'ui_turul_casei',
-      'ui_matchmaking_vs',
-      'ui_victorie',
-      'ui_infrangere',
-      'ui_gameplay_7x7',
-      'ui_gameplay_actiune',
-    ]) {
-      if (!mounted) return;
-      await precacheImage(
-        ResizeImage(AssetImage('assets/$name.png.jpg'), width: 540),
-        context,
-      );
-    }
     if (!mounted) return;
     setState(() => progress = 1);
     await Future<void>.delayed(const Duration(milliseconds: 250));
@@ -199,39 +122,68 @@ class _BootState extends State<Boot> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: Stack(
-      fit: StackFit.expand,
-      children: [
-        Image.asset(
-          splash
-              ? 'assets/studio_splash.png'
-              : 'assets/loading_screen_clean.png.jpg',
-          fit: BoxFit.cover,
-        ),
-        if (!splash)
-          Positioned(
-            left: 28,
-            right: 28,
-            bottom: 45,
-            child: Column(
-              children: [
-                label(statuses[min(3, (progress * 4).floor())], size: 17),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 20,
-                    color: gold,
-                    backgroundColor: ink,
-                  ),
+    body: splash
+        ? Image.asset(
+            'assets/studio_splash.png',
+            fit: BoxFit.contain,
+            width: double.infinity,
+            height: double.infinity,
+          )
+        : RoomBackground(
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Center(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Column(
+                            children: [
+                              label('CAT PAWS', size: 42),
+                              label('ARENA', size: 54, color: gold),
+                              label('Paws & Claws', size: 18),
+                              const SizedBox(height: 24),
+                              CatAvatar(widget.player, size: 160),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    panel(
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          label(
+                            statuses[min(3, (progress * 4).floor())],
+                            size: 17,
+                            color: ink,
+                          ),
+                          const SizedBox(height: 12),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 16,
+                              color: gold,
+                              backgroundColor: ink,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          label(
+                            '${(progress * 100).round()}%',
+                            size: 18,
+                            color: ink,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                label('${(progress * 100).round()}%', size: 18),
-              ],
+              ),
             ),
           ),
-      ],
-    ),
   );
 }
 
@@ -535,63 +487,15 @@ class _HomeState extends State<Home> {
       ),
     ),
   );
-  Widget hud() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(colors: [Color(0xffb37856), Color(0xff74443f)]),
-      border: Border(bottom: BorderSide(color: gold, width: 2)),
-    ),
-    child: Row(
-      children: [
-        InkWell(
-          onTap: profile,
-          child: Column(
-            children: [
-              CatAvatar(p, size: 48),
-              Text(
-                p.name,
-                style: const TextStyle(
-                  color: cream,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Wrap(
-            alignment: WrapAlignment.spaceAround,
-            children: [
-              InkWell(
-                onTap: road,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    sprite('icon_trophy', size: 32),
-                    label('${p.trophies}', size: 18),
-                  ],
-                ),
-              ),
-              InkWell(
-                onTap: () => select(0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    sprite('icon_paw_coin', size: 32),
-                    label('${p.coins} +', size: 18),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          onPressed: () => scaffold.currentState!.openEndDrawer(),
-          icon: const Icon(Icons.menu_rounded, color: cream, size: 32),
-        ),
-      ],
-    ),
+  Widget hud() => PlayerHud(
+    avatar: CatAvatar(p, size: 46),
+    name: p.name,
+    trophies: p.trophies,
+    coins: p.coins,
+    onProfile: profile,
+    onRoad: road,
+    onShop: () => select(0),
+    onMenu: () => scaffold.currentState!.openEndDrawer(),
   );
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -674,83 +578,19 @@ class _HomeState extends State<Home> {
             children: [
               hud(),
               Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.asset(
-                      'assets/ui_lobby_lupta.png.jpg',
-                      fit: BoxFit.cover,
-                      cacheWidth: 720,
-                    ),
-                    ColoredBox(
-                      color: [
-                        const Color(0x442f1912),
-                        const Color(0x55594520),
-                        const Color(0x554b6741),
-                        const Color(0x55513676),
-                      ][p.tier],
-                    ),
-                    PageView(
-                      controller: pages,
-                      onPageChanged: (i) => setState(() => tab = i),
-                      children: [shop(), cats(), lobby(), team(), events()],
-                    ),
-                  ],
+                child: RoomBackground(
+                  tier: p.tier,
+                  child: PageView(
+                    controller: pages,
+                    onPageChanged: (i) => setState(() => tab = i),
+                    children: [shop(), cats(), lobby(), team(), events()],
+                  ),
                 ),
               ),
-              Container(
-                color: const Color(0xff5398b1),
-                child: Row(
-                  children: [
-                    for (var i = 0; i < 5; i++)
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => select(i),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 220),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: tab == i
-                                  ? const Color(0xffb75045)
-                                  : Colors.transparent,
-                              border: Border.all(color: ink, width: 1),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  [
-                                    Icons.storefront,
-                                    Icons.pets,
-                                    Icons.sports_esports,
-                                    Icons.shield,
-                                    Icons.event,
-                                  ][i],
-                                  color: tab == i ? gold : cream,
-                                  size: 27,
-                                ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  [
-                                    tr('MAGAZIN', 'SHOP'),
-                                    tr('PISICI', 'CATS'),
-                                    tr('LUPTĂ', 'BATTLE'),
-                                    tr('ECHIPĂ', 'TEAM'),
-                                    tr('EVENIMENTE', 'EVENTS'),
-                                  ][i],
-                                  maxLines: 1,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: cream,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+              ArenaBottomBar(
+                selected: tab,
+                onSelected: select,
+                english: p.english,
               ),
             ],
           ),
@@ -908,51 +748,39 @@ class _HomeState extends State<Home> {
         ],
       ),
     ),
-    panel(
-      Column(
-        children: [
-          const Text('DAILY DEAL • Pirate + Zoomies'),
-          action('650 Lăbuțe', () {
-            if (!p.owned.contains('daily_combo') && p.coins >= 650) {
-              p.coins -= 650;
-              p.owned.addAll(['daily_combo', accessories[0], powers[0]]);
-              p.save();
-            } else {
-              modal(
-                'Daily Deal',
-                const Text('Already owned or insufficient Lăbuțe.'),
-              );
-            }
-          }),
-        ],
-      ),
+    ProductCard(
+      title: 'Oferta zilei',
+      subtitle: 'Pirate + The Midnight Zoomies',
+      spriteName: 'acc_pirate_bandana',
+      buttonText: p.owned.contains('daily_combo') ? 'DEȚINUT' : '650 Lăbuțe',
+      onPressed: p.owned.contains('daily_combo')
+          ? null
+          : () {
+              if (p.coins >= 650) {
+                p.coins -= 650;
+                p.owned.addAll(['daily_combo', accessories[0], powers[0]]);
+                p.save();
+              } else {
+                modal('Oferta zilei', const Text('Nu ai suficiente Lăbuțe.'));
+              }
+            },
     ),
     label('Accesorii & Puteri'),
     for (final item in [...accessories, ...powers])
-      panel(
-        Row(
-          children: [
-            sprite(item, size: 65),
-            Expanded(
-              child: Text(
-                item
-                    .replaceAll('acc_', '')
-                    .replaceAll('vfx_', '')
-                    .replaceAll('_', ' '),
-              ),
-            ),
-            action(
-              p.owned.contains(item) ? 'DEȚINUT' : '300',
-              p.owned.contains(item)
-                  ? null
-                  : () {
-                      if (!p.buy(item, 300)) {
-                        modal('Lăbuțe', const Text('Nu ai suficiente Lăbuțe.'));
-                      }
-                    },
-            ),
-          ],
-        ),
+      ProductCard(
+        title: item
+            .replaceAll('acc_', '')
+            .replaceAll('vfx_', '')
+            .replaceAll('_', ' '),
+        spriteName: item,
+        buttonText: p.owned.contains(item) ? 'DEȚINUT' : '300 Lăbuțe',
+        onPressed: p.owned.contains(item)
+            ? null
+            : () {
+                if (!p.buy(item, 300)) {
+                  modal('Lăbuțe', const Text('Nu ai suficiente Lăbuțe.'));
+                }
+              },
       ),
     label('Lăbuțe • IAP'),
     const Text(
@@ -967,19 +795,17 @@ class _HomeState extends State<Home> {
       ('12,750', '134.99'),
       ('25,000 BEST VALUE', '224.99'),
     ])
-      panel(
-        Row(
-          children: [
-            sprite('icon_paw_coin'),
-            Expanded(child: Text(pack.$1)),
-            action('${pack.$2} LEI', () => online('Google Play Billing')),
-          ],
-        ),
+      ProductCard(
+        title: pack.$1,
+        spriteName: 'icon_paw_coin',
+        subtitle: 'Pachet de Lăbuțe',
+        buttonText: '${pack.$2} LEI',
+        onPressed: () => online('Google Play Billing'),
       ),
   ]);
   Widget cats() => list([
     label(tr('PISICILE TALE', 'YOUR CATS'), size: 30),
-    CatAvatar(p, size: 180),
+    Center(child: CatAvatar(p, size: 180)),
     for (final cat in ['Tzuki', 'Bubble', 'Custom'])
       panel(
         Row(
@@ -1135,7 +961,7 @@ class _HomeState extends State<Home> {
               Expanded(
                 child: TabBarView(
                   children: [
-                    Column(
+                    ListView(
                       children: [
                         const SizedBox(height: 20),
                         sprite('icon_golden_fish', size: 90),
@@ -1152,7 +978,7 @@ class _HomeState extends State<Home> {
                         ),
                       ],
                     ),
-                    Column(
+                    ListView(
                       children: [
                         const TextField(
                           decoration: InputDecoration(labelText: 'Cod turneu'),
@@ -1334,45 +1160,30 @@ class _MatchScreenState extends State<MatchScreen> with WidgetsBindingObserver {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.asset(
-                  'assets/${result != null
-                      ? (result! > 0
-                            ? 'ui_victorie'
-                            : result! < 0
-                            ? 'ui_infrangere'
-                            : 'ui_matchmaking_vs')
-                      : searching
-                      ? 'ui_matchmaking_vs'
-                      : 'ui_gameplay_7x7'}.png.jpg',
-                  fit: BoxFit.cover,
-                  cacheWidth: 720,
-                ),
-                const ColoredBox(color: Color(0xcc452d36)),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: result != null
-                      ? resultView()
-                      : searching
-                      ? vsView()
-                      : battle(),
-                ),
-              ],
+            child: RoomBackground(
+              tier: p.tier,
+              dim: true,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: result != null
+                    ? resultView()
+                    : searching
+                    ? vsView()
+                    : battle(),
+              ),
             ),
           ),
         ),
       ),
     ),
   );
-  Widget vsView() => Column(
-    mainAxisAlignment: MainAxisAlignment.center,
+  Widget vsView() => ListView(
+    padding: const EdgeInsets.symmetric(vertical: 20),
     children: [
       label('ANTRENAMENT OFFLINE', size: 28),
       label('Opponent simulated • ±75 trophies', size: 15),
       const SizedBox(height: 30),
-      CatAvatar(p, size: 120),
+      Center(child: CatAvatar(p, size: 120)),
       label('${p.name} • RO • ${p.trophies}'),
       label('VS', size: 54),
       sprite('emote_angry', size: 110),
@@ -1380,10 +1191,10 @@ class _MatchScreenState extends State<MatchScreen> with WidgetsBindingObserver {
       const SizedBox(height: 25),
       label('+30 Win • 0 Draw • -25 Loss', size: 18),
       const SizedBox(height: 20),
-      const CircularProgressIndicator(color: gold),
+      const Center(child: CircularProgressIndicator(color: gold)),
     ],
   );
-  Widget battle() => Column(
+  Widget battle() => ListView(
     children: [
       Row(
         children: [
@@ -1421,30 +1232,40 @@ class _MatchScreenState extends State<MatchScreen> with WidgetsBindingObserver {
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            children: [
-              CatAvatar(p, size: 52),
-              label('${p.name}\n${board.score}', size: 18),
-            ],
+          Expanded(
+            child: Column(
+              children: [
+                CatAvatar(p, size: 52),
+                Text(
+                  p.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: cream,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                label('${board.score}', size: 18),
+              ],
+            ),
           ),
-          Column(
-            children: [
-              sprite('emote_angry', size: 52),
-              label('Bubble Bot\n$botScore', size: 18),
-            ],
+          Expanded(
+            child: Column(
+              children: [
+                sprite('emote_angry', size: 52),
+                label('Bubble Bot', size: 16),
+                label('$botScore', size: 18),
+              ],
+            ),
           ),
         ],
       ),
       const SizedBox(height: 12),
-      Expanded(
-        child: Center(
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: GameWidget(game: game),
-            ),
-          ),
+      AspectRatio(
+        aspectRatio: 1,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: GameWidget(game: game),
         ),
       ),
       if (emote.isNotEmpty) sprite(emote, size: 65),
@@ -1483,16 +1304,22 @@ class _MatchScreenState extends State<MatchScreen> with WidgetsBindingObserver {
       label('Match 4 / 5 → attack • Combo × cascades', size: 13),
     ],
   );
-  Widget resultView() => Column(
-    mainAxisAlignment: MainAxisAlignment.center,
+  Widget resultView() => ListView(
+    padding: const EdgeInsets.symmetric(vertical: 20),
     children: [
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CatAvatar(p, size: 55),
-          label('${p.name}   ${p.trophies}', size: 20),
-          sprite('icon_paw_coin'),
-          label('${p.coins}', size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: label('${p.name}\n${p.trophies} trofee', size: 18)),
+          sprite('icon_paw_coin', size: 28),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: label('${p.coins}', size: 18),
+            ),
+          ),
         ],
       ),
       const SizedBox(height: 30),

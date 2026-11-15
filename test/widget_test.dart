@@ -4,31 +4,128 @@ import 'package:cat_paws_arena/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cat_paws_arena/arena.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:cat_paws_arena/ui_widgets.dart';
 
 void main() {
-  testWidgets('portrait home and all five navigation tabs render', (
+  void expectCleanArtwork(WidgetTester tester) {
+    final assets = tester
+        .widgetList<Image>(find.byType(Image))
+        .map((image) => image.image)
+        .whereType<AssetImage>()
+        .map((image) => image.assetName);
+    expect(
+      assets.where(
+        (name) =>
+            name.startsWith('assets/ui_') ||
+            name.contains('loading_screen_clean'),
+      ),
+      isEmpty,
+    );
+  }
+
+  for (final size in [
+    const Size(320, 568),
+    const Size(360, 640),
+    const Size(390, 844),
+    const Size(430, 932),
+  ]) {
+    for (final scale in [1.0, 1.5]) {
+      testWidgets('clean adaptive navigation $size scale $scale', (
+        tester,
+      ) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        SharedPreferences.setMockInitialValues({});
+        final p = Player(await SharedPreferences.getInstance())
+          ..name = 'AlexandruNumeFoarteLung'
+          ..trophies = 1500
+          ..coins = 123456789
+          ..cat = 'Custom';
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            home: Home(player: p),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        for (final tab in [0, 1, 3, 4, 2]) {
+          await tester.tap(find.byKey(ValueKey('nav-$tab')));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull, reason: 'tab $tab');
+          expect(find.byType(PlayerHud), findsOneWidget);
+          expect(find.byType(ArenaBottomBar), findsOneWidget);
+          expectCleanArtwork(tester);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
+  }
+  testWidgets('shop reward and IAP cards are real interactive widgets', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(360, 640);
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.tap(find.byKey(const ValueKey('nav-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+200 Lăbuțe'));
+    await tester.pumpAndSettle();
+    expect(p.coins, 700);
+    await tester.scrollUntilVisible(
+      find.text('8.99 LEI'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await Scrollable.ensureVisible(
+      tester.element(find.text('8.99 LEI')),
+      alignment: 0.3,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('8.99 LEI').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('8.99 LEI'));
+    await tester.pumpAndSettle();
+    expect(find.text('Google Play Billing'), findsOneWidget);
+    expect(p.coins, 700);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('VS, gameplay and result never render screen mockups', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferences.setMockInitialValues({});
-    final p = Player(await SharedPreferences.getInstance());
-    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
-    await tester.pumpAndSettle();
+    final p = Player(await SharedPreferences.getInstance())
+      ..name = 'UnNumeFoarteLungDeJucător';
+    await tester.pumpWidget(MaterialApp(home: MatchScreen(player: p, mode: 0)));
+    expectCleanArtwork(tester);
     expect(tester.takeException(), isNull);
-    for (final title in [
-      'MAGAZIN',
-      'PISICI',
-      'ECHIPĂ',
-      'EVENIMENTE',
-      'LUPTĂ',
-    ]) {
-      await tester.tap(find.text(title).last);
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull, reason: title);
-    }
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 100));
+    expectCleanArtwork(tester);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Renunță'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('RENUNȚĂ'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('ÎNFRÂNGERE'), findsOneWidget);
+    expectCleanArtwork(tester);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
   test('bot moves resolve cascades and recover blocked boards', () {
     final board = MatchBoard(seed: 17);
