@@ -96,14 +96,10 @@ class Player extends ChangeNotifier {
   }
 
   void result(int outcome) {
-    trophies =
-        (trophies +
-                (outcome > 0
-                    ? 30
-                    : outcome < 0
-                    ? -25
-                    : 0))
-            .clamp(0, 1000000);
+    const trophyFloors = [0, 300, 800, 1500];
+    final floor = trophyFloors.lastWhere((t) => trophies >= t);
+    final delta = outcome > 0 ? 30 : outcome < 0 ? -10 : 0;
+    trophies = (trophies + delta).clamp(floor, 1000000);
     if (outcome > 0) coins += 150;
     save();
   }

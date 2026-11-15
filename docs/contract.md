@@ -186,3 +186,5 @@ Binding conditions for lane 5 and later lanes:
 - Human review is still required for COPPA/GDPR/Play Families SDK compliance, request-log retention, the Play data-deletion form, and the parent gate.
 
 Owner actions before the first online build: create the Firebase project (Blaze plan, budget alert) and provide `google-services.json` for `games.oneear.catpawsarena`; add the Android signing secrets before tagging a release.
+
+Release gate: the owner requires friend duels in the first public APK. Until the Firebase project, `google-services.json`, and signing secrets exist, lane 5 may implement and test `lib/online/`, `backend/`, and Android wiring against fakes/emulator, but must not deploy functions, publish a backend, build a release APK, or tag a release. No release may ship without the approved backend reachable and the human gates approved.
