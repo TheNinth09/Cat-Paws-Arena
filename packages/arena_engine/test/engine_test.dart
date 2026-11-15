@@ -127,7 +127,7 @@ void main() {
         applyMove(s, const SwapMove(firstCell: (row: 0, col: 0), secondCell: (row: 0, col: 2))),
         isA<EngineFailure<MoveResult>>(),
       );
-      // Power moves are not enabled in the core slice.
+      // Powers need charge; a fresh match has none.
       expect(
         applyMove(s, const PowerMove(power: PowerKind.zoomies, targetRow: 3)),
         isA<EngineFailure<MoveResult>>(),

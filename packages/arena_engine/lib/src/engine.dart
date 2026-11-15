@@ -55,7 +55,8 @@ EngineResult<MatchState> newMatch(int seed, MatchConfig config) {
 /// All currently legal moves for [MatchState.activePlayer].
 ///
 /// Does not mutate state or consume randomness. An empty list is valid only
-/// when the state cannot accept a move (a finished match).
+/// when the state cannot accept a move (a finished match or a player with
+/// no moves left).
 EngineResult<List<Move>> legalMoves(MatchState state) {
   if (state.isFinished) return const EngineOk(const []);
   final slot = state.activePlayer;
@@ -68,7 +69,7 @@ EngineResult<List<Move>> legalMoves(MatchState state) {
     for (final (a, b) in pairs)
       SwapMove(firstCell: pos(a), secondCell: pos(b)),
   ];
-  if (state.movesLeft(slot) > 0 && state.chargeOf(slot) >= kPowerCost) {
+  if (state.chargeOf(slot) >= kPowerCost) {
     moves.add(const PowerMove(power: PowerKind.shadowPounce));
     moves.add(const PowerMove(power: PowerKind.laserChase));
     for (var row = 0; row < board.height; row++) {
@@ -173,6 +174,68 @@ EngineResult<MoveResult> _applySwap(
   _resolveMatches(work, slot);
   _finishTurn(work, state);
 
+  return _result(work, hashBefore);
+}
+
+EngineResult<MoveResult> _applyPower(
+  MatchState state,
+  PowerMove move,
+  PlayerSlot slot,
+  String hashBefore,
+) {
+  if (state.chargeOf(slot) < kPowerCost) {
+    return const EngineFailure(
+      EngineError(
+        EngineErrorCode.insufficientCharge,
+        'power charge below cost',
+      ),
+    );
+  }
+  if (state.movesLeft(slot) <= 0) {
+    return _invalidMove('no moves remaining this round');
+  }
+  final h = state.boardOf(slot).height;
+  if (move.power == PowerKind.zoomies) {
+    final row = move.targetRow;
+    if (row == null || row < 0 || row >= h) {
+      return _invalidMove('zoomies requires a target row in bounds');
+    }
+  } else if (move.targetRow != null) {
+    return _invalidMove('this power takes no target row');
+  }
+
+  final work = _Work.fromState(state);
+  final board = work.boards[slot.index];
+  work.movesRemaining[slot.index]--;
+  work.powerCharge[slot.index] = 0;
+  work.events.add(
+    PowerCharged(player: slot, amount: -kPowerCost),
+  );
+
+  final rng = work.rngFor(slot);
+  switch (move.power) {
+    case PowerKind.zoomies:
+      _powerZoomies(work, slot, move.targetRow!, rng);
+    case PowerKind.shadowPounce:
+      _powerShadowPounce(work, slot);
+    case PowerKind.laserChase:
+      _powerLaserChase(work, slot, rng);
+  }
+  work.storeRng(slot, rng);
+
+  applyGravityAndRefill(
+    board: board,
+    colourCount: work.config.colourCount,
+    player: slot,
+    events: work.events,
+  );
+  _resolveMatches(work, slot);
+  _finishTurn(work, state);
+
+  return _result(work, hashBefore);
+}
+
+EngineResult<MoveResult> _result(_Work work, String hashBefore) {
   final newState = work.freeze();
   final events = List<GameEvent>.of(work.events);
   if (newState.isFinished) {
@@ -195,16 +258,6 @@ EngineResult<MoveResult> _applySwap(
       hashAfter: stateHash(newState),
     ),
   );
-}
-
-EngineResult<MoveResult> _applyPower(
-  MatchState state,
-  PowerMove move,
-  PlayerSlot slot,
-  String hashBefore,
-) {
-  // Powers are enabled by the full ruleset; the core slice exposes swaps only.
-  return _invalidMove('power moves are not enabled by this engine version');
 }
 
 /// Mutable working copy of a [MatchState] for one transition.
@@ -308,44 +361,30 @@ EngineError? _validateConfig(MatchConfig config) {
   return null;
 }
 
-/// Fires any special pieces sitting on the two swapped cells, in ascending
-/// cell order. Specials consumed by an earlier effect do not fire.
-/// Core slice: boards never contain specials, so this is a no-op until the
-/// full ruleset lands.
-void _fireSwapSpecials(_Work work, PlayerSlot slot, int first, int second) {
-  // Intentionally empty in the core slice.
-}
+// ---------------------------------------------------------------------------
+// Clearing helpers
+// ---------------------------------------------------------------------------
 
-/// Resolves colour matches on [slot]'s board until stable: clears, gravity,
-/// refill, repeat. Emits [Cleared], [ObstacleBroken], [Fell] and
-/// [Refilled] events and updates score.
-void _resolveMatches(_Work work, PlayerSlot slot) {
+/// Removes [cells] from [slot]'s board: sets them empty, breaks boxes
+/// orthogonally adjacent to any removed cell (unless [breakBoxes] is false)
+/// and consumes yarn locks on removed pieces. Emits one [ObstacleBroken]
+/// event when anything was consumed. Returns the consumed obstacle cells.
+Set<int> _removePieceCells(
+  _Work work,
+  PlayerSlot slot,
+  Set<int> cells, {
+  bool breakBoxes = true,
+}) {
   final board = work.boards[slot.index];
   final w = board.width;
   final h = board.height;
-
-  while (true) {
-    final groups = scanMatches(board);
-    if (groups.isEmpty) break;
-
-    final matched = <int>{};
-    for (final g in groups) {
-      matched.addAll(g.cells);
-    }
-    final sorted = matched.toList()..sort();
-    final points = sorted.length * kPointsPerPiece;
-    work.events.add(
-      Cleared(player: slot, cells: _posList(w, sorted), points: points),
-    );
-    work.scores[slot.index] += points;
-
-    final broken = <int>{};
-    for (final i in sorted) {
-      if (isYarnedCode(board.cells[i])) broken.add(i);
-      board.cells[i] = kCellEmpty;
-    }
-    // Boxes adjacent to any cleared cell break.
-    for (final i in sorted) {
+  final broken = <int>{};
+  for (final i in cells) {
+    if (isYarnedCode(board.cells[i])) broken.add(i);
+    board.cells[i] = kCellEmpty;
+  }
+  if (breakBoxes) {
+    for (final i in cells) {
       final r = i ~/ w, c = i % w;
       const deltas = [(0, -1), (0, 1), (-1, 0), (1, 0)];
       for (final (dr, dc) in deltas) {
@@ -358,12 +397,305 @@ void _resolveMatches(_Work work, PlayerSlot slot) {
         }
       }
     }
-    if (broken.isNotEmpty) {
+  }
+  if (broken.isNotEmpty) {
+    work.events.add(
+      ObstacleBroken(player: slot, cells: _posList(w, broken.toList())),
+    );
+  }
+  return broken;
+}
+
+/// Adds [pieces] worth of charge to [slot], capped at [kPowerCost], and
+/// emits [PowerCharged] with the actual positive delta.
+void _addCharge(_Work work, PlayerSlot slot, int pieces) {
+  if (pieces <= 0) return;
+  final gain = pieces * kChargePerPiece;
+  final before = work.powerCharge[slot.index];
+  final after = before + gain > kPowerCost ? kPowerCost : before + gain;
+  final delta = after - before;
+  if (delta <= 0) return;
+  work.powerCharge[slot.index] = after;
+  work.events.add(PowerCharged(player: slot, amount: delta));
+}
+
+/// Awards score for [pieces] cleared by [slot].
+void _addScore(_Work work, PlayerSlot slot, int pieces) {
+  work.scores[slot.index] += pieces * kPointsPerPiece;
+}
+
+// ---------------------------------------------------------------------------
+// Special pieces
+// ---------------------------------------------------------------------------
+
+/// The cell a bomb is created on inside a bent [group]: the lowest-index
+/// cell that has a matched neighbour on both axes. Falls back to the
+/// group's first cell (unreachable for real bent groups).
+int _bombAnchor(MatchGroup group, MutableBoard board) {
+  final w = board.width;
+  final inGroup = group.cells.toSet();
+  for (final i in group.cells) {
+    final r = i ~/ w, c = i % w;
+    bool member(int rr, int cc) =>
+        rr >= 0 &&
+        rr < board.height &&
+        cc >= 0 &&
+        cc < w &&
+        inGroup.contains(rr * w + cc);
+    final hasH = member(r, c - 1) || member(r, c + 1);
+    final hasV = member(r - 1, c) || member(r + 1, c);
+    if (hasH && hasV) return i;
+  }
+  return group.cells.first;
+}
+
+/// Computes the cells a special piece at [index] would clear, reading
+/// [scratch] (a working copy of the board where earlier effects are already
+/// removed). [otherSwap] is the other cell of the activating swap, used by
+/// the rainbow to pick its colour.
+Set<int> _specialEffectCells({
+  required _Work work,
+  required PlayerSlot slot,
+  required int index,
+  required int base,
+  required List<int> scratch,
+  required int otherSwap,
+  required GameRandom rng,
+}) {
+  final board = work.boards[slot.index];
+  final w = board.width;
+  final h = board.height;
+  final r = index ~/ w, c = index % w;
+  final cells = <int>{};
+
+  void collectRow(int rr) {
+    for (var cc = 0; cc < w; cc++) {
+      final j = rr * w + cc;
+      if (isPieceCode(scratch[j])) cells.add(j);
+    }
+  }
+
+  void collectCol(int cc) {
+    for (var rr = 0; rr < h; rr++) {
+      final j = rr * w + cc;
+      if (isPieceCode(scratch[j])) cells.add(j);
+    }
+  }
+
+  switch (base) {
+    case kLineRow:
+      collectRow(r);
+    case kLineColumn:
+      collectCol(c);
+    case kBomb:
+      for (var rr = r - 1; rr <= r + 1; rr++) {
+        if (rr < 0 || rr >= h) continue;
+        for (var cc = c - 1; cc <= c + 1; cc++) {
+          if (cc < 0 || cc >= w) continue;
+          final j = rr * w + cc;
+          if (isPieceCode(scratch[j])) cells.add(j);
+        }
+      }
+    case kRainbow:
+      if (work.config.rainbowRule == RainbowRule.clearOneColour) {
+        var target = -1;
+        if (isColourCode(scratch[otherSwap])) {
+          target = basePieceCode(scratch[otherSwap]);
+        } else {
+          target = rng.nextInt(work.config.colourCount);
+        }
+        for (var j = 0; j < scratch.length; j++) {
+          if (isColourCode(scratch[j]) &&
+              basePieceCode(scratch[j]) == target) {
+            cells.add(j);
+          }
+        }
+      } else {
+        final eligible = <int>[
+          for (var j = 0; j < scratch.length; j++)
+            if (isPieceCode(scratch[j])) j,
+        ];
+        final take =
+            eligible.length < kRainbowRemoveCount
+                ? eligible.length
+                : kRainbowRemoveCount;
+        // Partial Fisher–Yates for `take` distinct picks.
+        for (var k = 0; k < take; k++) {
+          final j = k + rng.nextInt(eligible.length - k);
+          final t = eligible[k];
+          eligible[k] = eligible[j];
+          eligible[j] = t;
+          cells.add(eligible[k]);
+        }
+      }
+      cells.add(index); // the rainbow piece itself is consumed
+    default:
+      break;
+  }
+  return cells;
+}
+
+SpecialKind _specialKindOf(int base) => switch (base) {
+  kLineRow || kLineColumn => SpecialKind.line,
+  kBomb => SpecialKind.bomb,
+  kRainbow => SpecialKind.rainbow,
+  _ => throw ArgumentError.value(base, 'base', 'not a special code'),
+};
+
+/// Fires special pieces on the two swapped cells ([first], [second],
+/// ascending). Each special's effect is computed on a scratch copy where
+/// earlier effects are already removed, so a special consumed by another
+/// special's blast does not fire. All effects resolve before a single
+/// gravity+refill step.
+void _fireSwapSpecials(_Work work, PlayerSlot slot, int first, int second) {
+  final board = work.boards[slot.index];
+  final w = board.width;
+  final scratch = List<int>.of(board.cells);
+  final rng = work.rngFor(slot);
+
+  final fired = <(SpecialKind, Set<int>)>[];
+  for (final idx in [first, second]) {
+    if (!isSpecialCode(scratch[idx])) continue;
+    final base = basePieceCode(scratch[idx]);
+    final effect = _specialEffectCells(
+      work: work,
+      slot: slot,
+      index: idx,
+      base: base,
+      scratch: scratch,
+      otherSwap: idx == first ? second : first,
+      rng: rng,
+    );
+    for (final j in effect) {
+      scratch[j] = kCellEmpty;
+    }
+    fired.add((_specialKindOf(base), effect));
+  }
+  if (fired.isEmpty) {
+    work.storeRng(slot, rng);
+    return;
+  }
+
+  // Commit: write the scratch board back, then emit events in firing order.
+  board.cells.setAll(0, scratch);
+  final allCleared = <int>{};
+  var chargePieces = 0;
+  for (final (kind, effect) in fired) {
+    final sorted = effect.toList()..sort();
+    allCleared.addAll(sorted);
+    chargePieces += sorted.length;
+    work.events.add(
+      SpecialFired(
+        player: slot,
+        kind: kind,
+        cells: _posList(w, sorted),
+        points: sorted.length * kPointsPerPiece,
+      ),
+    );
+    _addScore(work, slot, sorted.length);
+  }
+  _addCharge(work, slot, chargePieces);
+  _removePieceCells(work, slot, allCleared);
+  applyGravityAndRefill(
+    board: board,
+    colourCount: work.config.colourCount,
+    player: slot,
+    events: work.events,
+  );
+  work.storeRng(slot, rng);
+}
+
+/// Resolves colour matches on [slot]'s board until stable. Each wave:
+/// detect groups, create specials on qualifying anchors, clear the rest,
+/// break adjacent obstacles, award extra moves for matches of 4+, then
+/// gravity and refill. Repeats while matches exist.
+void _resolveMatches(_Work work, PlayerSlot slot) {
+  final board = work.boards[slot.index];
+  final w = board.width;
+
+  while (true) {
+    final groups = scanMatches(board);
+    if (groups.isEmpty) break;
+
+    // Decide special creations: bent -> bomb, straight 5+ -> rainbow,
+    // straight 4 -> line (orientation perpendicular to the run).
+    final creations = <(int, int, LineOrientation?)>[]; // anchor, code, orient
+    final anchors = <int>{};
+    for (final g in groups) {
+      int anchor;
+      int code;
+      LineOrientation? orient;
+      if (g.isBent) {
+        anchor = _bombAnchor(g, board);
+        code = kBomb;
+      } else if (g.cells.length >= 5) {
+        anchor = g.cells.first;
+        code = kRainbow;
+      } else if (g.cells.length == 4) {
+        anchor = g.cells.first;
+        // A horizontal run rewards a column clearer and vice versa.
+        if (g.isStraightHorizontal) {
+          code = kLineColumn;
+          orient = LineOrientation.column;
+        } else {
+          code = kLineRow;
+          orient = LineOrientation.row;
+        }
+      } else {
+        continue;
+      }
+      creations.add((anchor, code, orient));
+      anchors.add(anchor);
+    }
+
+    final matched = <int>{};
+    for (final g in groups) {
+      matched.addAll(g.cells);
+    }
+    matched.removeAll(anchors);
+    final sorted = matched.toList()..sort();
+    final points = sorted.length * kPointsPerPiece;
+    work.events.add(
+      Cleared(player: slot, cells: _posList(w, sorted), points: points),
+    );
+    _addScore(work, slot, sorted.length);
+
+    // Transform anchors into specials in place (yarn lock is preserved).
+    creations.sort((a, b) => a.$1.compareTo(b.$1));
+    for (final (anchor, code, orient) in creations) {
+      final wasYarned = isYarnedCode(board.cells[anchor]);
+      board.cells[anchor] = code + (wasYarned ? kYarnOffset : 0);
       work.events.add(
-        ObstacleBroken(player: slot, cells: _posList(w, broken.toList())),
+        SpecialCreated(
+          player: slot,
+          kind: _specialKindOf(code),
+          orientation: orient,
+          cell: _posOf(w, anchor),
+        ),
       );
     }
 
+    // A match of four or more cells in a group awards one extra move,
+    // capped at twice movesPerRound so a round cannot become endless.
+    final extras = groups.where((g) => g.cells.length >= 4).length;
+    if (extras > 0) {
+      final cap = work.config.movesPerRound * 2;
+      final before = work.movesRemaining[slot.index];
+      final after = before + extras > cap ? cap : before + extras;
+      if (after > before) {
+        work.movesRemaining[slot.index] = after;
+        work.events.add(
+          ExtraMove(
+            player: slot,
+            round: work.round,
+            movesRemaining: after,
+          ),
+        );
+      }
+    }
+
+    _addCharge(work, slot, sorted.length);
+    _removePieceCells(work, slot, matched.toSet());
     applyGravityAndRefill(
       board: board,
       colourCount: work.config.colourCount,
@@ -404,8 +736,9 @@ void _finishTurn(_Work work, MatchState prev) {
   // Otherwise the same player continues (the opponent already finished).
 }
 
-/// Closes the current round: emits [RoundEnded], deals the next round's
-/// boards (or marks the match finished after the last round).
+/// Closes the current round: emits [RoundEnded], lands queued obstacles on
+/// the next round's fresh boards and deals them (or marks the match
+/// finished after the last round, discarding unplayed obstacles).
 void _endRound(_Work work) {
   final config = work.config;
   final scores = work.scorePairSnapshot();
@@ -420,13 +753,14 @@ void _endRound(_Work work) {
     work.events.add(
       RoundEnded(round: work.round, scores: scores, outcome: work.outcome),
     );
+    // Obstacles earned in the final round have no next round and are
+    // discarded with the pending queues.
     return;
   }
 
   work.events.add(RoundEnded(round: work.round, scores: scores, outcome: null));
 
-  // Next round: fresh identical deals for both players; queued obstacles
-  // (none in the core slice) would land here.
+  // Next round: fresh identical deals for both players.
   final nextRound = work.round + 1;
   work.round = nextRound;
   for (var p = 0; p < 2; p++) {
@@ -437,15 +771,18 @@ void _endRound(_Work work) {
       List<int>.of(deal.cells),
       List<int>.of(deal.refillState),
     );
-    work.pending[p].clear();
     work.movesRemaining[p] = config.movesPerRound;
   }
   work.activePlayer = PlayerSlot.first;
 
-  // Fresh deals guarantee a legal move; kept as a safety net for later
-  // rulesets that place obstacles on the new boards.
+  // Land each player's queued obstacles on their fresh board, then make
+  // sure the board still has a legal move.
   for (var p = 0; p < 2; p++) {
     final slot = PlayerSlot.values[p];
+    if (work.pending[p].isNotEmpty) {
+      _landObstacles(work, slot);
+    }
+    work.pending[p].clear();
     final b = work.boards[p];
     if (!hasLegalMove(b)) {
       final rng = work.rngFor(slot);
@@ -458,6 +795,192 @@ void _endRound(_Work work) {
       );
       work.storeRng(slot, rng);
     }
+  }
+}
+
+/// Places [slot]'s pending obstacles on their fresh round board, in queue
+/// order, using [slot]'s RNG stream. Boxes replace a random piece cell;
+/// yarn locks a random regular-colour piece. Obstacles that find no
+/// eligible cell are discarded.
+void _landObstacles(_Work work, PlayerSlot slot) {
+  final board = work.boards[slot.index];
+  final w = board.width;
+  final rng = work.rngFor(slot);
+  final placed = <int>[];
+
+  for (final kind in work.pending[slot.index]) {
+    if (kind == ObstacleKind.box) {
+      final eligible = <int>[
+        for (var i = 0; i < board.cells.length; i++)
+          if (isPieceCode(board.cells[i])) i,
+      ];
+      if (eligible.isEmpty) continue;
+      final pick = eligible[rng.nextInt(eligible.length)];
+      board.cells[pick] = kCellBox;
+      placed.add(pick);
+    } else {
+      final eligible = <int>[
+        for (var i = 0; i < board.cells.length; i++)
+          if (isColourCode(board.cells[i]) && !isYarnedCode(board.cells[i])) i,
+      ];
+      if (eligible.isEmpty) continue;
+      final pick = eligible[rng.nextInt(eligible.length)];
+      board.cells[pick] += kYarnOffset;
+      placed.add(pick);
+    }
+  }
+  work.storeRng(slot, rng);
+
+  if (placed.isNotEmpty) {
+    work.events.add(
+      ObstacleLanded(player: slot, cells: _posList(w, placed)),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Powers
+// ---------------------------------------------------------------------------
+
+/// Queues [count] obstacles of random kind for [receiver], drawn from
+/// [sender]'s RNG. Emits [ObstacleQueued] with the number actually queued
+/// (the pending queue is capped at [kMaxPendingObstacles]).
+void _earnObstacles(
+  _Work work,
+  PlayerSlot sender,
+  PlayerSlot receiver,
+  int count,
+  GameRandom rng,
+) {
+  final queue = work.pending[receiver.index];
+  var added = 0;
+  for (var k = 0; k < count && queue.length < kMaxPendingObstacles; k++) {
+    queue.add(ObstacleKind.values[rng.nextInt(ObstacleKind.values.length)]);
+    added++;
+  }
+  if (added > 0) {
+    work.events.add(
+      ObstacleQueued(
+        player: receiver,
+        sourceRound: work.round,
+        count: added,
+      ),
+    );
+  }
+}
+
+/// Clears every piece in [row] of [slot]'s board, then sends
+/// [kZoomiesObstacleCount] obstacles to the opponent.
+void _powerZoomies(_Work work, PlayerSlot slot, int row, GameRandom rng) {
+  final board = work.boards[slot.index];
+  final w = board.width;
+  final cells = <int>{};
+  for (var c = 0; c < w; c++) {
+    final i = row * w + c;
+    if (isPieceCode(board.cells[i])) cells.add(i);
+  }
+  final sorted = cells.toList()..sort();
+  work.events.add(
+    PowerFired(
+      player: slot,
+      power: PowerKind.zoomies,
+      cells: _posList(w, sorted),
+      points: sorted.length * kPointsPerPiece,
+    ),
+  );
+  _addScore(work, slot, sorted.length);
+  _addCharge(work, slot, sorted.length);
+  _removePieceCells(work, slot, cells);
+  _earnObstacles(
+    work,
+    slot,
+    slot.other,
+    kZoomiesObstacleCount,
+    rng,
+  );
+}
+
+/// Clears every piece of the most common colour on [slot]'s board.
+/// Ties resolve to the lowest colour code.
+void _powerShadowPounce(_Work work, PlayerSlot slot) {
+  final board = work.boards[slot.index];
+  final w = board.width;
+  final counts = List<int>.filled(kPieceColours, 0);
+  for (final code in board.cells) {
+    if (isColourCode(code)) counts[basePieceCode(code)]++;
+  }
+  var target = 0;
+  for (var i = 1; i < counts.length; i++) {
+    if (counts[i] > counts[target]) target = i;
+  }
+  final cells = <int>{};
+  for (var i = 0; i < board.cells.length; i++) {
+    final code = board.cells[i];
+    if (isColourCode(code) && basePieceCode(code) == target) cells.add(i);
+  }
+  final sorted = cells.toList()..sort();
+  work.events.add(
+    PowerFired(
+      player: slot,
+      power: PowerKind.shadowPounce,
+      cells: _posList(w, sorted),
+      points: sorted.length * kPointsPerPiece,
+    ),
+  );
+  _addScore(work, slot, sorted.length);
+  _addCharge(work, slot, sorted.length);
+  _removePieceCells(work, slot, cells);
+}
+
+/// Breaks [kLaserBreakCount] random pieces on [slot]'s board, then clears
+/// all of [slot]'s own obstacles (boxes and yarn locks).
+void _powerLaserChase(_Work work, PlayerSlot slot, GameRandom rng) {
+  final board = work.boards[slot.index];
+  final w = board.width;
+  final eligible = <int>[
+    for (var i = 0; i < board.cells.length; i++)
+      if (isPieceCode(board.cells[i])) i,
+  ];
+  final take =
+      eligible.length < kLaserBreakCount ? eligible.length : kLaserBreakCount;
+  final broken = <int>{};
+  for (var k = 0; k < take; k++) {
+    final j = k + rng.nextInt(eligible.length - k);
+    final t = eligible[k];
+    eligible[k] = eligible[j];
+    eligible[j] = t;
+    broken.add(eligible[k]);
+  }
+  final sorted = broken.toList()..sort();
+  work.events.add(
+    PowerFired(
+      player: slot,
+      power: PowerKind.laserChase,
+      cells: _posList(w, sorted),
+      points: sorted.length * kPointsPerPiece,
+    ),
+  );
+  _addScore(work, slot, sorted.length);
+  _addCharge(work, slot, sorted.length);
+  // No adjacency box-break here: every own obstacle is cleared next, so a
+  // single ObstacleBroken reports the full set.
+  _removePieceCells(work, slot, broken, breakBoxes: false);
+
+  final obstacleCells = <int>{};
+  for (var i = 0; i < board.cells.length; i++) {
+    final code = board.cells[i];
+    if (code == kCellBox) {
+      board.cells[i] = kCellEmpty;
+      obstacleCells.add(i);
+    } else if (isYarnedCode(code)) {
+      board.cells[i] = code - kYarnOffset;
+      obstacleCells.add(i);
+    }
+  }
+  if (obstacleCells.isNotEmpty) {
+    work.events.add(
+      ObstacleBroken(player: slot, cells: _posList(w, obstacleCells.toList())),
+    );
   }
 }
 
