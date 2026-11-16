@@ -398,4 +398,163 @@ void main() {
       reason: 'the card must not contain a photo',
     );
   });
+
+  test('avatar spec serializes and validates safely', () {
+    const spec = AvatarSpec(
+      species: 2,
+      fur: 4,
+      pattern: 3,
+      eyes: 1,
+      ears: 3,
+      accessory: 'acc_pirate_bandana',
+    );
+    final restored = AvatarSpec.fromJsonString(spec.toJsonString());
+    expect(restored, spec);
+
+    // Out-of-range values and unknown accessories fall back safely.
+    final bad = AvatarSpec.fromJson(const {
+      's': 99,
+      'f': -2,
+      'p': 42,
+      'e': 7,
+      'r': 8,
+      'a': 'not_a_sprite',
+    });
+    expect(bad, const AvatarSpec());
+    expect(AvatarSpec.fromJsonString('not json'), const AvatarSpec());
+    expect(AvatarSpec.fromJsonString(null), const AvatarSpec());
+  });
+
+  testWidgets('avatar species zero matches the cat renderer exactly', (
+    tester,
+  ) async {
+    const spec = AvatarSpec(fur: 1, pattern: 2, eyes: 3, ears: 0);
+    final avatar = await _renderCat(tester, AvatarAvatar(spec, size: 96));
+    final cat = await _renderCat(
+      tester,
+      CatSpecAvatar(
+        CatSpec(
+          fur: catFurColours[1],
+          pattern: 2,
+          eyes: catEyeColours[3],
+          ears: 0,
+        ),
+        size: 96,
+      ),
+    );
+    expect(avatar.rgba, cat.rgba);
+  });
+
+  testWidgets('every avatar combination renders without exceptions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Wrap(
+              children: [
+                for (var species = 0; species < avatarSpeciesCount; species++)
+                  for (var fur = 0; fur < catFurColours.length; fur++)
+                    for (var pattern = 0; pattern < catPatternCount; pattern++)
+                      for (var eyes = 0; eyes < catEyeColours.length; eyes++)
+                        for (var ears = 0; ears < catEarCount; ears++)
+                          AvatarAvatar(
+                            AvatarSpec(
+                              species: species,
+                              fur: fur,
+                              pattern: pattern,
+                              eyes: eyes,
+                              ears: ears,
+                            ),
+                            size: 24,
+                          ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byType(AvatarAvatar),
+      findsNWidgets(
+        avatarSpeciesCount *
+            catFurColours.length *
+            catPatternCount *
+            catEyeColours.length *
+            catEarCount,
+      ),
+    );
+  });
+
+  testWidgets('a fixed sample of avatar combinations produces images', (
+    tester,
+  ) async {
+    for (var i = 0; i < 24; i++) {
+      final spec = AvatarSpec(
+        species: i % avatarSpeciesCount,
+        fur: (i * 5) % catFurColours.length,
+        pattern: (i * 3) % catPatternCount,
+        eyes: (i * 7) % catEyeColours.length,
+        ears: (i * 2) % catEarCount,
+      );
+      final render = await _renderCat(tester, AvatarAvatar(spec, size: 64));
+      expect(render.png.length, greaterThan(200), reason: 'avatar $i');
+      expect(
+        _alphaAt(render, render.width ~/ 2, render.height * 3 ~/ 5),
+        255,
+        reason: 'avatar $i centre is painted',
+      );
+    }
+  });
+
+  testWidgets('avatar editor builds, saves and restores the avatar', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final player = Player(prefs)..owned.add('acc_pirate_bandana');
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(home: CatsScreen(player: player, onShop: () {})),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('AVATARUL TĂU'), findsOneWidget);
+    await tester.tap(find.text('EDITEAZĂ'));
+    await tester.pumpAndSettle();
+    expect(find.text('EDITEAZĂ AVATARUL'), findsOneWidget);
+
+    // Owned accessories are offered inside the sheet, unowned ones are not.
+    final sheet = find.byType(BottomSheet);
+    expect(
+      find.descendant(of: sheet, matching: find.text('Bandană Pirat')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.text('Pălărie Vrăjitoare')),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('Câine'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SALVEAZĂ'));
+    await tester.pumpAndSettle();
+
+    final saved = AvatarSpec.fromJsonString(prefs.getString(avatarSpecKey));
+    expect(saved.species, 1);
+
+    await tester.pumpWidget(
+      MaterialApp(home: CatsScreen(player: player, onShop: () {})),
+    );
+    await tester.pumpAndSettle();
+    final avatar = tester.widget<AvatarAvatar>(
+      find.byType(AvatarAvatar).first,
+    );
+    expect(avatar.spec.species, 1);
+    expect(find.text('AVATARUL TĂU'), findsOneWidget);
+  });
 }

@@ -319,6 +319,7 @@ class CatsScreen extends StatefulWidget {
 class _CatsScreenState extends State<CatsScreen> {
   final _random = Random();
   String? _catName;
+  AvatarSpec _avatar = const AvatarSpec();
 
   Player get player => widget.player;
 
@@ -327,6 +328,7 @@ class _CatsScreenState extends State<CatsScreen> {
     super.initState();
     _catName = loadCustomCatName(player.prefs);
     if (_catName == null) _pickRandomName();
+    _avatar = loadAvatarSpec(player.prefs);
   }
 
   void change(VoidCallback update) {
@@ -463,78 +465,6 @@ class _CatsScreenState extends State<CatsScreen> {
     }
   }
 
-  Widget choices(
-    String title,
-    List<String> names,
-    int selected,
-    ValueChanged<int> update,
-  ) => Padding(
-    padding: const EdgeInsets.only(top: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xff6b4a32),
-            fontWeight: FontWeight.w900,
-            fontSize: 13,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (var i = 0; i < names.length; i++)
-              _OptionChip(
-                text: names[i],
-                selected: selected == i,
-                onTap: () => change(() => update(i)),
-              ),
-          ],
-        ),
-      ],
-    ),
-  );
-
-  Widget swatches(
-    String title,
-    List<Color> colours,
-    List<String> names,
-    int selected,
-    ValueChanged<int> update,
-  ) => Padding(
-    padding: const EdgeInsets.only(top: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xff6b4a32),
-            fontWeight: FontWeight.w900,
-            fontSize: 13,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (var i = 0; i < colours.length; i++)
-              _SwatchChip(
-                colour: colours[i],
-                label: names[i],
-                selected: selected == i,
-                onTap: () => change(() => update(i)),
-              ),
-          ],
-        ),
-      ],
-    ),
-  );
-
   Widget nameRow() => Padding(
     padding: const EdgeInsets.only(top: 12),
     child: Column(
@@ -597,12 +527,100 @@ class _CatsScreenState extends State<CatsScreen> {
     ),
   );
 
+  /// Profile avatar card: the user's own creature, separate from the duel
+  /// cats below. Opens the avatar editor.
+  Widget _avatarCard() => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      decoration: BoxDecoration(
+        gradient: _cardGradient,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ink, width: 2.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x6651312d),
+            offset: Offset(0, 3),
+            blurRadius: 5,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xfffff8e6),
+                  border: Border.all(color: ink, width: 2.5),
+                ),
+                child: ClipOval(child: AvatarAvatar(_avatar, size: 64)),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AVATARUL TĂU',
+                      style: TextStyle(
+                        color: ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Arată ca mine • separat de pisica de duel',
+                      style: TextStyle(
+                        color: Color(0xff8a5a3b),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ArenaButton(
+            text: 'EDITEAZĂ',
+            onPressed: _editAvatar,
+            green: true,
+            singleLine: true,
+          ),
+        ],
+      ),
+    ),
+  );
+
+  void _editAvatar() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AvatarEditorSheet(
+        initial: _avatar,
+        owned: player.owned,
+        onSave: (spec) {
+          setState(() => _avatar = spec);
+          saveAvatarSpec(player.prefs, spec);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ListView(
     key: const PageStorageKey('cats-scroll'),
     padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
     children: [
       const _CatsBanner(),
+      _avatarCard(),
       _CatStage(player: player, catName: _catName),
       const SizedBox(height: 8),
       ArenaButton(
@@ -643,31 +661,31 @@ class _CatsScreenState extends State<CatsScreen> {
                 ],
               ),
               nameRow(),
-              swatches(
+              _swatchesRow(
                 'Culoare blană',
                 catFurColours,
                 const ['Gri', 'Portocaliu', 'Crem', 'Mov', 'Negru', 'Alb'],
                 player.fur,
-                (v) => player.fur = v,
+                (i) => change(() => player.fur = i),
               ),
-              choices(
+              _choicesRow(
                 'Model',
                 const ['Uniform', 'Tigrat', 'Bicolor', 'Calico', 'Colorpoint'],
                 player.pattern,
-                (v) => player.pattern = v,
+                (i) => change(() => player.pattern = i),
               ),
-              swatches(
+              _swatchesRow(
                 'Culoare ochi',
                 catEyeColours,
                 const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
                 player.eyes,
-                (v) => player.eyes = v,
+                (i) => change(() => player.eyes = i),
               ),
-              choices(
+              _choicesRow(
                 'Urechi',
                 const ['Două urechi', 'Doar stânga', 'Plisate', 'Smocuri'],
                 player.ears,
-                (v) => player.ears = v,
+                (i) => change(() => player.ears = i),
               ),
             ],
           ),
@@ -1350,4 +1368,254 @@ class CatShareCard extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Label-chip row shared by the cat creator and the avatar editor.
+Widget _choicesRow(
+  String title,
+  List<String> names,
+  int selected,
+  ValueChanged<int> onSelect,
+) => Padding(
+  padding: const EdgeInsets.only(top: 12),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: const TextStyle(
+          color: Color(0xff6b4a32),
+          fontWeight: FontWeight.w900,
+          fontSize: 13,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (var i = 0; i < names.length; i++)
+            _OptionChip(
+              text: names[i],
+              selected: selected == i,
+              onTap: () => onSelect(i),
+            ),
+        ],
+      ),
+    ],
+  ),
+);
+
+/// Colour-swatch row shared by the cat creator and the avatar editor.
+Widget _swatchesRow(
+  String title,
+  List<Color> colours,
+  List<String> names,
+  int selected,
+  ValueChanged<int> onSelect,
+) => Padding(
+  padding: const EdgeInsets.only(top: 12),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: const TextStyle(
+          color: Color(0xff6b4a32),
+          fontWeight: FontWeight.w900,
+          fontSize: 13,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (var i = 0; i < colours.length; i++)
+            _SwatchChip(
+              colour: colours[i],
+              label: names[i],
+              selected: selected == i,
+              onTap: () => onSelect(i),
+            ),
+        ],
+      ),
+    ],
+  ),
+);
+
+/// Bottom-sheet editor for the player's avatar. Edits a local draft and only
+/// persists through [onSave]; owned accessories are the only ones offered.
+class _AvatarEditorSheet extends StatefulWidget {
+  const _AvatarEditorSheet({
+    required this.initial,
+    required this.owned,
+    required this.onSave,
+  });
+  final AvatarSpec initial;
+  final Set<String> owned;
+  final ValueChanged<AvatarSpec> onSave;
+
+  @override
+  State<_AvatarEditorSheet> createState() => _AvatarEditorSheetState();
+}
+
+class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
+  late AvatarSpec _spec = widget.initial;
+  final _random = Random();
+
+  List<String> get _ownedAccessories =>
+      accessories.where(widget.owned.contains).toList();
+
+  void _update(AvatarSpec next) => setState(() => _spec = next);
+
+  void _randomise() => setState(() {
+    final ownedAcc = _ownedAccessories;
+    _spec = AvatarSpec(
+      species: _random.nextInt(avatarSpeciesCount),
+      fur: _random.nextInt(catFurColours.length),
+      pattern: _random.nextInt(catPatternCount),
+      eyes: _random.nextInt(catEyeColours.length),
+      ears: _random.nextInt(catEarCount),
+      accessory: ownedAcc.isEmpty
+          ? ''
+          : ownedAcc[_random.nextInt(ownedAcc.length)],
+    );
+  });
+
+  void _save() {
+    widget.onSave(_spec);
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ownedAcc = _ownedAccessories;
+    final accessoryIndex = _spec.accessory.isEmpty
+        ? 0
+        : ownedAcc.indexOf(_spec.accessory) + 1;
+    final accessoryNames = [
+      'Fără',
+      for (final item in ownedAcc) itemName(item),
+    ];
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xfffff3d9),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0x6651312d),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'EDITEAZĂ AVATARUL',
+                      style: TextStyle(
+                        color: ink,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: ink),
+                    tooltip: 'Închide',
+                  ),
+                ],
+              ),
+            ),
+            AvatarAvatar(_spec, size: 140),
+            const SizedBox(height: 4),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                children: [
+                  _choicesRow(
+                    'Specie',
+                    avatarSpeciesNames,
+                    _spec.species,
+                    (i) => _update(_spec.copyWith(species: i)),
+                  ),
+                  _swatchesRow(
+                    'Culoare blană',
+                    catFurColours,
+                    const ['Gri', 'Portocaliu', 'Crem', 'Mov', 'Negru', 'Alb'],
+                    _spec.fur,
+                    (i) => _update(_spec.copyWith(fur: i)),
+                  ),
+                  _choicesRow(
+                    'Model',
+                    const ['Uniform', 'Tigrat', 'Bicolor', 'Calico', 'Colorpoint'],
+                    _spec.pattern,
+                    (i) => _update(_spec.copyWith(pattern: i)),
+                  ),
+                  _swatchesRow(
+                    'Culoare ochi',
+                    catEyeColours,
+                    const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
+                    _spec.eyes,
+                    (i) => _update(_spec.copyWith(eyes: i)),
+                  ),
+                  _choicesRow(
+                    'Urechi',
+                    avatarEarNames[_spec.species],
+                    _spec.ears,
+                    (i) => _update(_spec.copyWith(ears: i)),
+                  ),
+                  _choicesRow(
+                    'Accesorii',
+                    accessoryNames,
+                    accessoryIndex.clamp(0, accessoryNames.length - 1),
+                    (i) => _update(
+                      _spec.copyWith(
+                        accessory: i == 0 ? '' : ownedAcc[i - 1],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ArenaButton(
+                          text: 'ALEATORIZEAZĂ',
+                          onPressed: _randomise,
+                          green: true,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ArenaButton(
+                          text: 'SALVEAZĂ',
+                          onPressed: _save,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

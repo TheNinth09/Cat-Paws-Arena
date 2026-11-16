@@ -141,3 +141,11 @@ Request: Set `OnlinePlay.services` once during app bootstrap (lib/main.dart befo
 Reason: The settings section is gated by `OnlinePlay.services != null`; lane 4 cannot edit lib/main.dart.
 Status: open — orchestrator will wire `OnlineServices.start()` -> `OnlinePlay.services` in lib/main.dart after this merge.
 ```
+
+```text
+Lane: 3
+Blocking PR: lane-3 avatar editor (P2-1 custom user avatar)
+Request: Persist the custom user avatar so it survives save/reload and Google account link. Proposed schema — AvatarSpec in lib/cat_avatar.dart serializes to compact JSON {"s":species 0-3,"f":fur 0-5,"p":pattern 0-4,"e":eyes 0-3,"r":ears 0-3,"a":accessory sprite id or ""}. Ask: (1) lib/profile.dart — add `String avatarSpec` (default '') saved inside the 'player' JSON; (2) lib/online/cloud_profile.dart — add an `avatar` string key copied in fromPlayer/applyTo/toJson/fromJson (schemaVersion bump or tolerant read) so cloud sync does not drop it; (3) orchestrator/lane-4 may later surface AvatarAvatar(player) in PlayerHud/profile — lane 3 already ships loadAvatarSpec/saveAvatarSpec helpers over prefs key 'avatar_spec_v1' as the interim local store.
+Reason: Owner decision for P2-1: a custom user avatar separate from the duel cats; cloud sync must not drop it on Google link. AvatarSpec.fromJsonString tolerates bad data so older/newer clients degrade safely.
+Status: open
+```

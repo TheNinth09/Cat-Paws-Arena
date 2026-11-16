@@ -3,7 +3,9 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'catalog.dart';
 import 'profile.dart';
 import 'ui_widgets.dart';
 
@@ -362,6 +364,90 @@ class _HeadBasePainter extends CustomPainter {
   bool shouldRepaint(_HeadBasePainter oldDelegate) => oldDelegate.fur != fur;
 }
 
+/// Paints one of the five fur patterns inside the current clip. Shared by
+/// the cat head/body layers and the user-avatar painter; [earPaths] are the
+/// outer ear silhouettes used by colourpoint so ears tint with the face.
+void _paintHeadPattern(
+  Canvas canvas, {
+  required Color fur,
+  required int pattern,
+  required List<Path> earPaths,
+}) {
+  switch (pattern) {
+    case 1:
+      _tabbyMarks(canvas, fur);
+    case 2:
+      _bicolourMarks(canvas);
+    case 3:
+      _calicoMarks(canvas);
+    case 4:
+      _colourpointMarks(canvas, earPaths);
+  }
+}
+
+void _tabbyMarks(Canvas canvas, Color fur) {
+  final stroke = Paint()
+    ..color = _markingColor(fur)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4.5
+    ..strokeCap = StrokeCap.round;
+  for (final x in [46.0, 62.0, 78.0]) {
+    canvas.drawPath(
+      Path()
+        ..moveTo(x - 4, 29)
+        ..quadraticBezierTo(x + 4, 36, x - 3, 45),
+      stroke,
+    );
+  }
+  for (final (x1, y1, x2, y2) in [
+    (22.0, 55.0, 31.0, 63.0),
+    (17.0, 67.0, 27.0, 73.0),
+    (98.0, 55.0, 89.0, 63.0),
+    (103.0, 67.0, 93.0, 73.0),
+  ]) {
+    canvas.drawLine(Offset(x1, y1), Offset(x2, y2), stroke);
+  }
+}
+
+void _bicolourMarks(Canvas canvas) {
+  final p = Paint()..color = const Color(0xfffff6e6);
+  canvas.drawOval(Rect.fromLTWH(52, 19, 20, 17), p);
+  canvas.drawOval(Rect.fromLTWH(35, 71, 52, 41), p);
+  canvas.drawOval(Rect.fromLTWH(11, 77, 19, 27), p);
+  canvas.drawOval(Rect.fromLTWH(90, 77, 19, 27), p);
+}
+
+void _calicoMarks(Canvas canvas) {
+  canvas.drawOval(
+    Rect.fromLTWH(74, 28, 36, 32),
+    Paint()..color = const Color(0xff454b5c),
+  );
+  canvas.drawOval(
+    Rect.fromLTWH(15, 56, 32, 27),
+    Paint()..color = const Color(0xffe8973f),
+  );
+  canvas.drawOval(
+    Rect.fromLTWH(58, 82, 22, 18),
+    Paint()..color = const Color(0xff454b5c),
+  );
+  canvas.drawOval(
+    Rect.fromLTWH(20, 30, 15, 13),
+    Paint()..color = const Color(0xffe8973f),
+  );
+}
+
+void _colourpointMarks(Canvas canvas, List<Path> earPaths) {
+  final point = Paint()
+    ..color = const Color(0xff54402f).withValues(alpha: 0.7);
+  for (final ear in earPaths) {
+    canvas.drawPath(ear, point);
+  }
+  canvas.drawOval(
+    Rect.fromLTWH(29, 43, 68, 42),
+    Paint()..color = const Color(0xff54402f).withValues(alpha: 0.32),
+  );
+}
+
 class _HeadPatternPainter extends CustomPainter {
   const _HeadPatternPainter(this.spec);
   final CatSpec spec;
@@ -372,86 +458,48 @@ class _HeadPatternPainter extends CustomPainter {
     _scaleTo(canvas, size, 120, 120);
     canvas.save();
     canvas.clipPath(_headClipPath(spec.ears));
-    switch (spec.pattern) {
-      case 1:
-        _tabby(canvas, spec.fur);
-      case 2:
-        _bicolour(canvas);
-      case 3:
-        _calico(canvas);
-      case 4:
-        _colourpoint(canvas);
-    }
+    _paintHeadPattern(
+      canvas,
+      fur: spec.fur,
+      pattern: spec.pattern,
+      earPaths: _earOuterPaths(spec.ears),
+    );
     canvas.restore();
     canvas.restore();
-  }
-
-  void _tabby(Canvas canvas, Color fur) {
-    final stroke = Paint()
-      ..color = _markingColor(fur)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.5
-      ..strokeCap = StrokeCap.round;
-    for (final x in [46.0, 62.0, 78.0]) {
-      canvas.drawPath(
-        Path()
-          ..moveTo(x - 4, 29)
-          ..quadraticBezierTo(x + 4, 36, x - 3, 45),
-        stroke,
-      );
-    }
-    for (final (x1, y1, x2, y2) in [
-      (22.0, 55.0, 31.0, 63.0),
-      (17.0, 67.0, 27.0, 73.0),
-      (98.0, 55.0, 89.0, 63.0),
-      (103.0, 67.0, 93.0, 73.0),
-    ]) {
-      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), stroke);
-    }
-  }
-
-  void _bicolour(Canvas canvas) {
-    final p = Paint()..color = const Color(0xfffff6e6);
-    canvas.drawOval(Rect.fromLTWH(52, 19, 20, 17), p);
-    canvas.drawOval(Rect.fromLTWH(35, 71, 52, 41), p);
-    canvas.drawOval(Rect.fromLTWH(11, 77, 19, 27), p);
-    canvas.drawOval(Rect.fromLTWH(90, 77, 19, 27), p);
-  }
-
-  void _calico(Canvas canvas) {
-    canvas.drawOval(
-      Rect.fromLTWH(74, 28, 36, 32),
-      Paint()..color = const Color(0xff454b5c),
-    );
-    canvas.drawOval(
-      Rect.fromLTWH(15, 56, 32, 27),
-      Paint()..color = const Color(0xffe8973f),
-    );
-    canvas.drawOval(
-      Rect.fromLTWH(58, 82, 22, 18),
-      Paint()..color = const Color(0xff454b5c),
-    );
-    canvas.drawOval(
-      Rect.fromLTWH(20, 30, 15, 13),
-      Paint()..color = const Color(0xffe8973f),
-    );
-  }
-
-  void _colourpoint(Canvas canvas) {
-    final point = Paint()
-      ..color = const Color(0xff54402f).withValues(alpha: 0.7);
-    for (final ear in _earOuterPaths(spec.ears)) {
-      canvas.drawPath(ear, point);
-    }
-    canvas.drawOval(
-      Rect.fromLTWH(29, 43, 68, 42),
-      Paint()..color = const Color(0xff54402f).withValues(alpha: 0.32),
-    );
   }
 
   @override
   bool shouldRepaint(_HeadPatternPainter oldDelegate) =>
       oldDelegate.spec != spec;
+}
+
+/// The cat muzzle: cream oval, pink nose and mouth arcs. Shared with the
+/// avatar painter when the species is a cat.
+void _paintCatMuzzle(Canvas canvas) {
+  final p = Paint()..color = const Color(0xffffeddd);
+  canvas.drawOval(const Rect.fromLTWH(34, 78, 54, 30), p);
+  p.color = const Color(0xffe78e9c);
+  canvas.drawPath(
+    Path()
+      ..moveTo(51, 83)
+      ..lineTo(68, 83)
+      ..lineTo(60, 91)
+      ..close(),
+    p,
+  );
+  final mouth = Paint()
+    ..color = ink
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  for (final x in [42.0, 60.0]) {
+    canvas.drawArc(
+      Rect.fromLTWH(x, 86, 18, 13),
+      0,
+      pi,
+      false,
+      mouth,
+    );
+  }
 }
 
 class _MuzzlePainter extends CustomPainter {
@@ -460,35 +508,32 @@ class _MuzzlePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _scaleTo(canvas, size, 120, 120);
-    final p = Paint()..color = const Color(0xffffeddd);
-    canvas.drawOval(const Rect.fromLTWH(34, 78, 54, 30), p);
-    p.color = const Color(0xffe78e9c);
-    canvas.drawPath(
-      Path()
-        ..moveTo(51, 83)
-        ..lineTo(68, 83)
-        ..lineTo(60, 91)
-        ..close(),
-      p,
-    );
-    final mouth = Paint()
-      ..color = ink
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    for (final x in [42.0, 60.0]) {
-      canvas.drawArc(
-        Rect.fromLTWH(x, 86, 18, 13),
-        0,
-        pi,
-        false,
-        mouth,
-      );
-    }
+    _paintCatMuzzle(canvas);
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(_MuzzlePainter oldDelegate) => false;
+}
+
+/// The pair of irises, pupils and highlights at the canonical eye spots.
+/// Shared by the cat layers and the user-avatar painter.
+void _paintEyes(Canvas canvas, Color colour) {
+  for (final x in [35.0, 81.0]) {
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(x, 65), width: 25, height: 30),
+      Paint()..color = colour,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(x + 2, 66), width: 12, height: 24),
+      Paint()..color = const Color(0xff171b25),
+    );
+    canvas.drawCircle(
+      Offset(x + 5, 58),
+      4,
+      Paint()..color = Colors.white,
+    );
+  }
 }
 
 class _EyePainter extends CustomPainter {
@@ -498,21 +543,7 @@ class _EyePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _scaleTo(canvas, size, 120, 120);
-    for (final x in [35.0, 81.0]) {
-      canvas.drawOval(
-        Rect.fromCenter(center: Offset(x, 65), width: 25, height: 30),
-        Paint()..color = colour,
-      );
-      canvas.drawOval(
-        Rect.fromCenter(center: Offset(x + 2, 66), width: 12, height: 24),
-        Paint()..color = const Color(0xff171b25),
-      );
-      canvas.drawCircle(
-        Offset(x + 5, 58),
-        4,
-        Paint()..color = Colors.white,
-      );
-    }
+    _paintEyes(canvas, colour);
     canvas.restore();
   }
 
@@ -789,4 +820,447 @@ class CatPainter extends CustomPainter {
       old.ears != ears ||
       old.eye != eye ||
       old.pattern != pattern;
+}
+
+// ---------------------------------------------------------------------------
+// User avatar — a separate creature from the duel cats (Tzuki/Bubble/Custom).
+// Rendered by the same layer idea: species silhouette + fur + pattern +
+// muzzle + eyes + accessory sprite. No photo, no network, no cost.
+// ---------------------------------------------------------------------------
+
+/// Number of avatar species: 0 pisică, 1 câine, 2 iepure, 3 urs.
+const avatarSpeciesCount = 4;
+
+/// Romanian species labels for the editor, indexed by [AvatarSpec.species].
+const avatarSpeciesNames = ['Pisică', 'Câine', 'Iepure', 'Urs'];
+
+/// Ear-style labels per species, indexed `[species][ears]`. Index 1 always
+/// means "only the left ear" across every species.
+const avatarEarNames = [
+  ['Două urechi', 'Doar stânga', 'Plisate', 'Smocuri'],
+  ['Flori', 'O floare', 'Drepte', 'Lungi'],
+  ['Drepte', 'O dreaptă', 'Plecate', 'Amestec'],
+  ['Mari', 'O ureche', 'Mici', 'Înalte'],
+];
+
+/// Shared-preferences key for the locally stored avatar spec JSON.
+const avatarSpecKey = 'avatar_spec_v1';
+
+/// Visual description of the player's avatar. Every field is a small index
+/// or an accessory sprite id so the whole spec serializes to a compact JSON
+/// object that `Player`/`CloudProfile` can persist later.
+class AvatarSpec {
+  const AvatarSpec({
+    this.species = 0,
+    this.fur = 0,
+    this.pattern = 0,
+    this.eyes = 0,
+    this.ears = 0,
+    this.accessory = '',
+  });
+
+  /// Species index in `0..[avatarSpeciesCount)`.
+  final int species;
+
+  /// Fur palette index into [catFurColours].
+  final int fur;
+
+  /// Pattern index in `0..[catPatternCount)` (same set as the cats).
+  final int pattern;
+
+  /// Iris palette index into [catEyeColours].
+  final int eyes;
+
+  /// Ear style index in `0..[catEarCount)`; meaning depends on [species].
+  final int ears;
+
+  /// Accessory sprite id from `assets/generated/` ('' = none). Only ids from
+  /// [accessories] are accepted so a bad save can never request a missing
+  /// asset.
+  final String accessory;
+
+  Color get furColor => catFurColours[_clampIndex(fur, catFurColours.length)];
+  Color get eyeColor => catEyeColours[_clampIndex(eyes, catEyeColours.length)];
+
+  AvatarSpec copyWith({
+    int? species,
+    int? fur,
+    int? pattern,
+    int? eyes,
+    int? ears,
+    String? accessory,
+  }) => AvatarSpec(
+    species: species ?? this.species,
+    fur: fur ?? this.fur,
+    pattern: pattern ?? this.pattern,
+    eyes: eyes ?? this.eyes,
+    ears: ears ?? this.ears,
+    accessory: accessory ?? this.accessory,
+  );
+
+  /// Compact JSON form proposed for `Player.avatar`/`CloudProfile.avatar`.
+  Map<String, Object?> toJson() => {
+    's': _clampIndex(species, avatarSpeciesCount),
+    'f': _clampIndex(fur, catFurColours.length),
+    'p': _clampIndex(pattern, catPatternCount),
+    'e': _clampIndex(eyes, catEyeColours.length),
+    'r': _clampIndex(ears, catEarCount),
+    'a': accessories.contains(accessory) ? accessory : '',
+  };
+
+  String toJsonString() => jsonEncode(toJson());
+
+  /// Tolerant parse for local/cloud data: bad or out-of-range values fall
+  /// back to defaults instead of throwing, so a corrupt save cannot brick
+  /// the avatar. Unknown accessory ids are dropped.
+  factory AvatarSpec.fromJson(Map<String, Object?> json) {
+    int pick(String key, int fallback, int count) {
+      final v = json[key];
+      return v is int && v >= 0 && v < count ? v : fallback;
+    }
+
+    final a = json['a'];
+    return AvatarSpec(
+      species: pick('s', 0, avatarSpeciesCount),
+      fur: pick('f', 0, catFurColours.length),
+      pattern: pick('p', 0, catPatternCount),
+      eyes: pick('e', 0, catEyeColours.length),
+      ears: pick('r', 0, catEarCount),
+      accessory: a is String && accessories.contains(a) ? a : '',
+    );
+  }
+
+  factory AvatarSpec.fromJsonString(String? raw) {
+    if (raw == null || raw.isEmpty) return const AvatarSpec();
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, Object?>
+          ? AvatarSpec.fromJson(decoded)
+          : const AvatarSpec();
+    } on FormatException {
+      return const AvatarSpec();
+    }
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is AvatarSpec &&
+      other.species == species &&
+      other.fur == fur &&
+      other.pattern == pattern &&
+      other.eyes == eyes &&
+      other.ears == ears &&
+      other.accessory == accessory;
+
+  @override
+  int get hashCode => Object.hash(species, fur, pattern, eyes, ears, accessory);
+}
+
+/// Loads the locally stored avatar spec; a missing or corrupt value yields
+/// the default spec. This is lane-3 local persistence until the orchestrator
+/// adds `Player.avatar`/`CloudProfile.avatar` (see docs/requests.md).
+AvatarSpec loadAvatarSpec(SharedPreferences prefs) =>
+    AvatarSpec.fromJsonString(prefs.getString(avatarSpecKey));
+
+Future<void> saveAvatarSpec(SharedPreferences prefs, AvatarSpec spec) =>
+    prefs.setString(avatarSpecKey, spec.toJsonString());
+
+// --- species geometry (canonical 120x120 head space, like the cats) ---------
+
+Path _avatarHeadPath(int species) => switch (species) {
+  // Dog: wider cheeks and jowls.
+  1 => Path()
+    ..moveTo(62, 18)
+    ..cubicTo(30, 18, 9, 45, 8, 75)
+    ..cubicTo(7, 107, 32, 125, 62, 125)
+    ..cubicTo(93, 125, 117, 105, 116, 73)
+    ..cubicTo(115, 43, 93, 18, 62, 18)
+    ..close(),
+  // Bunny: narrower, taller head.
+  2 => Path()
+    ..moveTo(62, 13)
+    ..cubicTo(37, 13, 17, 41, 16, 71)
+    ..cubicTo(15, 101, 36, 119, 62, 119)
+    ..cubicTo(89, 119, 107, 99, 106, 69)
+    ..cubicTo(105, 39, 86, 13, 62, 13)
+    ..close(),
+  // Bear: the roundest, widest head.
+  3 => Path()
+    ..moveTo(62, 21)
+    ..cubicTo(27, 21, 7, 47, 7, 77)
+    ..cubicTo(7, 109, 32, 127, 62, 127)
+    ..cubicTo(95, 127, 119, 107, 119, 75)
+    ..cubicTo(119, 45, 95, 21, 62, 21)
+    ..close(),
+  // Cat and anything unexpected: the classic cat head.
+  _ => _headPath(),
+};
+
+/// Ear stamps for species 1-3 in canonical space: each stamp is
+/// `[cx, cy, w, h]` for an oval ear. Left stamp first; a style-1 spec has a
+/// single left ear. Species 0 uses the cat's path ears instead.
+List<List<double>> _avatarEarStamps(int species, int ears) {
+  if (ears == 1) {
+    return switch (species) {
+      1 => [
+        [23.0, 47.0, 22.0, 54.0],
+      ],
+      2 => [
+        [31.0, 34.0, 17.0, 54.0],
+      ],
+      3 => [
+        [26.0, 25.0, 26.0, 26.0],
+      ],
+      _ => const [],
+    };
+  }
+  return switch ((species, ears)) {
+    // Dog: floppy, perked, long floppy.
+    (1, 0) => [
+      [23.0, 47.0, 22.0, 54.0],
+      [97.0, 47.0, 22.0, 54.0],
+    ],
+    (1, 2) => [
+      [27.0, 30.0, 20.0, 32.0],
+      [93.0, 30.0, 20.0, 32.0],
+    ],
+    (1, 3) => [
+      [21.0, 50.0, 19.0, 62.0],
+      [99.0, 50.0, 19.0, 62.0],
+    ],
+    // Bunny: upright, lop, mixed (left upright, right lop).
+    (2, 0) => [
+      [31.0, 34.0, 17.0, 54.0],
+      [89.0, 34.0, 17.0, 54.0],
+    ],
+    (2, 2) => [
+      [24.0, 46.0, 24.0, 32.0],
+      [96.0, 46.0, 24.0, 32.0],
+    ],
+    (2, 3) => [
+      [31.0, 34.0, 17.0, 54.0],
+      [97.0, 46.0, 24.0, 32.0],
+    ],
+    // Bear: big round, small round, tall oval.
+    (3, 0) => [
+      [26.0, 25.0, 26.0, 26.0],
+      [94.0, 25.0, 26.0, 26.0],
+    ],
+    (3, 2) => [
+      [26.0, 26.0, 18.0, 18.0],
+      [94.0, 26.0, 18.0, 18.0],
+    ],
+    (3, 3) => [
+      [26.0, 23.0, 20.0, 34.0],
+      [94.0, 23.0, 20.0, 34.0],
+    ],
+    _ => const [],
+  };
+}
+
+/// Oval paths approximating the ear stamps, used for pattern clipping and
+/// colourpoint tinting.
+List<Path> _avatarEarPaths(int species, int ears) => [
+  for (final s in _avatarEarStamps(species, ears))
+    Path()..addOval(Rect.fromCenter(center: Offset(s[0], s[1]), width: s[2], height: s[3])),
+];
+
+Path _avatarClipPath(int species, int ears) {
+  final clip = _avatarHeadPath(species);
+  if (species == 0) {
+    for (final ear in _earOuterPaths(ears)) {
+      clip.addPath(ear, Offset.zero);
+    }
+  } else {
+    for (final ear in _avatarEarPaths(species, ears)) {
+      clip.addPath(ear, Offset.zero);
+    }
+  }
+  return clip;
+}
+
+void _paintAnimalEars(Canvas canvas, int species, int ears, Color fur) {
+  final stamps = _avatarEarStamps(species, ears);
+  if (stamps.isEmpty) return;
+  final furPaint = Paint()..color = fur;
+  final line = Paint()
+    ..color = ink
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  final inner = Paint()..color = const Color(0xffeca7ad);
+  for (final s in stamps) {
+    final outer = Rect.fromCenter(
+      center: Offset(s[0], s[1]),
+      width: s[2],
+      height: s[3],
+    );
+    canvas.drawOval(outer, furPaint);
+    canvas.drawOval(outer, line);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(s[0], s[1] + s[3] * 0.08),
+        width: s[2] * 0.55,
+        height: s[3] * 0.62,
+      ),
+      inner,
+    );
+  }
+}
+
+/// Species-specific muzzles/snouts in canonical space.
+void _paintAnimalMuzzle(Canvas canvas, int species) {
+  switch (species) {
+    case 1:
+      // Dog: broad cream muzzle, large dark nose, happy mouth.
+      canvas.drawOval(
+        const Rect.fromLTWH(36, 74, 52, 36),
+        Paint()..color = const Color(0xffffeddd),
+      );
+      canvas.drawOval(
+        const Rect.fromLTWH(50, 78, 22, 14),
+        Paint()..color = const Color(0xff4a3b2f),
+      );
+      canvas.drawPath(
+        Path()
+          ..moveTo(48, 100)
+          ..quadraticBezierTo(62, 108, 76, 100),
+        Paint()
+          ..color = ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5
+          ..strokeCap = StrokeCap.round,
+      );
+    case 2:
+      // Bunny: small muzzle, tiny nose, two buck teeth.
+      canvas.drawOval(
+        const Rect.fromLTWH(44, 78, 36, 26),
+        Paint()..color = const Color(0xffffeddd),
+      );
+      canvas.drawOval(
+        const Rect.fromLTWH(56, 80, 10, 8),
+        Paint()..color = const Color(0xffe78e9c),
+      );
+      for (final x in [52.0, 62.0]) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x, 94, 8, 11),
+            const Radius.circular(3),
+          ),
+          Paint()..color = Colors.white,
+        );
+      }
+      canvas.drawLine(
+        const Offset(58, 94),
+        const Offset(58, 105),
+        Paint()
+          ..color = ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    case 3:
+      // Bear: wide muzzle, big round nose.
+      canvas.drawOval(
+        const Rect.fromLTWH(28, 74, 68, 34),
+        Paint()..color = const Color(0xffffeddd),
+      );
+      canvas.drawOval(
+        const Rect.fromLTWH(46, 76, 30, 18),
+        Paint()..color = const Color(0xff4a3b2f),
+      );
+      canvas.drawPath(
+        Path()
+          ..moveTo(50, 102)
+          ..quadraticBezierTo(62, 108, 74, 102),
+        Paint()
+          ..color = ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5
+          ..strokeCap = StrokeCap.round,
+      );
+  }
+}
+
+/// Paints an [AvatarSpec] in the canonical 120x120 space. Species 0 is a
+/// cat and delegates to the cat layer stack so it looks identical to the
+/// duel cats; species 1-3 draw their own ears, head, muzzle and eyes.
+class AvatarPainter extends CustomPainter {
+  const AvatarPainter(this.spec);
+  final AvatarSpec spec;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final species = _clampIndex(spec.species, avatarSpeciesCount);
+    if (species == 0) {
+      CatLayersPainter(
+        CatSpec(
+          fur: spec.furColor,
+          pattern: _clampIndex(spec.pattern, catPatternCount),
+          eyes: spec.eyeColor,
+          ears: _clampIndex(spec.ears, catEarCount),
+        ),
+      ).paint(canvas, size);
+      return;
+    }
+    _scaleTo(canvas, size, 120, 120);
+    final fur = spec.furColor;
+    _paintAnimalEars(canvas, species, spec.ears, fur);
+    final head = _avatarHeadPath(species);
+    canvas.drawPath(head, Paint()..color = fur);
+    canvas.drawPath(
+      head,
+      Paint()
+        ..color = ink
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4,
+    );
+    final pattern = _clampIndex(spec.pattern, catPatternCount);
+    if (pattern != 0) {
+      canvas.save();
+      canvas.clipPath(_avatarClipPath(species, spec.ears));
+      _paintHeadPattern(
+        canvas,
+        fur: fur,
+        pattern: pattern,
+        earPaths: _avatarEarPaths(species, spec.ears),
+      );
+      canvas.restore();
+    }
+    _paintAnimalMuzzle(canvas, species);
+    _paintEyes(canvas, spec.eyeColor);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(AvatarPainter oldDelegate) => oldDelegate.spec != spec;
+}
+
+/// Renders an [AvatarSpec] avatar. Set [showAccessory] false to hide the
+/// sprite overlay (used where the accessory is drawn separately).
+class AvatarAvatar extends StatelessWidget {
+  const AvatarAvatar(
+    this.spec, {
+    super.key,
+    this.size = 64,
+    this.showAccessory = true,
+  });
+  final AvatarSpec spec;
+  final double size;
+  final bool showAccessory;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        CustomPaint(painter: AvatarPainter(spec)),
+        if (showAccessory && spec.accessory.isNotEmpty)
+          Align(
+            alignment: Alignment.topCenter,
+            child: sprite(spec.accessory, size: size * .7),
+          ),
+      ],
+    ),
+  );
 }
