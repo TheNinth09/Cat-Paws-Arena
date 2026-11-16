@@ -119,6 +119,12 @@ class FirebaseAuthBackend implements AuthBackend {
   Future<void> signOut() => _guard(_auth.signOut);
 
   @override
+  Future<void> reauthenticate(GoogleCredential credential) {
+    final user = _current;
+    return _guard(() => user.reauthenticateWithCredential(_google(credential)));
+  }
+
+  @override
   Future<void> deleteCurrentUser() {
     final user = _current;
     return _guard(user.delete);
@@ -280,6 +286,23 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
           if (emote != null && from is String) yield EmoteEvent(from, emote);
         }
       });
+
+  @override
+  Future<void> deleteUserData(String uid) => _guard(() async {
+    final batch = _db.batch();
+    final devices = await _users.doc(uid).collection('devices').get();
+    for (final doc in devices.docs) {
+      batch.delete(doc.reference);
+    }
+    final rooms = await _rooms.where('hostUid', isEqualTo: uid).get();
+    for (final doc in rooms.docs) {
+      batch.delete(doc.reference);
+    }
+    batch
+      ..delete(_users.doc(uid))
+      ..delete(_db.collection('clocks').doc(uid));
+    await batch.commit();
+  });
 
   static PlayerSlot? _slot(Object? name) => PlayerSlot.values.asNameMap()[name];
 

@@ -279,7 +279,7 @@ void main() {
       await RoomService(cloud).createRoom(user.uid);
       await RoomService(cloud).createRoom('someone-else');
 
-      await account.deleteAccount();
+      await account.deleteAccount(freshGoogle: google);
       expect(account.user, isNull);
       expect(cloud.profiles, isEmpty);
       expect(cloud.googleToUid, isEmpty);
@@ -314,6 +314,12 @@ void main() {
       expect(cloud.profiles.keys, [user.uid]);
       expect(cloud.rooms.keys, [room.code]);
       expect(account.user?.uid, user.uid);
+
+      // With a fresh Google sign-in it deletes everything, no function needed.
+      await account.deleteAccount(freshGoogle: const GoogleCredential('g-old'));
+      expect(cloud.profiles, isEmpty);
+      expect(cloud.rooms, isEmpty);
+      expect(account.user, isNull);
     });
   });
 

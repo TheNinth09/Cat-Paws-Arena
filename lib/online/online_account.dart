@@ -57,12 +57,20 @@ class OnlineAccount {
     return next;
   }
 
-  /// Deletes the account; the server then deletes its profile, devices and
-  /// rooms and anonymizes its matches (`onUserDeleted`). Nothing is deleted
-  /// if the backend refuses, e.g. [OnlineErrorCode.requiresRecentLogin].
+  /// Deletes the cloud data, then the account. Works without Cloud
+  /// Functions (Spark). A Google-linked account needs [freshGoogle] (a new
+  /// Google sign-in) first; without it this throws
+  /// [OnlineErrorCode.requiresRecentLogin] before anything is deleted.
   /// The caller clears local data afterwards.
-  Future<void> deleteAccount() async {
-    _signedIn;
+  Future<void> deleteAccount({GoogleCredential? freshGoogle}) async {
+    final user = _signedIn;
+    if (user.googleLinked) {
+      if (freshGoogle == null) {
+        throw const OnlineException(OnlineErrorCode.requiresRecentLogin);
+      }
+      await auth.reauthenticate(freshGoogle);
+    }
+    await store.deleteUserData(user.uid);
     await auth.deleteCurrentUser();
   }
 }

@@ -281,6 +281,12 @@ class FakeCloud implements CloudStore, MatchStore {
     moveLog[matchId]![index] = replacement;
   }
 
+  @override
+  Future<void> deleteUserData(String uid) async {
+    profiles.remove(uid);
+    rooms.removeWhere((_, room) => room.hostUid == uid);
+  }
+
   /// What the `onUserDeleted` function does server-side after the Auth user
   /// is deleted.
   void onUserDeleted(String uid) {
@@ -341,6 +347,16 @@ class FakeAuth implements AuthBackend {
       throw const OnlineException(OnlineErrorCode.noLinkedAccount);
     }
     return _user = OnlineUser(uid: uid, googleLinked: true);
+  }
+
+  @override
+  Future<void> reauthenticate(GoogleCredential credential) async {
+    final user = _user;
+    if (user == null) throw const OnlineException(OnlineErrorCode.notSignedIn);
+    if (cloud.googleToUid[credential.googleUserId] != user.uid) {
+      throw const OnlineException(OnlineErrorCode.noLinkedAccount);
+    }
+    requireRecentLogin = false;
   }
 
   @override

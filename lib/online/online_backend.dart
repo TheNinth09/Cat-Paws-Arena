@@ -29,6 +29,10 @@ abstract interface class AuthBackend {
 
   /// Signs in to the user that [credential] was linked to earlier.
   Future<OnlineUser> signInWithGoogle(GoogleCredential credential);
+
+  /// Confirms the current Google-linked user with a fresh sign-in, so a
+  /// later delete cannot fail with `requiresRecentLogin`.
+  Future<void> reauthenticate(GoogleCredential credential);
   Future<void> signOut();
   Future<void> deleteCurrentUser();
 }
@@ -120,4 +124,9 @@ abstract interface class CloudStore {
   /// Only preset [Emote]s exist; there is no way to send text.
   Future<void> sendEmote(String matchId, String senderUid, Emote emote);
   Stream<EmoteEvent> emotes(String matchId);
+
+  /// Deletes what the client may delete: profile, devices, clock and open
+  /// rooms of [uid]. Works without Cloud Functions; `onUserDeleted`
+  /// repeats it server-side and anonymizes matches when deployed.
+  Future<void> deleteUserData(String uid);
 }
