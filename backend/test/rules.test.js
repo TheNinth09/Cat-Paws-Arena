@@ -76,6 +76,13 @@ async function hostRoom(code = 'ABC234', uid = 'host') {
   return (await getDoc(doc(h, 'rooms', code))).data();
 }
 
+const matchFields = {
+  seed: 12345,
+  config: 'v1|7x7|c5|r5|m3|rainbow:clearOneColour|powers:threeFreeEqual',
+  engineVersion: 1,
+  contractVersion: 1,
+};
+
 const matchIdOf = (code, room) => `${code}_${room.createdAt.toMillis()}`;
 
 // What FirestoreCloudStore.claimRoom does.
@@ -91,6 +98,7 @@ function claim(code, uid) {
       hostUid: room.hostUid,
       guestUid: uid,
       createdAt: serverTimestamp(),
+      ...matchFields,
     });
     tx.delete(doc(g, 'rooms', code));
     return id;
@@ -234,7 +242,9 @@ describe('room claim', () => {
     const room = await hostRoom();
     const g = db('guest');
     const id = matchIdOf('ABC234', room);
-    const data = { roomCode: 'ABC234', hostUid: 'host', guestUid: 'guest', createdAt: serverTimestamp() };
+    const data = {
+      roomCode: 'ABC234', hostUid: 'host', guestUid: 'guest', createdAt: serverTimestamp(), ...matchFields,
+    };
     await assertFails(setDoc(doc(g, 'matches', id), data));
     const wrong = writeBatch(g);
     wrong.set(doc(g, 'matches', 'ABC234_1'), data);
@@ -283,5 +293,81 @@ describe('matches and emotes', () => {
     await assertFails(addDoc(emotes('guest'), { ...ok('guest'), text: 'hi' }));
     await assertFails(addDoc(emotes('x'), ok('x')));
     await assertFails(getDocs(emotes('x')));
+  });
+});
+
+describe('match sync', () => {
+  const swap = { kind: 'swap', a: { row: 0, col: 0 }, b: { row: 0, col: 1 } };
+  const move = (i, uid, slot, m = swap, over = {}) => ({
+    index: i, by: uid, slot, move: m, hashAfter: '0123456789abcdef', at: serverTimestamp(), ...over,
+  });
+  const put = (uid, id, i, data) => setDoc(doc(db(uid), 'matches', id, 'moves', String(i).padStart(3, '0')), data);
+  const fin = { first: 10, second: 8, hash: '0123456789abcdef', outcome: 'firstWins' };
+
+  test('claim must carry the agreed seed, config and versions', async () => {
+    const room = await hostRoom();
+    const g = db('guest');
+    const batch = writeBatch(g);
+    batch.set(doc(g, 'matches', matchIdOf('ABC234', room)), {
+      roomCode: 'ABC234', hostUid: 'host', guestUid: 'guest', createdAt: serverTimestamp(),
+      ...matchFields, config: 'v1|9x9|c6|r5|m3|rainbow:clearOneColour|powers:threeFreeEqual',
+    });
+    batch.delete(doc(g, 'rooms', 'ABC234'));
+    await assertFails(batch.commit());
+  });
+
+  test('players append moves in order, own slot, create-only', async () => {
+    const id = await seedMatch();
+    await assertSucceeds(put('host', id, 0, move(0, 'host', 'first')));
+    await assertSucceeds(put('guest', id, 1, move(1, 'guest', 'second')));
+    await assertFails(put('guest', id, 1, move(1, 'guest', 'second'))); // exists: update
+    await assertFails(put('guest', id, 3, move(3, 'guest', 'second'))); // gap
+    await assertFails(put('guest', id, 2, move(2, 'guest', 'first'))); // wrong slot
+    await assertFails(put('guest', id, 2, move(2, 'host', 'second'))); // spoofed sender
+    await assertFails(put('x', id, 2, move(2, 'x', 'first')));
+    await assertFails(put('host', id, 2, move(2, 'host', 'first', { kind: 'chat', text: 'hi' })));
+    await assertFails(put('host', id, 2, move(2, 'host', 'first', { ...swap, a: { row: 9, col: 0 } })));
+    await assertFails(put('host', id, 2, move(2, 'host', 'first', swap, { hashAfter: 'nothex' })));
+    await assertFails(put('host', id, 2, move(2, 'host', 'first', swap, { at: Timestamp.now() })));
+    await assertFails(put('host', id, 2, move(2, 'host', 'first', swap, { note: 'x' })));
+    await assertSucceeds(
+      put('host', id, 2, move(2, 'host', 'first', { kind: 'power', power: 'zoomies', row: 3 })),
+    );
+    await assertFails(getDocs(collection(db('x'), 'matches', id, 'moves')));
+    await assertSucceeds(getDocs(collection(db('guest'), 'matches', id, 'moves')));
+    await assertFails(deleteDoc(doc(db('host'), 'matches', id, 'moves', '000')));
+  });
+
+  test('each player writes only their own final, once', async () => {
+    const id = await seedMatch();
+    const ref = (uid) => doc(db(uid), 'matches', id);
+    await assertSucceeds(updateDoc(ref('host'), { final_first: fin }));
+    await assertFails(updateDoc(ref('host'), { final_first: { ...fin, first: 99 } }));
+    await assertFails(updateDoc(ref('host'), { final_second: fin }));
+    await assertFails(updateDoc(ref('guest'), { final_second: { ...fin, outcome: 'whatever' } }));
+    await assertSucceeds(updateDoc(ref('guest'), { final_second: fin }));
+    await assertFails(updateDoc(ref('x'), { flag: 'hash_mismatch' }));
+  });
+
+  test('a flag is a fixed reason, set once, never cleared', async () => {
+    const id = await seedMatch();
+    const ref = (uid) => doc(db(uid), 'matches', id);
+    await assertFails(updateDoc(ref('guest'), { flag: 'you cheated' }));
+    await assertSucceeds(updateDoc(ref('guest'), { flag: 'hash_mismatch' }));
+    await assertFails(updateDoc(ref('host'), { flag: 'bad_log' }));
+    await assertFails(updateDoc(ref('host'), { seed: 1 }));
+  });
+
+  test('forfeit only after 24 hours of the opponent not moving', async () => {
+    const id = await seedMatch();
+    await assertSucceeds(put('host', id, 0, move(0, 'host', 'first')));
+    const ref = (uid) => doc(db(uid), 'matches', id);
+    await assertFails(updateDoc(ref('host'), { forfeitWinner: 'first', forfeitAfter: '000' }));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'matches', id, 'moves', '000'), { at: hours(-25) });
+    });
+    await assertFails(updateDoc(ref('guest'), { forfeitWinner: 'second', forfeitAfter: '000' }));
+    await assertSucceeds(updateDoc(ref('host'), { forfeitWinner: 'first', forfeitAfter: '000' }));
+    await assertFails(put('guest', id, 1, move(1, 'guest', 'second')));
   });
 });
