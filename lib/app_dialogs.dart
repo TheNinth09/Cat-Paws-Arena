@@ -386,8 +386,7 @@ class _OnlineSettingsState extends State<_OnlineSettings> {
         if (credential == null || !mounted) return;
         final approval = await showParentGate(context, english: player.english);
         if (approval == null || !mounted) return;
-        await services.account.restoreWithGoogle(credential, approval);
-        await services.account.deleteAccount();
+        await services.account.deleteAccount(freshGoogle: credential);
       }
       await _clearLocalData(player);
       if (!mounted) return;

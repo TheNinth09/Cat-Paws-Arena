@@ -6,7 +6,6 @@ import 'package:cat_paws_arena/online/cloud_profile.dart';
 import 'package:cat_paws_arena/online/fake_backend.dart';
 import 'package:cat_paws_arena/online/online_account.dart';
 import 'package:cat_paws_arena/online/online_backend.dart';
-import 'package:cat_paws_arena/online/online_errors.dart';
 import 'package:cat_paws_arena/online/rooms.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/shop_screen.dart';
@@ -685,7 +684,7 @@ void main() {
   ) async {
     SharedPreferences.setMockInitialValues({});
     final cloud = FakeCloud();
-    final auth = _RequiresRecentLoginOnceAuth(FakeAuth(cloud));
+    final auth = FakeAuth(cloud);
     final account = OnlineAccount(auth, cloud);
     OnlinePlay.services = OnlinePlayServices(
       account: account,
@@ -695,6 +694,7 @@ void main() {
     addTearDown(() => OnlinePlay.services = null);
     await account.start();
     await auth.linkGoogle(const GoogleCredential('google-test'));
+    auth.requireRecentLogin = true;
     final p = Player(await SharedPreferences.getInstance())
       ..name = 'Local'
       ..trophies = 10
@@ -713,7 +713,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('parentGateOk')), findsOneWidget);
     await passParentGate(tester);
-    expect(auth.deleteAttempts, 2);
+    expect(auth.requireRecentLogin, isFalse);
     expect(account.user, isNull);
     expect(cloud.users, isEmpty);
     expect(p.trophies, 0);
@@ -724,37 +724,4 @@ void main() {
     await closeDialogContaining(tester, 'Cont șters');
     expect(tester.takeException(), isNull);
   });
-}
-
-class _RequiresRecentLoginOnceAuth implements AuthBackend {
-  _RequiresRecentLoginOnceAuth(this._inner);
-
-  final FakeAuth _inner;
-  var deleteAttempts = 0;
-
-  @override
-  OnlineUser? get currentUser => _inner.currentUser;
-
-  @override
-  Future<OnlineUser> signInAnonymously() => _inner.signInAnonymously();
-
-  @override
-  Future<OnlineUser> linkGoogle(GoogleCredential credential) =>
-      _inner.linkGoogle(credential);
-
-  @override
-  Future<OnlineUser> signInWithGoogle(GoogleCredential credential) =>
-      _inner.signInWithGoogle(credential);
-
-  @override
-  Future<void> signOut() => _inner.signOut();
-
-  @override
-  Future<void> deleteCurrentUser() async {
-    deleteAttempts++;
-    if (deleteAttempts == 1) {
-      throw const OnlineException(OnlineErrorCode.requiresRecentLogin);
-    }
-    await _inner.deleteCurrentUser();
-  }
 }
