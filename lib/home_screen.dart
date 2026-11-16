@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'app_dialogs.dart';
 import 'cat_avatar.dart';
 import 'cats_screen.dart';
+import 'events_screen.dart';
 import 'lobby_screen.dart';
 import 'match_screen.dart';
 import 'profile.dart';
 import 'shell/app_info.dart';
 import 'shop_screen.dart';
+import 'team_screen.dart';
 import 'ui_widgets.dart';
 
 class Home extends StatefulWidget {
@@ -48,7 +50,7 @@ class _HomeState extends State<Home> {
           context,
           item,
           Text(
-            'Versiunea $appVersion • Trei tab-uri, un singur mod de joc și identitate One Ear Games.',
+            'Versiunea $appVersion • Cinci tab-uri, un singur mod de joc și identitate One Ear Games.',
           ),
         );
       default:
@@ -153,6 +155,8 @@ class _HomeState extends State<Home> {
                           },
                           onRoad: () => showTrophyRoad(context, p),
                         ),
+                        TeamScreen(player: p, onUnavailable: unavailable),
+                        EventsScreen(player: p, onUnavailable: unavailable),
                       ],
                     ),
                   ),
