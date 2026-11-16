@@ -577,6 +577,28 @@ void main() {
       );
     });
 
+    test('a move whose sender was anonymized later still replays', () async {
+      final (cloud, host, guest) = await start(5);
+      await host.play(botForLevel(HouseCatLevel.medium).chooseMove(host.state));
+      final real = cloud.moveLog[host.matchId]!.first;
+      cloud.tamperMove(
+        host.matchId,
+        0,
+        MoveRecord(
+          index: 0,
+          uid: kDeletedUid,
+          slot: real.slot,
+          move: real.move,
+          hashAfter: real.hashAfter,
+          next: real.next,
+          at: real.at,
+        ),
+      );
+      await guest.refresh();
+      expect(guest.flag, isNull);
+      expect(guest.movesApplied, 1);
+    });
+
     test('watch and play together count each move once', () async {
       final (_, host, guest) = await start(9);
       final seen = <int>[];

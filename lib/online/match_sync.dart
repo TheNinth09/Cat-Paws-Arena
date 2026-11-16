@@ -172,7 +172,11 @@ class MatchSession {
   Future<bool> _accept(MoveRecord move) async {
     if (_flag != null) return false;
     if (move.index != _applied) return _raise(MatchFlag.badLog);
-    if (record.slotOf(move.uid) != move.slot ||
+    // The rules check the sender at write time; it may be anonymized later.
+    final sender = move.uid == kDeletedUid
+        ? move.slot
+        : record.slotOf(move.uid);
+    if (sender != move.slot ||
         move.slot != _state.activePlayer ||
         _state.outcome != null) {
       return _raise(MatchFlag.wrongTurn);

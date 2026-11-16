@@ -8,6 +8,9 @@ import 'package:arena_engine/arena_engine.dart';
 /// Bumped only with an announced contract change.
 const kMatchContractVersion = 1;
 
+/// The UID `onUserDeleted` writes in place of a deleted player's.
+const kDeletedUid = 'deleted';
+
 /// Slow play: a player who does not move for this long (server time, from
 /// the last move) forfeits.
 const roundLimit = Duration(hours: 24);
