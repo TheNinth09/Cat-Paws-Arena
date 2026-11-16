@@ -50,6 +50,10 @@
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
             android:value="false" />
+        <!-- firebase-messaging 26 needs this for register()/onRegistered (FID). -->
+        <meta-data
+            android:name="firebase_messaging_installation_id_enabled"
+            android:value="true" />
         <!-- Families policy: no Analytics collection even if a library adds it. -->
         <meta-data
             android:name="firebase_analytics_collection_deactivated"

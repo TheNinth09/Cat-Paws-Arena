@@ -115,7 +115,7 @@ preset IDs only.
 
 - [ ] `onUserDeleted` (Auth trigger, `europe-west1`): deletes what is left
       of the user, devices, clock and rooms, and writes `deleted` in place of
-      the uid in matches and emotes. The app deletes the profile first.
+      the uid in matches and emotes. The app deletes only the Auth user.
 - [ ] Push on move create: payload carries only the match ID, no names.
 - [ ] Deadline forfeit (scheduled): uses server time, writes only
       `roundDeadline`/forfeit fields.

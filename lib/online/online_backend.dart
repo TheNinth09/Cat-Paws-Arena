@@ -120,9 +120,4 @@ abstract interface class CloudStore {
   /// Only preset [Emote]s exist; there is no way to send text.
   Future<void> sendEmote(String matchId, String senderUid, Emote emote);
   Stream<EmoteEvent> emotes(String matchId);
-
-  /// Deletes what the client may delete: profile, devices and open rooms
-  /// of [uid]. Matches are anonymized server-side when the Auth user is
-  /// deleted (backend/functions).
-  Future<void> deleteUserData(String uid);
 }
