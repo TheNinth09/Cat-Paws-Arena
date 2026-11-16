@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 import 'dart:math';
 
+import 'package:arena_engine/arena_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -14,6 +15,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'emotes.dart';
+import 'match_store.dart';
 import 'online_backend.dart';
 import 'online_errors.dart';
 
@@ -117,13 +119,19 @@ class FirebaseAuthBackend implements AuthBackend {
   Future<void> signOut() => _guard(_auth.signOut);
 
   @override
+  Future<void> reauthenticate(GoogleCredential credential) {
+    final user = _current;
+    return _guard(() => user.reauthenticateWithCredential(_google(credential)));
+  }
+
+  @override
   Future<void> deleteCurrentUser() {
     final user = _current;
     return _guard(user.delete);
   }
 }
 
-class FirestoreCloudStore implements CloudStore {
+class FirestoreCloudStore implements CloudStore, MatchStore {
   FirestoreCloudStore([FirebaseFirestore? db])
     : _db = db ?? FirebaseFirestore.instance;
 
@@ -229,6 +237,10 @@ class FirestoreCloudStore implements CloudStore {
             'hostUid': room.hostUid,
             'guestUid': guestUid,
             'createdAt': FieldValue.serverTimestamp(),
+            'seed': Random.secure().nextInt(1 << 31),
+            'config': const MatchConfig.duel().fingerprint,
+            'engineVersion': kEngineVersion,
+            'contractVersion': kMatchContractVersion,
           });
           tx.delete(ref);
           return (RoomClaim.joined, room);
@@ -273,6 +285,163 @@ class FirestoreCloudStore implements CloudStore {
           final from = data['from'];
           if (emote != null && from is String) yield EmoteEvent(from, emote);
         }
+      });
+
+  @override
+  Future<void> deleteUserData(String uid) => _guard(() async {
+    final batch = _db.batch();
+    final devices = await _users.doc(uid).collection('devices').get();
+    for (final doc in devices.docs) {
+      batch.delete(doc.reference);
+    }
+    final rooms = await _rooms.where('hostUid', isEqualTo: uid).get();
+    for (final doc in rooms.docs) {
+      batch.delete(doc.reference);
+    }
+    batch
+      ..delete(_users.doc(uid))
+      ..delete(_db.collection('clocks').doc(uid));
+    await batch.commit();
+  });
+
+  static PlayerSlot? _slot(Object? name) => PlayerSlot.values.asNameMap()[name];
+
+  static MatchRecord _matchRecord(String id, Map<String, dynamic> d) =>
+      MatchRecord(
+        matchId: id,
+        roomCode: d['roomCode'] as String,
+        hostUid: d['hostUid'] as String,
+        guestUid: d['guestUid'] as String,
+        seed: d['seed'] as int,
+        config: d['config'] as String,
+        engineVersion: d['engineVersion'] as int,
+        contractVersion: d['contractVersion'] as int,
+        finals: {
+          for (final slot in PlayerSlot.values)
+            slot: ?MatchFinal.fromJson(d['final_${slot.name}']),
+        },
+        flag: MatchFlag.fromWire(d['flag']),
+        forfeitWinner: _slot(d['forfeitWinner']),
+      );
+
+  static MoveRecord? _moveRecord(Map<String, dynamic> d) {
+    final index = d['index'], by = d['by'], slot = _slot(d['slot']);
+    final move = d['move'], hash = d['hashAfter'], at = d['at'];
+    final next = d['next'];
+    if (index is! int ||
+        by is! String ||
+        slot == null ||
+        move is! Map ||
+        hash is! String ||
+        (next != 'none' && _slot(next) == null)) {
+      return null;
+    }
+    return MoveRecord(
+      index: index,
+      uid: by,
+      slot: slot,
+      move: Map<String, Object?>.from(move),
+      hashAfter: hash,
+      next: _slot(next),
+      at: at is Timestamp ? at.toDate().toUtc() : null,
+    );
+  }
+
+  CollectionReference<Map<String, dynamic>> _moves(String matchId) =>
+      _matches.doc(matchId).collection('moves');
+
+  static String _moveId(int index) => index.toString().padLeft(3, '0');
+
+  @override
+  Future<MatchRecord?> readMatch(String matchId) => _guard(() async {
+    final snap = await _matches.doc(matchId).get();
+    final data = snap.data();
+    return data == null ? null : _matchRecord(snap.id, data);
+  });
+
+  @override
+  Stream<MatchRecord> watchMatch(String matchId) => _matches
+      .doc(matchId)
+      .snapshots()
+      .where((snap) => snap.exists)
+      .map((snap) => _matchRecord(snap.id, snap.data()!));
+
+  @override
+  Future<List<MoveRecord>> readMoves(String matchId) => _guard(() async {
+    final snap = await _moves(matchId).orderBy('index').get();
+    return [for (final doc in snap.docs) ?_moveRecord(doc.data())];
+  });
+
+  @override
+  Stream<MoveRecord> watchMoves(String matchId, {int from = 0}) =>
+      _moves(matchId)
+          .where('index', isGreaterThanOrEqualTo: from)
+          .orderBy('index')
+          .snapshots()
+          .expand((snap) sync* {
+            for (final change in snap.docChanges) {
+              if (change.type != DocumentChangeType.added) continue;
+              final m = _moveRecord(change.doc.data() ?? const {});
+              if (m != null) yield m;
+            }
+          });
+
+  @override
+  Future<void> appendMove(String matchId, MoveRecord move) => _guard(() async {
+    final ref = _moves(matchId).doc(_moveId(move.index));
+    await _db.runTransaction((tx) async {
+      if ((await tx.get(ref)).exists) {
+        throw const MatchException(MatchErrorCode.moveConflict);
+      }
+      tx.set(ref, {
+        'index': move.index,
+        'by': move.uid,
+        'slot': move.slot.name,
+        'move': move.move,
+        'hashAfter': move.hashAfter,
+        'next': move.next?.name ?? 'none',
+        'at': FieldValue.serverTimestamp(),
+      });
+    });
+  });
+
+  @override
+  Future<void> writeFinal(String matchId, PlayerSlot slot, MatchFinal result) =>
+      _guard(
+        () => _matches.doc(matchId).update({
+          'final_${slot.name}': result.toJson(),
+        }),
+      );
+
+  @override
+  Future<void> flagMatch(String matchId, MatchFlag reason) => _guard(() async {
+    final ref = _matches.doc(matchId);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (snap.data()?['flag'] != null) return;
+      tx.update(ref, {'flag': reason.wire});
+    });
+  });
+
+  /// The rules check the opponent's last move is older than [roundLimit].
+  @override
+  Future<void> claimForfeit(String matchId, PlayerSlot winner) =>
+      _guard(() async {
+        final last = await _moves(matchId)
+            .orderBy('index', descending: true)
+            .limit(1)
+            .get();
+        final data = last.docs.isEmpty ? null : last.docs.first.data();
+        final at = data?['at'];
+        if (data?['next'] != winner.other.name ||
+            at is! Timestamp ||
+            serverNow().isBefore(at.toDate().toUtc().add(roundLimit))) {
+          throw const MatchException(MatchErrorCode.deadlineNotPassed);
+        }
+        await _matches.doc(matchId).update({
+          'forfeitWinner': winner.name,
+          'forfeitAfter': last.docs.first.id,
+        });
       });
 }
 

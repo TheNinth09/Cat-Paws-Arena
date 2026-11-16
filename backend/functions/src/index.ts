@@ -36,6 +36,8 @@ export const onUserDeleted = v1
         // Emotes first: once the match says `deleted`, a retry cannot find it.
         const emotes = await match.ref.collection("emotes").where("from", "==", uid).get();
         await Promise.all(emotes.docs.map((e) => e.ref.update({ from: DELETED })));
+        const moves = await match.ref.collection("moves").where("by", "==", uid).get();
+        await Promise.all(moves.docs.map((m) => m.ref.update({ by: DELETED })));
         await match.ref.update({ [field]: DELETED });
       }
     }

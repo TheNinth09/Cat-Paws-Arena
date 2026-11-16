@@ -1,12 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:arena_engine/arena_engine.dart';
 import 'package:cat_paws_arena/catalog.dart';
 import 'package:cat_paws_arena/online/cloud_profile.dart';
 import 'package:cat_paws_arena/online/emotes.dart';
 import 'package:cat_paws_arena/online/fake_backend.dart';
 import 'package:cat_paws_arena/online/online_account.dart';
 import 'package:cat_paws_arena/online/online_backend.dart';
+import 'package:cat_paws_arena/online/match_store.dart';
+import 'package:cat_paws_arena/online/match_sync.dart';
 import 'package:cat_paws_arena/online/online_config.dart';
 import 'package:cat_paws_arena/online/online_errors.dart';
 import 'package:cat_paws_arena/online/parent_gate.dart';
@@ -276,7 +280,7 @@ void main() {
       await RoomService(cloud).createRoom(user.uid);
       await RoomService(cloud).createRoom('someone-else');
 
-      await account.deleteAccount();
+      await account.deleteAccount(freshGoogle: google);
       expect(account.user, isNull);
       expect(cloud.profiles, isEmpty);
       expect(cloud.googleToUid, isEmpty);
@@ -311,6 +315,12 @@ void main() {
       expect(cloud.profiles.keys, [user.uid]);
       expect(cloud.rooms.keys, [room.code]);
       expect(account.user?.uid, user.uid);
+
+      // With a fresh Google sign-in it deletes everything, no function needed.
+      await account.deleteAccount(freshGoogle: const GoogleCredential('g-old'));
+      expect(cloud.profiles, isEmpty);
+      expect(cloud.rooms, isEmpty);
+      expect(account.user, isNull);
     });
   });
 
@@ -422,6 +432,221 @@ void main() {
       await sub.cancel();
       final replay = await cloud.emotes(joined.matchId).take(2).toList();
       expect(replay.map((e) => e.emote), [Emote.purr, Emote.goodGame]);
+    });
+  });
+
+  group('friend match sync over the fake transport', () {
+    Future<(FakeCloud, MatchSession, MatchSession)> start(int seed) async {
+      final cloud = FakeCloud(random: Random(seed));
+      final rooms = RoomService(cloud, random: Random(seed));
+      final room = await rooms.createRoom('host');
+      final joined = await rooms.joinRoom(room.code, 'guest');
+      return (
+        cloud,
+        await MatchSession.open(cloud, joined.matchId, 'host'),
+        await MatchSession.open(cloud, joined.matchId, 'guest'),
+      );
+    }
+
+    Future<void> playOut(
+      MatchSession host,
+      MatchSession guest,
+      ArenaBot a,
+      ArenaBot b,
+    ) async {
+      var guard = 0;
+      while (!host.isOver && host.flag == null && guard++ < 200) {
+        final mover = host.isMyTurn ? host : guest;
+        final bot = identical(mover, host) ? a : b;
+        await mover.play(bot.chooseMove(mover.state));
+        await (identical(mover, host) ? guest : host).refresh();
+      }
+    }
+
+    test('100 matches: both phones agree on score and hash', () async {
+      for (var i = 0; i < 100; i++) {
+        final (_, host, guest) = await start(i);
+        await playOut(
+          host,
+          guest,
+          botForLevel(HouseCatLevel.values[i % 3], i),
+          botForLevel(HouseCatLevel.values[(i + 1) % 3], i + 7),
+        );
+        await host.refresh();
+        await guest.refresh();
+        expect(host.isOver, isTrue, reason: 'match $i');
+        expect(host.flag, isNull, reason: 'match $i');
+        expect(stateHash(host.state), stateHash(guest.state));
+        expect(host.state.scores, guest.state.scores);
+        expect(host.counts && guest.counts, isTrue, reason: 'match $i');
+      }
+    });
+
+    test('a tampered move log is rejected and the match flagged', () async {
+      final (cloud, host, guest) = await start(3);
+      final bot = botForLevel(HouseCatLevel.medium);
+      await host.play(bot.chooseMove(host.state));
+      final real = cloud.moveLog[host.matchId]!.first;
+      cloud.tamperMove(
+        host.matchId,
+        0,
+        MoveRecord(
+          index: 0,
+          uid: real.uid,
+          slot: real.slot,
+          move: real.move,
+          hashAfter: '0000000000000000',
+          next: real.next,
+        ),
+      );
+      await guest.refresh();
+      expect(guest.flag, MatchFlag.hashMismatch);
+      expect(guest.movesApplied, 0);
+      expect(cloud.matchRecords[host.matchId]!.flag, MatchFlag.hashMismatch);
+      expect(guest.counts, isFalse);
+      await expectLater(
+        guest.play(bot.chooseMove(guest.state)),
+        throwsA(
+          isA<MatchException>().having(
+            (e) => e.code,
+            'code',
+            MatchErrorCode.notYourTurn,
+          ),
+        ),
+      );
+    });
+
+    test('a move out of turn is flagged', () async {
+      final (cloud, host, guest) = await start(4);
+      final bot = botForLevel(HouseCatLevel.easy, 1);
+      final move = bot.chooseMove(guest.state);
+      final res = applyMove(guest.state, move) as EngineOk<MoveResult>;
+      await cloud.appendMove(
+        host.matchId,
+        MoveRecord(
+          index: 0,
+          uid: 'guest',
+          slot: PlayerSlot.second,
+          move: move.toJson(),
+          hashAfter: res.value.hashAfter,
+          next: res.value.state.activePlayer,
+        ),
+      );
+      await host.refresh();
+      expect(host.flag, MatchFlag.wrongTurn);
+    });
+
+    test('a restart in the middle of a round restores the match', () async {
+      final (cloud, host, guest) = await start(5);
+      final a = botForLevel(HouseCatLevel.hard),
+          b = botForLevel(HouseCatLevel.medium);
+      for (var i = 0; i < 4; i++) {
+        final mover = host.isMyTurn ? host : guest;
+        await mover.play(
+          (identical(mover, host) ? a : b).chooseMove(mover.state),
+        );
+        await (identical(mover, host) ? guest : host).refresh();
+      }
+      expect(host.state.round, 1);
+      final restored = await MatchSession.open(cloud, host.matchId, 'host');
+      expect(restored.movesApplied, 4);
+      expect(stateHash(restored.state), stateHash(host.state));
+      await playOut(restored, guest, a, b);
+      expect(restored.counts, isTrue);
+    });
+
+    test('outsiders cannot open the match; others cannot write', () async {
+      final (cloud, host, _) = await start(6);
+      await expectLater(
+        MatchSession.open(cloud, host.matchId, 'stranger'),
+        throwsOnline(OnlineErrorCode.notInMatch),
+      );
+      await expectLater(
+        cloud.appendMove(
+          host.matchId,
+          const MoveRecord(
+            index: 0,
+            uid: 'stranger',
+            slot: PlayerSlot.first,
+            move: {},
+            hashAfter: 'x',
+            next: null,
+          ),
+        ),
+        throwsOnline(OnlineErrorCode.notInMatch),
+      );
+    });
+
+    test('a move whose sender was anonymized later still replays', () async {
+      final (cloud, host, guest) = await start(5);
+      await host.play(botForLevel(HouseCatLevel.medium).chooseMove(host.state));
+      final real = cloud.moveLog[host.matchId]!.first;
+      cloud.tamperMove(
+        host.matchId,
+        0,
+        MoveRecord(
+          index: 0,
+          uid: kDeletedUid,
+          slot: real.slot,
+          move: real.move,
+          hashAfter: real.hashAfter,
+          next: real.next,
+          at: real.at,
+        ),
+      );
+      await guest.refresh();
+      expect(guest.flag, isNull);
+      expect(guest.movesApplied, 1);
+    });
+
+    test('watch and play together count each move once', () async {
+      final (_, host, guest) = await start(9);
+      final seen = <int>[];
+      final sub = host.watch().listen((m) => seen.add(m.index));
+      final bot = botForLevel(HouseCatLevel.medium);
+      await host.play(bot.chooseMove(host.state));
+      await pumpEventQueue();
+      expect(host.movesApplied, 1);
+      expect(host.deadline, isNotNull);
+      await guest.refresh();
+      await guest.play(bot.chooseMove(guest.state));
+      await pumpEventQueue();
+      expect(host.movesApplied, 2);
+      expect(host.flag, isNull);
+      expect(seen, [1]);
+      expect(stateHash(host.state), stateHash(guest.state));
+      unawaited(sub.cancel());
+    });
+
+    test('forfeit only after the 24-hour limit', () async {
+      var now = DateTime.utc(2026, 11, 16, 10);
+      final cloud = FakeCloud(clock: () => now, random: Random(8));
+      final rooms = RoomService(cloud);
+      final joined = await rooms.joinRoom(
+        (await rooms.createRoom('host')).code,
+        'guest',
+      );
+      final host = await MatchSession.open(cloud, joined.matchId, 'host');
+      final guest = await MatchSession.open(cloud, joined.matchId, 'guest');
+      await host.play(botForLevel(HouseCatLevel.medium).chooseMove(host.state));
+      await host.refresh();
+      await expectLater(
+        host.claimForfeit(),
+        throwsA(
+          isA<MatchException>().having(
+            (e) => e.code,
+            'code',
+            MatchErrorCode.deadlineNotPassed,
+          ),
+        ),
+      );
+      now = now.add(roundLimit);
+      await host.claimForfeit();
+      expect(host.record.forfeitWinner, PlayerSlot.first);
+      expect(host.isOver, isTrue);
+      await guest.refresh();
+      expect(guest.isOver, isTrue);
+      expect(guest.record.forfeitWinner, PlayerSlot.first);
     });
   });
 

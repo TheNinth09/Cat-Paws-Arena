@@ -118,8 +118,13 @@ service cloud.firestore {
     // the same commit, so one room makes at most one match.
     function validClaim(matchId, d) {
       let roomPath = /databases/$(database)/documents/rooms/$(d.roomCode);
-      return exactKeys(d, ['roomCode', 'hostUid', 'guestUid', 'createdAt'])
+      return exactKeys(d, ['roomCode', 'hostUid', 'guestUid', 'createdAt',
+            'seed', 'config', 'engineVersion', 'contractVersion'])
         && d.roomCode is string
+        && d.seed is int && d.seed >= 0 && d.seed < 2147483648
+        && d.config == 'v1|7x7|c5|r5|m3|rainbow:clearOneColour|powers:threeFreeEqual'
+        && d.engineVersion == 1
+        && d.contractVersion == 1
         && exists(roomPath)
         && !existsAfter(roomPath)
         && d.guestUid == request.auth.uid
@@ -141,12 +146,109 @@ service cloud.firestore {
 
     // Only the two players. A missing match can be watched by its ID (the
     // host waits for the guest) but reveals nothing.
+    // The host plays 'first', the guest 'second'.
+    function slotOf(m) {
+      return request.auth.uid == m.data.hostUid ? 'first' : 'second';
+    }
+
+    function moveId(i) {
+      return i < 10 ? '00' + string(i) : (i < 100 ? '0' + string(i) : string(i));
+    }
+
+    function movePath(matchId, id) {
+      return /databases/$(database)/documents/matches/$(matchId)/moves/$(id);
+    }
+
+    function validCell(c) {
+      return c is map && exactKeys(c, ['row', 'col'])
+        && inRange(c.row, 7) && inRange(c.col, 7);
+    }
+
+    // Move.toJson() from arena_engine; no strings except enum names.
+    function validMove(m) {
+      return m is map && (
+        (m.kind == 'swap' && exactKeys(m, ['kind', 'a', 'b'])
+          && validCell(m.a) && validCell(m.b))
+        || (m.kind == 'power'
+          && m.keys().hasAll(['kind', 'power'])
+          && m.keys().hasOnly(['kind', 'power', 'row'])
+          && m.power in ['zoomies', 'shadowPounce', 'laserChase']
+          && (!('row' in m) || inRange(m.row, 7))));
+    }
+
+    function hash16(h) {
+      return h is string && h.matches('^[0-9a-f]{16}$');
+    }
+
+    function validFinal(f) {
+      return f is map && exactKeys(f, ['first', 'second', 'hash', 'outcome'])
+        && f.first is int && f.first >= 0 && f.second is int && f.second >= 0
+        && hash16(f.hash)
+        && f.outcome in ['firstWins', 'secondWins', 'draw'];
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // Each player writes their own result once.
+    function finalUpdate() {
+      let key = 'final_' + slotOf(resource);
+      return changedKeys().hasOnly([key]) && !(key in resource.data)
+        && validFinal(request.resource.data[key]);
+    }
+
+    // Any player may flag once; a flag is never cleared.
+    function flagUpdate() {
+      return changedKeys().hasOnly(['flag']) && !('flag' in resource.data)
+        && request.resource.data.flag in ['hash_mismatch', 'invalid_move',
+          'wrong_turn', 'bad_log', 'unknown_version', 'final_mismatch'];
+    }
+
+    // Slow play: the last move handed the turn to the opponent at least
+    // 24 hours ago. existsAfter: no move may join the same batch.
+    function forfeitUpdate(matchId) {
+      let d = request.resource.data;
+      let last = get(movePath(matchId, d.forfeitAfter)).data;
+      return changedKeys().hasOnly(['forfeitWinner', 'forfeitAfter'])
+        && !('forfeitWinner' in resource.data)
+        && d.forfeitWinner == slotOf(resource)
+        && d.forfeitAfter is string
+        && last.next == (slotOf(resource) == 'first' ? 'second' : 'first')
+        && request.time >= last.at + duration.value(24, 'h')
+        && !existsAfter(movePath(matchId, moveId(last.index + 1)));
+    }
+
     match /matches/{matchId} {
       allow get: if signedIn() && (resource == null || isPlayer(resource));
       allow list: if false;
       allow create: if signedIn() && validClaim(matchId, request.resource.data);
-      // Moves, hashes and results arrive with the match slice.
-      allow update, delete: if false;
+      allow update: if isPlayer(resource)
+        && (finalUpdate() || flagUpdate() || forfeitUpdate(matchId));
+      allow delete: if false;
+
+      // Ordered, create-only move log. Rules cannot run the engine: each
+      // phone replays the other's moves and flags a mismatch.
+      match /moves/{id} {
+        allow read: if isPlayerOf(matchId);
+        allow create: if isPlayerOf(matchId)
+          && exactKeys(request.resource.data,
+            ['index', 'by', 'slot', 'move', 'hashAfter', 'next', 'at'])
+          && inRange(request.resource.data.index, 200)
+          && id == moveId(request.resource.data.index)
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.slot == slotOf(
+            get(/databases/$(database)/documents/matches/$(matchId)))
+          && hash16(request.resource.data.hashAfter)
+          && request.resource.data.next in ['first', 'second', 'none']
+          && request.resource.data.at == request.time
+          && validMove(request.resource.data.move)
+          && (request.resource.data.index == 0
+            || exists(movePath(matchId, moveId(request.resource.data.index - 1))))
+          && !('forfeitWinner' in
+            getAfter(/databases/$(database)/documents/matches/$(matchId)).data);
+        allow update, delete: if false;
+      }
 
       // Preset emotes only (lib/online/emotes.dart). No text reaches the
       // other player.
