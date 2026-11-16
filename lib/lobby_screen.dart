@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'cat_avatar.dart';
 import 'catalog.dart';
 import 'profile.dart';
-import 'shell/daily_board.dart';
+import 'shell/friend_room.dart';
 import 'shell/house_tour.dart';
 import 'shell/reward_calendar.dart';
 import 'ui_widgets.dart';
@@ -30,8 +30,9 @@ class LobbyScreen extends StatelessWidget {
     required this.onRoad,
   });
   final Player player;
-  final void Function(HouseCat cat) onBattle;
+  final void Function(HouseCat? cat) onBattle;
   final VoidCallback onRoad;
+
   Widget progress() => Padding(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
     child: Material(
@@ -44,6 +45,7 @@ class LobbyScreen extends StatelessWidget {
       ),
     ),
   );
+
   Widget hero() => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
@@ -60,13 +62,21 @@ class LobbyScreen extends StatelessWidget {
       ),
     ],
   );
+
   Widget controls(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _HouseTourCard(player: player, onBattle: onBattle),
+        _HouseCatsCard(player: player, onBattle: onBattle),
+        const SizedBox(height: 8),
+        ArenaButton(
+          text: player.english ? 'BATTLE' : 'LUPTĂ',
+          onPressed: () => onBattle(null),
+          green: true,
+          spriteName: 'btn_play_paw',
+        ),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -80,9 +90,9 @@ class LobbyScreen extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: _ReturnButton(
-                title: 'TABLA ZILEI',
-                subtitle: 'scor zilnic',
-                onTap: () => showDailyBoard(context, player),
+                title: player.english ? 'FRIEND ROOM' : 'CAMERĂ ONLINE',
+                subtitle: player.english ? 'online code' : 'cod online',
+                onTap: () => showFriendRoom(context, english: player.english),
               ),
             ),
           ],
@@ -90,8 +100,8 @@ class LobbyScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           player.english
-              ? 'House cats are labelled bots; matches stay local practice.'
-              : 'Pisicile casei sunt boți etichetați; meciurile rămân antrenament local.',
+              ? 'House cats are labelled BOT; friend rooms are ONLINE when the service is configured.'
+              : 'Pisicile casei sunt BOT; camerele de prieten sunt ONLINE când serviciul este configurat.',
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: cream,
@@ -102,6 +112,7 @@ class LobbyScreen extends StatelessWidget {
       ],
     ),
   );
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
@@ -163,7 +174,14 @@ class _TrophyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ratio = (player.trophies / player.next).clamp(0.0, 1.0);
+    final current = houseRoomForTrophies(player.trophies);
+    final index = houseRooms.indexOf(current);
+    final next = index + 1 < houseRooms.length ? houseRooms[index + 1] : null;
+    final start = current.threshold;
+    final end = next?.threshold ?? current.threshold;
+    final ratio = next == null
+        ? 1.0
+        : ((player.trophies - start) / (end - start)).clamp(0.0, 1.0);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -188,19 +206,25 @@ class _TrophyCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'TROFEE',
-                      style: TextStyle(
-                        color: Color(0xff8a5a3b),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.4,
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        'DRUMUL TROFEELOR',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xff8a5a3b),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                        ),
                       ),
                     ),
-                    const Spacer(),
-                    Flexible(
+                    const SizedBox(width: 6),
+                    Expanded(
+                      flex: 2,
                       child: Text(
-                        player.room,
+                        current.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.right,
@@ -221,7 +245,7 @@ class _TrophyCard extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      '${player.trophies} / ${player.next}',
+                      '${player.trophies}${next == null ? '' : ' / ${next.threshold}'}',
                       softWrap: false,
                       style: const TextStyle(
                         color: ink,
@@ -254,7 +278,9 @@ class _TrophyCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Următoarea recompensă: ${player.next}',
+                  next == null
+                      ? 'Toate camerele sunt deschise'
+                      : 'Următoarea cameră: ${next.name} la ${next.threshold} trofee',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -297,7 +323,7 @@ class _HeroStage extends StatelessWidget {
         ],
       ),
       child: SizedBox(
-        height: 245,
+        height: 235,
         width: double.infinity,
         child: Stack(
           alignment: Alignment.center,
@@ -318,7 +344,7 @@ class _HeroStage extends StatelessWidget {
                 child: sprite('tile_paw', size: 30),
               ),
             ),
-            CatCharacter(player, height: 235),
+            CatCharacter(player, height: 225),
           ],
         ),
       ),
@@ -326,11 +352,11 @@ class _HeroStage extends StatelessWidget {
   );
 }
 
-class _HouseTourCard extends StatelessWidget {
-  const _HouseTourCard({required this.player, required this.onBattle});
+class _HouseCatsCard extends StatelessWidget {
+  const _HouseCatsCard({required this.player, required this.onBattle});
 
   final Player player;
-  final void Function(HouseCat cat) onBattle;
+  final void Function(HouseCat? cat) onBattle;
 
   @override
   Widget build(BuildContext context) {
@@ -357,7 +383,7 @@ class _HouseTourCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Turul casei • ${room.name}',
+                  'DRUMUL TROFEELOR • ${room.name}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -419,7 +445,7 @@ class _HouseCatButton extends StatelessWidget {
 
   final Player player;
   final HouseCat cat;
-  final void Function(HouseCat cat) onBattle;
+  final void Function(HouseCat? cat) onBattle;
 
   @override
   Widget build(BuildContext context) => Material(
