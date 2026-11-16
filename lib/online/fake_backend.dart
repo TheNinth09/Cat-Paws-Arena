@@ -1,14 +1,24 @@
 import 'dart:async';
+import 'dart:math';
+
+import 'package:arena_engine/arena_engine.dart';
 
 import 'emotes.dart';
+import 'match_store.dart';
 import 'online_backend.dart';
 import 'online_errors.dart';
 
 /// In-memory stand-in for the Firebase project, shared by every simulated
 /// install. Mirrors the security rules that matter for game logic.
-class FakeCloud implements CloudStore {
-  FakeCloud({DateTime Function()? clock})
-    : _clock = clock ?? (() => DateTime.now().toUtc());
+class FakeCloud implements CloudStore, MatchStore {
+  FakeCloud({DateTime Function()? clock, Random? random})
+    : _clock = clock ?? (() => DateTime.now().toUtc()),
+      _random = random ?? Random();
+
+  final Random _random;
+  final Map<String, MatchRecord> matchRecords = {};
+  final Map<String, List<MoveRecord>> moveLog = {};
+  final _matchChanges = StreamController<String>.broadcast(sync: true);
 
   final DateTime Function() _clock;
   final Map<String, Map<String, Object?>> profiles = {};
@@ -84,6 +94,16 @@ class FakeCloud implements CloudStore {
       guestUid: guestUid,
     );
     matches[match.matchId] = match;
+    matchRecords[match.matchId] = MatchRecord(
+      matchId: match.matchId,
+      roomCode: code,
+      hostUid: room.hostUid,
+      guestUid: guestUid,
+      seed: _random.nextInt(1 << 31),
+      config: const MatchConfig.duel().fingerprint,
+      engineVersion: kEngineVersion,
+      contractVersion: kMatchContractVersion,
+    );
     _joins.add(match);
     return (RoomClaim.joined, room);
   }
@@ -124,6 +144,141 @@ class FakeCloud implements CloudStore {
       onCancel: () => live?.cancel(),
     );
     return out.stream;
+  }
+
+  MatchRecord _match(String id) =>
+      matchRecords[id] ??
+      (throw const OnlineException(OnlineErrorCode.notInMatch));
+
+  void _update(String id, MatchRecord Function(MatchRecord m) change) {
+    matchRecords[id] = change(_match(id));
+    _matchChanges.add(id);
+  }
+
+  static MatchRecord _copyMatch(
+    MatchRecord m, {
+    Map<PlayerSlot, MatchFinal>? finals,
+    MatchFlag? flag,
+    PlayerSlot? forfeitWinner,
+  }) => MatchRecord(
+    matchId: m.matchId,
+    roomCode: m.roomCode,
+    hostUid: m.hostUid,
+    guestUid: m.guestUid,
+    seed: m.seed,
+    config: m.config,
+    engineVersion: m.engineVersion,
+    contractVersion: m.contractVersion,
+    finals: finals ?? m.finals,
+    flag: flag ?? m.flag,
+    forfeitWinner: forfeitWinner ?? m.forfeitWinner,
+  );
+
+  @override
+  Future<MatchRecord?> readMatch(String matchId) async => matchRecords[matchId];
+
+  @override
+  Stream<MatchRecord> watchMatch(String matchId) {
+    StreamSubscription<String>? live;
+    late final StreamController<MatchRecord> out;
+    out = StreamController<MatchRecord>(
+      onListen: () {
+        final m = matchRecords[matchId];
+        if (m != null) out.add(m);
+        live = _matchChanges.stream
+            .where((id) => id == matchId)
+            .listen((id) => out.add(matchRecords[id]!));
+      },
+      onCancel: () => live?.cancel(),
+    );
+    return out.stream;
+  }
+
+  @override
+  Future<List<MoveRecord>> readMoves(String matchId) async =>
+      List.of(moveLog[matchId] ?? const []);
+
+  @override
+  Stream<MoveRecord> watchMoves(String matchId, {int from = 0}) {
+    StreamSubscription<String>? live;
+    var next = from;
+    late final StreamController<MoveRecord> out;
+    void drain() {
+      final log = moveLog[matchId] ?? const [];
+      while (next < log.length) {
+        out.add(log[next++]);
+      }
+    }
+
+    out = StreamController<MoveRecord>(
+      onListen: () {
+        drain();
+        live = _matchChanges.stream
+            .where((id) => id == matchId)
+            .listen((_) => drain());
+      },
+      onCancel: () => live?.cancel(),
+    );
+    return out.stream;
+  }
+
+  /// Mirrors the security rules: participant, own slot, next index only.
+  @override
+  Future<void> appendMove(String matchId, MoveRecord move) async {
+    final m = _match(matchId);
+    if (m.slotOf(move.uid) != move.slot) {
+      throw const OnlineException(OnlineErrorCode.notInMatch);
+    }
+    final log = moveLog[matchId] ??= [];
+    if (move.index < log.length) {
+      throw const MatchException(MatchErrorCode.moveConflict);
+    }
+    if (move.index != log.length) {
+      throw const OnlineException(OnlineErrorCode.backend, 'gap');
+    }
+    log.add(
+      MoveRecord(
+        index: move.index,
+        uid: move.uid,
+        slot: move.slot,
+        move: Map.of(move.move),
+        hashAfter: move.hashAfter,
+        at: serverNow(),
+      ),
+    );
+    _matchChanges.add(matchId);
+  }
+
+  @override
+  Future<void> writeFinal(
+    String matchId,
+    PlayerSlot slot,
+    MatchFinal result,
+  ) async {
+    final m = _match(matchId);
+    if (m.finals.containsKey(slot)) return;
+    _update(matchId, (m) => _copyMatch(m, finals: {...m.finals, slot: result}));
+  }
+
+  @override
+  Future<void> flagMatch(String matchId, MatchFlag reason) async {
+    if (_match(matchId).flag != null) return;
+    _update(matchId, (m) => _copyMatch(m, flag: reason));
+  }
+
+  @override
+  Future<void> claimForfeit(String matchId, PlayerSlot winner) async {
+    final log = moveLog[matchId] ?? const [];
+    final last = log.isEmpty ? null : log.last.at;
+    if (last == null || serverNow().isBefore(last.add(roundLimit))) {
+      throw const MatchException(MatchErrorCode.deadlineNotPassed);
+    }
+    _update(matchId, (m) => _copyMatch(m, forfeitWinner: winner));
+  }
+
+  /// Test hook: overwrite a logged move as a cheating client would.
+  void tamperMove(String matchId, int index, MoveRecord replacement) {
+    moveLog[matchId]![index] = replacement;
   }
 
   /// What the `onUserDeleted` function does server-side after the Auth user
