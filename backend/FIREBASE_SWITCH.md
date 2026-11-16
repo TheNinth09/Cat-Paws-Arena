@@ -49,7 +49,7 @@ SDK (CI fails on them).
 | `signInAnonymously()` | `signInAnonymously()` | default; enough for friend duels |
 | `linkGoogle()` | `currentUser.linkWithCredential(GoogleAuthProvider.credential(idToken))` | same uid. `credential-already-in-use` → `credentialInUse` |
 | `signInWithGoogle()` | `signInWithCredential` | a new user means Google was never linked: it is deleted and `noLinkedAccount` thrown |
-| `deleteCurrentUser()` | `user.delete()` | `requires-recent-login` → `requiresRecentLogin` (sign in with Google again, then retry) |
+| `deleteCurrentUser()` | `user.delete()` | `requires-recent-login` → `requiresRecentLogin` (sign in with Google again, then retry). Nothing is deleted before this succeeds; `onUserDeleted` then deletes the profile, devices, clock and rooms and anonymizes matches |
 
 `OnlineAccount.linkGoogle` and `restoreWithGoogle` require a
 `ParentGateApproval`, which only `ParentGateChallenge.answer` can create
@@ -70,7 +70,6 @@ the Google provider enabled and an OAuth web client in
 | `claimRoom(code, guest)` | **one transaction**: read room, check expiry/own room, create `matches/{code}_{createdAtMillis}`, delete room |
 | `watchJoin(room)` | snapshots of `matches/{room.matchId}` |
 | `sendEmote` / `emotes` | `matches/{id}/emotes`: `{emote: wire ID, from: uid, at: serverTimestamp()}` |
-| `deleteUserData(uid)` | batch delete of devices, own rooms, `users/{uid}`, `clocks/{uid}` |
 
 Expiry is always `createdAt + 24 h` in server time; rules enforce it with
 `request.time`.
@@ -92,7 +91,8 @@ Expiry is always `createdAt + 24 h` in server time; rules enforce it with
   `test/rules.test.js` (`npm run test:rules`, demo project, CI job
   "Firestore rules and functions").
 - `functions/src/index.ts` (region `europe-west1`):
-  - `onUserDeleted` (Auth delete trigger) removes leftovers and replaces
+  - `onUserDeleted` (Auth delete trigger) deletes the profile, devices,
+    clock and rooms, and replaces
     the uid with `deleted` in matches and emotes.
   - `onMoveCreated` / `notifyTurn` send the your-turn push with
     `data: {matchId}` only; the text comes from

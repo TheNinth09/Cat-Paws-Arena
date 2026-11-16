@@ -57,10 +57,12 @@ class OnlineAccount {
     return next;
   }
 
-  /// Deletes every cloud record of the account, then the account itself.
+  /// Deletes the account; the server then deletes its profile, devices and
+  /// rooms and anonymizes its matches (`onUserDeleted`). Nothing is deleted
+  /// if the backend refuses, e.g. [OnlineErrorCode.requiresRecentLogin].
   /// The caller clears local data afterwards.
   Future<void> deleteAccount() async {
-    await store.deleteUserData(_signedIn.uid);
+    _signedIn;
     await auth.deleteCurrentUser();
   }
 }

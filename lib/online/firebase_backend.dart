@@ -20,21 +20,23 @@ import 'online_errors.dart';
 /// Reads the project from `android/app/google-services.json`.
 Future<void> initializeFirebase() => Firebase.initializeApp();
 
+OnlineException _authError(FirebaseAuthException e) => switch (e.code) {
+  'credential-already-in-use' ||
+  'email-already-in-use' ||
+  'provider-already-linked' => const OnlineException(
+    OnlineErrorCode.credentialInUse,
+  ),
+  'requires-recent-login' => const OnlineException(
+    OnlineErrorCode.requiresRecentLogin,
+  ),
+  _ => OnlineException(OnlineErrorCode.backend, e.code),
+};
+
 Future<T> _guard<T>(Future<T> Function() body) async {
   try {
     return await body();
   } on FirebaseAuthException catch (e) {
-    throw switch (e.code) {
-      'credential-already-in-use' ||
-      'email-already-in-use' ||
-      'provider-already-linked' => const OnlineException(
-        OnlineErrorCode.credentialInUse,
-      ),
-      'requires-recent-login' => const OnlineException(
-        OnlineErrorCode.requiresRecentLogin,
-      ),
-      _ => OnlineException(OnlineErrorCode.backend, e.code),
-    };
+    throw _authError(e);
   } on FirebaseException catch (e) {
     throw OnlineException(OnlineErrorCode.backend, e.code);
   }
@@ -46,14 +48,12 @@ class FirebaseAuthBackend implements AuthBackend {
 
   final FirebaseAuth _auth;
 
+  static bool _hasGoogle(User user) =>
+      user.providerData.any((p) => p.providerId == 'google.com');
+
   static OnlineUser? _user(User? user) => user == null
       ? null
-      : OnlineUser(
-          uid: user.uid,
-          googleLinked: user.providerData.any(
-            (p) => p.providerId == 'google.com',
-          ),
-        );
+      : OnlineUser(uid: user.uid, googleLinked: _hasGoogle(user));
 
   static AuthCredential _google(GoogleCredential credential) {
     final token = credential.idToken;
@@ -85,9 +85,26 @@ class FirebaseAuthBackend implements AuthBackend {
 
   @override
   Future<OnlineUser> signInWithGoogle(GoogleCredential credential) async {
-    final result = await _guard(
-      () => _auth.signInWithCredential(_google(credential)),
-    );
+    var google = _google(credential);
+    final current = _auth.currentUser;
+    if (current != null && !_hasGoogle(current)) {
+      // Probe with a link first, so a Google account that was never linked
+      // does not replace (and lose) the current session. Checked by
+      // provider, not isAnonymous, which a link + unlink can change.
+      AuthCredential? linkedElsewhere;
+      try {
+        await current.linkWithCredential(google);
+      } on FirebaseAuthException catch (e) {
+        if (e.code != 'credential-already-in-use') throw _authError(e);
+        linkedElsewhere = e.credential ?? google;
+      }
+      if (linkedElsewhere == null) {
+        await _guard(() => current.unlink('google.com'));
+        throw const OnlineException(OnlineErrorCode.noLinkedAccount);
+      }
+      google = linkedElsewhere;
+    }
+    final result = await _guard(() => _auth.signInWithCredential(google));
     if (result.additionalUserInfo?.isNewUser ?? false) {
       // Google was never linked: do not create a second account.
       await _guard(() async => result.user?.delete());
@@ -257,23 +274,6 @@ class FirestoreCloudStore implements CloudStore {
           if (emote != null && from is String) yield EmoteEvent(from, emote);
         }
       });
-
-  @override
-  Future<void> deleteUserData(String uid) => _guard(() async {
-    final batch = _db.batch();
-    final devices = await _users.doc(uid).collection('devices').get();
-    for (final doc in devices.docs) {
-      batch.delete(doc.reference);
-    }
-    final rooms = await _rooms.where('hostUid', isEqualTo: uid).get();
-    for (final doc in rooms.docs) {
-      batch.delete(doc.reference);
-    }
-    batch
-      ..delete(_users.doc(uid))
-      ..delete(_db.collection('clocks').doc(uid));
-    await batch.commit();
-  });
 }
 
 /// Google account picker. Needs the Google provider enabled in Firebase and

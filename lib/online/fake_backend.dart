@@ -126,14 +126,11 @@ class FakeCloud implements CloudStore {
     return out.stream;
   }
 
-  @override
-  Future<void> deleteUserData(String uid) async {
+  /// What the `onUserDeleted` function does server-side after the Auth user
+  /// is deleted.
+  void onUserDeleted(String uid) {
     profiles.remove(uid);
     rooms.removeWhere((_, room) => room.hostUid == uid);
-  }
-
-  /// What the `onUserDeleted` function does server-side.
-  void anonymizeMatches(String uid) {
     for (final e in matches.entries.toList()) {
       final m = e.value;
       if (m.hostUid != uid && m.guestUid != uid) continue;
@@ -159,6 +156,9 @@ class FakeAuth implements AuthBackend {
 
   final FakeCloud cloud;
   OnlineUser? _user;
+
+  /// Simulates Firebase refusing to delete a stale Google session.
+  bool requireRecentLogin = false;
 
   @override
   OnlineUser? get currentUser => _user;
@@ -195,9 +195,12 @@ class FakeAuth implements AuthBackend {
   Future<void> deleteCurrentUser() async {
     final user = _user;
     if (user == null) throw const OnlineException(OnlineErrorCode.notSignedIn);
+    if (requireRecentLogin && user.googleLinked) {
+      throw const OnlineException(OnlineErrorCode.requiresRecentLogin);
+    }
     cloud.users.remove(user.uid);
     cloud.googleToUid.removeWhere((_, uid) => uid == user.uid);
-    cloud.anonymizeMatches(user.uid);
+    cloud.onUserDeleted(user.uid);
     _user = null;
   }
 }
