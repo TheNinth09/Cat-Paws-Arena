@@ -83,7 +83,9 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
     try {
       final previous = createdRoom;
       if (previous != null) {
-        await services.rooms.cancelRoom(previous);
+        try {
+          await services.rooms.cancelRoom(previous);
+        } catch (_) {}
         if (!mounted) return;
         createdRoom = null;
       }
