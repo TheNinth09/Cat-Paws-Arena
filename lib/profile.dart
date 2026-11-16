@@ -26,11 +26,13 @@ class Player extends ChangeNotifier {
       english = d['english'] ?? false;
       notifications = d['notifications'] ?? false;
       photo = d['photo'];
+      avatarSpec = d['avatarSpec'] ?? '';
     }
   }
   final SharedPreferences prefs;
   String name = 'Alex', cat = 'Tzuki', accessory = '', daily = '';
   String? photo;
+  String avatarSpec = '';
   int trophies = 0,
       coins = 500,
       fur = 0,
@@ -75,6 +77,7 @@ class Player extends ChangeNotifier {
         'english': english,
         'notifications': notifications,
         'photo': photo,
+        'avatarSpec': avatarSpec,
       }),
     );
   }

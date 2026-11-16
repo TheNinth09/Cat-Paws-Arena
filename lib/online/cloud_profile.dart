@@ -23,6 +23,7 @@ class CloudProfile {
     required this.music,
     required this.english,
     required this.notifications,
+    this.avatar = '',
     this.revision = 0,
   });
 
@@ -42,6 +43,7 @@ class CloudProfile {
   final Set<String> owned;
   final Set<int> claims;
   final bool sfx, music, english, notifications;
+  final String avatar;
 
   factory CloudProfile.fromPlayer(Player p, {int revision = 0}) => CloudProfile(
     trophies: p.trophies,
@@ -60,6 +62,7 @@ class CloudProfile {
     music: p.music,
     english: p.english,
     notifications: p.notifications,
+    avatar: p.avatarSpec,
     revision: revision,
   );
 
@@ -82,7 +85,8 @@ class CloudProfile {
       ..sfx = sfx
       ..music = music
       ..english = english
-      ..notifications = notifications;
+      ..notifications = notifications
+      ..avatarSpec = avatar;
     return p.save();
   }
 
@@ -103,6 +107,7 @@ class CloudProfile {
     music: music,
     english: english,
     notifications: notifications,
+    avatar: avatar,
     revision: value,
   );
 
@@ -125,6 +130,7 @@ class CloudProfile {
     'music': music,
     'english': english,
     'notifications': notifications,
+    'avatar': avatar,
   };
 
   static const _keys = {
@@ -146,6 +152,7 @@ class CloudProfile {
     'music',
     'english',
     'notifications',
+    'avatar',
   };
 
   /// Strict parse: unknown keys, wrong types or an unknown schema version
@@ -200,8 +207,12 @@ class CloudProfile {
       music: flag('music'),
       english: flag('english'),
       notifications: flag('notifications'),
+      avatar: _avatar(json['avatar']),
     );
   }
+
+  static String _avatar(Object? v) =>
+      v is String && v.length <= maxListLength ? v : '';
 
   static final _control = RegExp(r'[\x00-\x1f\x7f]');
 }

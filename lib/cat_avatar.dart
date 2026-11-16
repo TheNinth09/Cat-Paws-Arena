@@ -965,6 +965,21 @@ AvatarSpec loadAvatarSpec(SharedPreferences prefs) =>
 Future<void> saveAvatarSpec(SharedPreferences prefs, AvatarSpec spec) =>
     prefs.setString(avatarSpecKey, spec.toJsonString());
 
+/// Player-backed avatar store. [Player.avatarSpec] is canonical; the prefs
+/// key stays as a migration fallback for saves made before the field.
+AvatarSpec avatarSpecFor(Player p) {
+  final spec = p.avatarSpec;
+  return spec.isEmpty
+      ? loadAvatarSpec(p.prefs)
+      : AvatarSpec.fromJsonString(spec);
+}
+
+Future<void> saveAvatarSpecFor(Player p, AvatarSpec spec) async {
+  p.avatarSpec = spec.toJsonString();
+  await saveAvatarSpec(p.prefs, spec);
+  await p.save();
+}
+
 // --- species geometry (canonical 120x120 head space, like the cats) ---------
 
 Path _avatarHeadPath(int species) => switch (species) {

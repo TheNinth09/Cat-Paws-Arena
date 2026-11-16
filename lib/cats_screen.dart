@@ -328,7 +328,7 @@ class _CatsScreenState extends State<CatsScreen> {
     super.initState();
     _catName = loadCustomCatName(player.prefs);
     if (_catName == null) _pickRandomName();
-    _avatar = loadAvatarSpec(player.prefs);
+    _avatar = avatarSpecFor(player);
   }
 
   void change(VoidCallback update) {
@@ -608,7 +608,7 @@ class _CatsScreenState extends State<CatsScreen> {
         owned: player.owned,
         onSave: (spec) {
           setState(() => _avatar = spec);
-          saveAvatarSpec(player.prefs, spec);
+          saveAvatarSpecFor(player, spec);
         },
       ),
     );

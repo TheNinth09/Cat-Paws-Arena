@@ -524,7 +524,8 @@ Future<void> _clearLocalData(Player p) async {
     ..music = fresh.music
     ..english = fresh.english
     ..notifications = fresh.notifications
-    ..photo = fresh.photo;
+    ..photo = fresh.photo
+    ..avatarSpec = fresh.avatarSpec;
   await p.save();
 }
 

@@ -33,7 +33,7 @@ service cloud.firestore {
       return exactKeys(d, ['schemaVersion', 'revision', 'trophies', 'coins',
             'cat', 'accessory', 'fur', 'eyes', 'ears', 'pattern', 'power',
             'owned', 'claims', 'daily', 'sfx', 'music', 'english',
-            'notifications'])
+            'notifications', 'avatar'])
         && d.schemaVersion == 1
         && d.revision is int
         && d.trophies is int && d.trophies >= 0
@@ -49,7 +49,8 @@ service cloud.firestore {
         && d.claims is list && d.claims.size() <= 512
         && shortId(d.daily)
         && d.sfx is bool && d.music is bool
-        && d.english is bool && d.notifications is bool;
+        && d.english is bool && d.notifications is bool
+        && d.avatar is string && d.avatar.size() <= 512;
     }
 
     // Cloud save. Private to its owner; never shown to other players.
