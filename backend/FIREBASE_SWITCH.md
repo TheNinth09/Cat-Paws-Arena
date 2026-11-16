@@ -79,7 +79,7 @@ the Google provider enabled and an OAuth web client in
 | `watchJoin(room)` | snapshots of `matches/{room.matchId}` |
 | `sendEmote` / `emotes` | `matches/{id}/emotes`: `{emote: wire ID, from: uid, at: serverTimestamp()}` |
 | `readMatch` / `watchMatch` | `matches/{id}`: seed, `config` fingerprint, versions, `final_first`/`final_second`, `flag`, `forfeitWinner` |
-| `readMoves` / `watchMoves` | `matches/{id}/moves` ordered by `index`: `{index, by, slot, move, hashAfter, at}` |
+| `readMoves` / `watchMoves` | `matches/{id}/moves` ordered by `index`: `{index, by, slot, move, hashAfter, next, at}` |
 | `appendMove` | transaction: `moveConflict` if `moves/{index}` exists, else create |
 | `writeFinal` / `flagMatch` / `claimForfeit` | single-field updates the rules allow once |
 
@@ -113,7 +113,7 @@ Expiry is always `createdAt + 24 h` in server time; rules enforce it with
 
 ## 4. Server side (`backend/`)
 
-- `firestore.rules`: checklist in `SECURITY_RULES.md`; 25 emulator tests in
+- `firestore.rules`: checklist in `SECURITY_RULES.md`; 27 emulator tests in
   `test/rules.test.js` (`npm run test:rules`, demo project, CI job
   "Firestore rules and functions").
 - `functions/src/index.ts` (region `europe-west1`):

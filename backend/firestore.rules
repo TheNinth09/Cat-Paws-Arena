@@ -205,7 +205,8 @@ service cloud.firestore {
           'wrong_turn', 'bad_log', 'unknown_version', 'final_mismatch'];
     }
 
-    // Slow play: my move is the last one and is older than 24 hours.
+    // Slow play: the last move handed the turn to the opponent at least
+    // 24 hours ago. existsAfter: no move may join the same batch.
     function forfeitUpdate(matchId) {
       let d = request.resource.data;
       let last = get(movePath(matchId, d.forfeitAfter)).data;
@@ -213,9 +214,9 @@ service cloud.firestore {
         && !('forfeitWinner' in resource.data)
         && d.forfeitWinner == slotOf(resource)
         && d.forfeitAfter is string
-        && last.slot == slotOf(resource)
+        && last.next == (slotOf(resource) == 'first' ? 'second' : 'first')
         && request.time >= last.at + duration.value(24, 'h')
-        && !exists(movePath(matchId, moveId(last.index + 1)));
+        && !existsAfter(movePath(matchId, moveId(last.index + 1)));
     }
 
     match /matches/{matchId} {
@@ -232,19 +233,20 @@ service cloud.firestore {
         allow read: if isPlayerOf(matchId);
         allow create: if isPlayerOf(matchId)
           && exactKeys(request.resource.data,
-            ['index', 'by', 'slot', 'move', 'hashAfter', 'at'])
+            ['index', 'by', 'slot', 'move', 'hashAfter', 'next', 'at'])
           && inRange(request.resource.data.index, 200)
           && id == moveId(request.resource.data.index)
           && request.resource.data.by == request.auth.uid
           && request.resource.data.slot == slotOf(
             get(/databases/$(database)/documents/matches/$(matchId)))
           && hash16(request.resource.data.hashAfter)
+          && request.resource.data.next in ['first', 'second', 'none']
           && request.resource.data.at == request.time
           && validMove(request.resource.data.move)
           && (request.resource.data.index == 0
             || exists(movePath(matchId, moveId(request.resource.data.index - 1))))
           && !('forfeitWinner' in
-            get(/databases/$(database)/documents/matches/$(matchId)).data);
+            getAfter(/databases/$(database)/documents/matches/$(matchId)).data);
         allow update, delete: if false;
       }
 

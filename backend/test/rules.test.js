@@ -299,7 +299,8 @@ describe('matches and emotes', () => {
 describe('match sync', () => {
   const swap = { kind: 'swap', a: { row: 0, col: 0 }, b: { row: 0, col: 1 } };
   const move = (i, uid, slot, m = swap, over = {}) => ({
-    index: i, by: uid, slot, move: m, hashAfter: '0123456789abcdef', at: serverTimestamp(), ...over,
+    index: i, by: uid, slot, move: m, hashAfter: '0123456789abcdef',
+    next: slot === 'first' ? 'second' : 'first', at: serverTimestamp(), ...over,
   });
   const put = (uid, id, i, data) => setDoc(doc(db(uid), 'matches', id, 'moves', String(i).padStart(3, '0')), data);
   const fin = { first: 10, second: 8, hash: '0123456789abcdef', outcome: 'firstWins' };
@@ -330,6 +331,7 @@ describe('match sync', () => {
     await assertFails(put('host', id, 2, move(2, 'host', 'first', swap, { hashAfter: 'nothex' })));
     await assertFails(put('host', id, 2, move(2, 'host', 'first', swap, { at: Timestamp.now() })));
     await assertFails(put('host', id, 2, move(2, 'host', 'first', swap, { note: 'x' })));
+    await assertFails(put('host', id, 2, move(2, 'host', 'first', swap, { next: 'me' })));
     await assertSucceeds(
       put('host', id, 2, move(2, 'host', 'first', { kind: 'power', power: 'zoomies', row: 3 })),
     );
@@ -369,5 +371,27 @@ describe('match sync', () => {
     await assertFails(updateDoc(ref('guest'), { forfeitWinner: 'second', forfeitAfter: '000' }));
     await assertSucceeds(updateDoc(ref('host'), { forfeitWinner: 'first', forfeitAfter: '000' }));
     await assertFails(put('guest', id, 1, move(1, 'guest', 'second')));
+  });
+
+  test('no forfeit while the claimer still has to move', async () => {
+    const id = await seedMatch();
+    await assertSucceeds(put('host', id, 0, move(0, 'host', 'first', swap, { next: 'first' })));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'matches', id, 'moves', '000'), { at: hours(-25) });
+    });
+    await assertFails(updateDoc(doc(db('host'), 'matches', id), { forfeitWinner: 'first', forfeitAfter: '000' }));
+  });
+
+  test('a forfeit and a move cannot share a batch', async () => {
+    const id = await seedMatch();
+    await assertSucceeds(put('host', id, 0, move(0, 'host', 'first')));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'matches', id, 'moves', '000'), { at: hours(-25) });
+    });
+    const h = db('host');
+    const batch = writeBatch(h);
+    batch.update(doc(h, 'matches', id), { forfeitWinner: 'first', forfeitAfter: '000' });
+    batch.set(doc(h, 'matches', id, 'moves', '001'), move(1, 'host', 'first'));
+    await assertFails(batch.commit());
   });
 });

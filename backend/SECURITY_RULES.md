@@ -73,8 +73,9 @@ preset IDs only.
       `final_second` (once; ints, 16-hex hash, outcome enum), `flag` (once,
       fixed reason list, never cleared), or `forfeitWinner` + `forfeitAfter`.
       Seed, config, versions and players are therefore immutable.
-- [x] Forfeit: the writer's own move `forfeitAfter` is the last one and is at
-      least 24 h old (`request.time`); no moves are accepted afterwards.
+- [x] Forfeit: move `forfeitAfter` is the last one (`existsAfter`, so no
+      move in the same batch), its `next` is the opponent, and it is at least
+      24 h old (`request.time`); no moves are accepted afterwards (`getAfter`).
 - [x] No delete by clients.
 - [ ] Rewards count only when both finals are equal and there is no flag
       (`MatchSession.counts`); the rules do not compare them.
@@ -89,7 +90,8 @@ preset IDs only.
 - [x] `move` is exactly a serialized `arena_engine` move: swap with two
       cells in 0..6, or power `zoomies|shadowPounce|laserChase` with an
       optional row; no other strings.
-- [x] `hashAfter` is 16 lowercase hex digits; `at == request.time`.
+- [x] `hashAfter` is 16 lowercase hex digits; `next` is `first|second|none`
+      (verified on replay); `at == request.time`.
 - [x] Rules do not judge turn order or legality: each phone replays with
       `arena_engine` and flags `wrong_turn`, `invalid_move`,
       `hash_mismatch`, `bad_log` or `unknown_version` (no cheat-proof claim).
