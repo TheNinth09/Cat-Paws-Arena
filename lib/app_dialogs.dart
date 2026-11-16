@@ -7,6 +7,7 @@ import 'cat_avatar.dart';
 import 'online/online_errors.dart';
 import 'online/parent_gate.dart';
 import 'profile.dart';
+import 'shell/house_tour.dart';
 import 'shell/online_play.dart';
 import 'ui_widgets.dart';
 
@@ -334,6 +335,38 @@ class _OnlineSettingsState extends State<_OnlineSettings> {
     }
   }
 
+  Future<void> _restoreGoogle() async {
+    if (busy) return;
+    final approval = await showParentGate(context, english: player.english);
+    if (approval == null || !mounted) return;
+    setState(() => busy = true);
+    try {
+      final credential = await services.googleCredential();
+      if (credential == null) return;
+      final profile = await services.account.restoreWithGoogle(
+        credential,
+        approval,
+      );
+      if (!mounted) return;
+      if (profile != null) await profile.applyTo(player);
+      if (!mounted) return;
+      setState(() {});
+      await showAppDialog(
+        context,
+        'Cont Google',
+        Text(
+          profile == null
+              ? 'Nu există profil cloud de restaurat.'
+              : 'Profilul cloud a fost restaurat.',
+        ),
+      );
+    } catch (error) {
+      if (mounted) setState(() => notice = _onlineErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _deleteAccount() async {
     if (busy) return;
     if (await showParentGate(context, english: player.english) == null ||
@@ -345,7 +378,17 @@ class _OnlineSettingsState extends State<_OnlineSettings> {
     setState(() => busy = true);
     try {
       await services.account.start();
-      await services.account.deleteAccount();
+      try {
+        await services.account.deleteAccount();
+      } on OnlineException catch (error) {
+        if (error.code != OnlineErrorCode.requiresRecentLogin) rethrow;
+        final credential = await services.googleCredential();
+        if (credential == null || !mounted) return;
+        final approval = await showParentGate(context, english: player.english);
+        if (approval == null || !mounted) return;
+        await services.account.restoreWithGoogle(credential, approval);
+        await services.account.deleteAccount();
+      }
       await _clearLocalData(player);
       if (!mounted) return;
       setState(() {});
@@ -418,6 +461,11 @@ class _OnlineSettingsState extends State<_OnlineSettings> {
             text: 'Link Google account',
             secondary: true,
             onPressed: busy || user?.googleLinked == true ? null : _linkGoogle,
+          ),
+          ArenaButton(
+            text: 'Restore with Google',
+            secondary: true,
+            onPressed: busy ? null : _restoreGoogle,
           ),
           ArenaButton(
             text: 'Delete account',
@@ -560,7 +608,7 @@ String _onlineErrorMessage(Object error) {
 
 Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
   context,
-  'Turul Casei',
+  'DRUMUL TROFEELOR',
   AnimatedBuilder(
     animation: p,
     builder: (context, _) => Column(
@@ -575,12 +623,7 @@ Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
           ),
         ),
         const SizedBox(height: 10),
-        for (final entry in [
-          (0, 'Living'),
-          (300, 'Holul Principal'),
-          (800, 'Bucătăria'),
-          (1500, 'Dormitorul Stăpânului'),
-        ])
+        for (final room in houseRooms)
           panel(
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -612,7 +655,9 @@ Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
                       ),
                       child: Center(
                         child: sprite(
-                          entry.$1 == 1500 ? 'icon_golden_fish' : 'icon_chest',
+                          room.threshold == 1500
+                              ? 'icon_golden_fish'
+                              : 'icon_chest',
                           size: 32,
                         ),
                       ),
@@ -623,7 +668,7 @@ Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${entry.$1} trofee',
+                            '${room.threshold} trofee',
                             style: const TextStyle(
                               color: ink,
                               fontWeight: FontWeight.w900,
@@ -632,7 +677,7 @@ Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            entry.$2,
+                            room.name,
                             style: const TextStyle(
                               color: Color(0xff8a6242),
                               fontWeight: FontWeight.w700,
@@ -646,14 +691,15 @@ Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
                 ),
                 const SizedBox(height: 10),
                 ArenaButton(
-                  text: p.claims.contains(entry.$1)
+                  text: p.claims.contains(room.threshold)
                       ? 'REVENDICAT'
                       : '+100 Lăbuțe',
                   green: true,
                   onPressed:
-                      p.trophies >= entry.$1 && !p.claims.contains(entry.$1)
+                      p.trophies >= room.threshold &&
+                          !p.claims.contains(room.threshold)
                       ? () {
-                          p.claims.add(entry.$1);
+                          p.claims.add(room.threshold);
                           p.coins += 100;
                           p.save();
                         }

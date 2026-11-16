@@ -495,9 +495,15 @@ class ArenaBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labels = english
-        ? const ['SHOP', 'CATS', 'BATTLE']
-        : const ['MAGAZIN', 'PISICI', 'LUPTĂ'];
-    const icons = [Icons.storefront, Icons.pets, Icons.sports_esports];
+        ? const ['SHOP', 'CATS', 'BATTLE', 'TEAM', 'EVENTS']
+        : const ['MAGAZIN', 'PISICI', 'LUPTĂ', 'ECHIPĂ', 'EVENIMENTE'];
+    const icons = [
+      Icons.storefront,
+      Icons.pets,
+      Icons.sports_esports,
+      Icons.shield,
+      Icons.event,
+    ];
 
     Widget navItem(int i) => Expanded(
       child: Semantics(
@@ -558,27 +564,161 @@ class ArenaBottomBar extends StatelessWidget {
       ),
     );
 
-    return Container(
+    return SizedBox(
       height: 76,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xff7c4e37), Color(0xff54342a)],
-        ),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        border: const Border(top: BorderSide(color: gold, width: 2)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x5520130e),
-            offset: Offset(0, -6),
-            blurRadius: 16,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 62,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xff7c4e37), Color(0xff54342a)],
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                border: const Border(top: BorderSide(color: gold, width: 2)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x5520130e),
+                    offset: Offset(0, -6),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < 5; i++)
+                      if (i == 2)
+                        const Expanded(child: SizedBox.shrink())
+                      else
+                        navItem(i),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Semantics(
+                button: true,
+                selected: selected == 2,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: const ValueKey('nav-2'),
+                    onTap: () => onSelected(2),
+                    borderRadius: BorderRadius.circular(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 58,
+                          height: 58,
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Color(0xfffff6bd),
+                                        gold,
+                                        Color(0xffe8a01f),
+                                      ],
+                                    ),
+                                    border: Border.all(
+                                      color: const Color(0xff8f5f14),
+                                      width: 2.5,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x66ffc63c),
+                                        blurRadius: 18,
+                                      ),
+                                      BoxShadow(
+                                        color: Color(0x6620130e),
+                                        offset: Offset(0, 4),
+                                        blurRadius: 0,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const Positioned(
+                                top: 6,
+                                left: 14,
+                                right: 14,
+                                height: 13,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(10),
+                                    ),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Color(0x80ffffff),
+                                        Color(0x00ffffff),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Center(child: sprite('btn_play_paw', size: 36)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        SizedBox(
+                          height: 13,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              labels[2],
+                              style: TextStyle(
+                                color: selected == 2
+                                    ? gold
+                                    : const Color(0xffe8c9a0),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.3,
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x66000000),
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        child: Row(children: [for (var i = 0; i < 3; i++) navItem(i)]),
       ),
     );
   }

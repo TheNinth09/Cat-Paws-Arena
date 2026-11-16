@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'catalog.dart';
 import 'profile.dart';
 import 'shell/cosmetic_offers.dart';
 import 'shell/purchase_service.dart';
@@ -45,52 +46,101 @@ class ShopScreen extends StatelessWidget {
     onMessage('Magazin', result.message);
   }
 
+  Future<void> buyCoinBundle(int index) async {
+    final bundle = coinBundles[index];
+    final amount = bundle.$1.replaceAll(',', '');
+    final result = await purchaseService.purchase('coin_bundle_$amount');
+    if (result.success) {
+      player.coins += int.tryParse(amount) ?? 0;
+      await player.save();
+      return;
+    }
+    onMessage('Pachete Lăbuțe', result.message);
+  }
+
   @override
-  Widget build(BuildContext context) => ListView(
-    key: const PageStorageKey('shop-scroll'),
-    padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-    children: [
-      const _ShopBanner(),
-      const SectionHeading('CADOU ZILNIC'),
-      AdaptiveCardGrid(
-        minWidth: 150,
-        maxColumns: 2,
-        children: [
-          ShopOfferCard(
-            title: 'CADOU ZILNIC',
-            art: 'icon_chest',
-            subtitle: 'Un cadou gratuit în fiecare zi',
-            badge: player.daily == player.today ? '' : 'GRATUIT',
-            buttonText: player.daily == player.today
-                ? 'REVENDICAT'
-                : '+200 Lăbuțe',
-            onPressed: player.daily == player.today ? null : player.claimDaily,
-          ),
-        ],
-      ),
-      const SectionHeading('PACHETE COSMETICE'),
-      const _BillingNote(),
-      AdaptiveCardGrid(
-        minWidth: 180,
-        maxColumns: 2,
-        children: [
-          for (final offer in cosmeticOffers)
+  Widget build(BuildContext context) {
+    final dailyDeal = cosmeticOffers.first;
+    return ListView(
+      key: const PageStorageKey('shop-scroll'),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+      children: [
+        const _ShopBanner(),
+        const SectionHeading('ZONA DE OFERTE'),
+        AdaptiveCardGrid(
+          minWidth: 150,
+          maxColumns: 2,
+          children: [
             ShopOfferCard(
-              title: offer.title,
-              art: offer.art,
-              extraArt: offer.extraArt,
-              subtitle: offer.subtitle,
-              buttonText: ownsOffer(offer) ? 'DEȚINUT' : offer.leiPrice,
-              onPressed: ownsOffer(offer)
+              title: 'RECOMPENSĂ ZILNICĂ',
+              art: 'icon_chest',
+              subtitle: 'Cadoul de azi',
+              badge: player.daily == player.today ? '' : 'GRATUIT',
+              buttonText: player.daily == player.today
+                  ? 'REVENDICAT'
+                  : '+200 Lăbuțe',
+              onPressed: player.daily == player.today
+                  ? null
+                  : player.claimDaily,
+            ),
+            ShopOfferCard(
+              title: 'DAILY DEAL',
+              art: dailyDeal.art,
+              extraArt: dailyDeal.extraArt,
+              subtitle: dailyDeal.subtitle,
+              buttonText: ownsOffer(dailyDeal) ? 'DEȚINUT' : dailyDeal.leiPrice,
+              onPressed: ownsOffer(dailyDeal)
                   ? null
                   : () {
-                      buyOffer(offer);
+                      buyOffer(dailyDeal);
                     },
             ),
-        ],
-      ),
-    ],
-  );
+          ],
+        ),
+        const SectionHeading('PACHETE LĂBUȚE'),
+        const _BillingNote(),
+        AdaptiveCardGrid(
+          key: const ValueKey('coin-bundle-grid'),
+          minWidth: 96,
+          maxColumns: 3,
+          children: [
+            for (var i = 0; i < coinBundles.length; i++)
+              ShopOfferCard(
+                key: ValueKey('coin-bundle-$i'),
+                title: coinBundles[i].$1,
+                subtitle: 'LĂBUȚE',
+                art: i >= 4 ? 'icon_chest' : 'icon_paw_coin',
+                badge: coinBundles[i].$3,
+                buttonText: '${coinBundles[i].$2} LEI',
+                onPressed: () => buyCoinBundle(i),
+                compact: true,
+              ),
+          ],
+        ),
+        const SectionHeading('PACHETE COSMETICE'),
+        const _BillingNote(),
+        AdaptiveCardGrid(
+          minWidth: 180,
+          maxColumns: 2,
+          children: [
+            for (final offer in cosmeticOffers)
+              ShopOfferCard(
+                title: offer.title,
+                art: offer.art,
+                extraArt: offer.extraArt,
+                subtitle: offer.subtitle,
+                buttonText: ownsOffer(offer) ? 'DEȚINUT' : offer.leiPrice,
+                onPressed: ownsOffer(offer)
+                    ? null
+                    : () {
+                        buyOffer(offer);
+                      },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 class _ShopBanner extends StatelessWidget {
@@ -123,7 +173,7 @@ class _ShopBanner extends StatelessWidget {
               label('MAGAZINUL', size: 26),
               const SizedBox(height: 2),
               Text(
-                'Cosmetice pentru pisica ta',
+                'Cosmetice și pachete de Lăbuțe',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -159,7 +209,7 @@ class _BillingNote extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Plățile sunt opționale; nu există cronometre sau oferte limitate.',
+            'Plățile sunt opționale; prețurile sunt în LEI și nu există cronometre sau oferte limitate.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: ink,

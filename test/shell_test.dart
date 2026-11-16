@@ -2,9 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:cat_paws_arena/events_screen.dart';
 import 'package:cat_paws_arena/main.dart';
+import 'package:cat_paws_arena/online/cloud_profile.dart';
 import 'package:cat_paws_arena/online/fake_backend.dart';
 import 'package:cat_paws_arena/online/online_account.dart';
 import 'package:cat_paws_arena/online/online_backend.dart';
+import 'package:cat_paws_arena/online/online_errors.dart';
 import 'package:cat_paws_arena/online/rooms.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/shop_screen.dart';
@@ -43,12 +45,14 @@ void main() {
     final field = find.byKey(const Key('parentGateAnswer'));
     final gate = find.ancestor(of: field, matching: find.byType(AlertDialog));
     final question = tester
-        .widgetList<Text>(find.descendant(of: gate, matching: find.byType(Text)))
+        .widgetList<Text>(
+          find.descendant(of: gate, matching: find.byType(Text)),
+        )
         .map((text) => text.data ?? '')
         .firstWhere((data) => data.contains('×'), orElse: () => '');
     final match = RegExp(r'(\d+)\s*×\s*(\d+)').firstMatch(question)!;
-    final answer =
-        (int.parse(match.group(1)!) * int.parse(match.group(2)!)).toString();
+    final answer = (int.parse(match.group(1)!) * int.parse(match.group(2)!))
+        .toString();
     await tester.enterText(field, answer);
     await tester.pump();
     await tester.tap(find.descendant(of: gate, matching: find.text('OK')));
@@ -88,28 +92,38 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        for (final tab in [0, 1, 2]) {
+        for (final tab in [0, 1, 2, 3, 4]) {
           expect(find.byKey(ValueKey('nav-$tab')), findsOneWidget);
         }
-        expect(find.byKey(const ValueKey('nav-3')), findsNothing);
-        expect(find.byKey(const ValueKey('nav-4')), findsNothing);
-        expect(find.text('SHOP'), findsOneWidget);
-        expect(find.text('CATS'), findsOneWidget);
-        expect(find.text('BATTLE'), findsOneWidget);
-        for (final tab in [0, 1, 2]) {
+        final bar = find.byType(ArenaBottomBar);
+        for (final label in ['SHOP', 'CATS', 'BATTLE', 'TEAM', 'EVENTS']) {
+          expect(
+            find.descendant(of: bar, matching: find.text(label)),
+            findsOneWidget,
+          );
+        }
+        for (final tab in [0, 1, 2, 3, 4]) {
           await tester.tap(find.byKey(ValueKey('nav-$tab')));
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull, reason: 'tab $tab');
           expect(find.byType(PlayerHud), findsOneWidget);
           expect(find.byType(ArenaBottomBar), findsOneWidget);
-          expect(find.byType(TeamScreen), findsNothing);
-          expect(find.byType(EventsScreen), findsNothing);
           expect(
             find.textContaining('Paws & Claws', findRichText: true),
             findsNothing,
           );
           expectCleanArtwork(tester);
         }
+        await tester.tap(find.byKey(const ValueKey('nav-3')));
+        await tester.pumpAndSettle();
+        expect(find.byType(TeamScreen), findsOneWidget);
+        expect(find.text('ECHIPĂ'), findsOneWidget);
+        expect(find.textContaining('parked'), findsWidgets);
+        await tester.tap(find.byKey(const ValueKey('nav-4')));
+        await tester.pumpAndSettle();
+        expect(find.byType(EventsScreen), findsOneWidget);
+        expect(find.text('EVENIMINTE'), findsOneWidget);
+        expect(find.textContaining('parked'), findsWidgets);
         await tester.pumpWidget(const SizedBox.shrink());
       });
     }
@@ -170,11 +184,17 @@ void main() {
       find.descendant(of: find.byType(PlayerHud), matching: find.text('321')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Turul Casei'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byType(AlertDialog),
-        matching: find.text('Holul Principal'),
+        matching: find.text('DRUMUL TROFEELOR'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Hall'),
       ),
       findsOneWidget,
     );
@@ -217,70 +237,120 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shop sells only cosmetic LEI bundles with no countdown', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    final p = Player(await SharedPreferences.getInstance());
-    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
-    await tester.tap(find.byKey(const ValueKey('nav-0')));
-    await tester.pumpAndSettle();
-    final shop = find.byType(ShopScreen);
-    await tester.tap(find.text('+200 Lăbuțe'));
-    await tester.pumpAndSettle();
-    expect(p.coins, 700);
-    for (final removed in [
-      'DAILY DEAL',
-      'PACHETE LĂBUȚE',
-      'ACCESORII & PUTERI',
-      'The Midnight Zoomies',
-      'Shadow Pounce',
-      'Laser Chase',
-      '650 Lăbuțe',
-      'Google Play Billing',
-    ]) {
+  testWidgets(
+    'shop restores offers, daily reward, paw packs and honest LEI prices',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final p = Player(await SharedPreferences.getInstance());
+      await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('nav-0')));
+      await tester.pumpAndSettle();
+      final shop = find.byType(ShopScreen);
+      final scrollable = find
+          .descendant(of: shop, matching: find.byType(Scrollable))
+          .first;
       expect(
-        find.descendant(of: shop, matching: find.text(removed)),
+        find.descendant(of: shop, matching: find.text('ZONA DE OFERTE')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: shop, matching: find.text('RECOMPENSĂ ZILNICĂ')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: shop, matching: find.text('DAILY DEAL')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('+200 Lăbuțe'));
+      await tester.pumpAndSettle();
+      expect(p.coins, 700);
+      for (final removed in [
+        'ACCESORII & PUTERI',
+        'The Midnight Zoomies',
+        'Shadow Pounce',
+        'Laser Chase',
+        'Google Play Billing',
+      ]) {
+        expect(
+          find.descendant(of: shop, matching: find.text(removed)),
+          findsNothing,
+        );
+      }
+      await tester.scrollUntilVisible(
+        find.text('PACHETE LĂBUȚE'),
+        300,
+        scrollable: scrollable,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('coin-bundle-grid')), findsOneWidget);
+      for (final price in [
+        '8.99 LEI',
+        '22.99 LEI',
+        '44.99 LEI',
+        '89.99 LEI',
+        '134.99 LEI',
+        '224.99 LEI',
+      ]) {
+        expect(find.text(price), findsOneWidget);
+      }
+      for (final badge in ['CEL MAI POPULAR', 'BEST VALUE']) {
+        expect(find.text(badge), findsOneWidget);
+      }
+      for (final pressure in ['EXPIRĂ', 'LIMITATĂ', 'COUNTDOWN']) {
+        expect(
+          find.descendant(of: shop, matching: find.textContaining(pressure)),
+          findsNothing,
+        );
+      }
+      expect(
+        find.descendant(
+          of: shop,
+          matching: find.textContaining(RegExp(r'\b\d{1,2}:\d{2}\b')),
+        ),
         findsNothing,
       );
-    }
-    for (final price in ['14.99 LEI', '17.99 LEI']) {
-      await tester.scrollUntilVisible(
-        find.text(price),
-        300,
-        scrollable: find
-            .descendant(
-              of: find.byType(ListView).first,
-              matching: find.byType(Scrollable),
-            )
-            .first,
-      );
       await Scrollable.ensureVisible(
-        tester.element(find.text(price)),
+        tester.element(find.text('8.99 LEI')),
         alignment: 0.3,
       );
       await tester.pumpAndSettle();
-      expect(find.text(price).hitTestable(), findsOneWidget);
-    }
-    for (final pressure in ['EXPIRĂ', 'LIMITATĂ', 'COUNTDOWN']) {
+      await tester.tap(find.text('8.99 LEI'));
+      await tester.pumpAndSettle();
       expect(
-        find.descendant(of: shop, matching: find.textContaining(pressure)),
-        findsNothing,
+        find.text('Achizițiile nu sunt disponibile încă.'),
+        findsOneWidget,
       );
-    }
-    expect(
-      find.descendant(
-        of: shop,
-        matching: find.textContaining(RegExp(r'\b\d{1,2}:\d{2}\b')),
-      ),
-      findsNothing,
-    );
-    await tester.tap(find.text('14.99 LEI'));
-    await tester.pumpAndSettle();
-    expect(find.text('Achizițiile nu sunt disponibile încă.'), findsOneWidget);
-    expect(p.coins, 700);
-    expect(tester.takeException(), isNull);
-  });
+      expect(p.coins, 700);
+      await closeDialogContaining(
+        tester,
+        'Achizițiile nu sunt disponibile încă.',
+      );
+      await tester.scrollUntilVisible(
+        find.text('17.99 LEI'),
+        300,
+        scrollable: scrollable,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('17.99 LEI'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Achizițiile nu sunt disponibile încă.'),
+        findsOneWidget,
+      );
+      expect(p.coins, 700);
+      expect(p.owned, isEmpty);
+      await closeDialogContaining(
+        tester,
+        'Achizițiile nu sunt disponibile încă.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('house tour opens room two at 300 trophies', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -295,7 +365,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-2')));
     await tester.pumpAndSettle();
-    expect(find.text('Turul casei • Hall'), findsOneWidget);
+    expect(find.text('DRUMUL TROFEELOR • Hall'), findsOneWidget);
     for (final name in ['Nori', 'Kiko', 'Biscuit']) {
       expect(find.text(name), findsOneWidget);
     }
@@ -362,6 +432,7 @@ void main() {
     expect(find.text('Indisponibil'), findsOneWidget);
     for (final hidden in [
       'Link Google account',
+      'Restore with Google',
       'Delete account',
       'Join room',
       'Cod cameră',
@@ -394,6 +465,7 @@ void main() {
     await tester.pumpAndSettle();
     await openSettings(tester);
     expect(find.text('Link Google account'), findsOneWidget);
+    expect(find.text('Restore with Google'), findsOneWidget);
     expect(find.text('Delete account'), findsOneWidget);
     expect(find.text('Join room'), findsOneWidget);
     expect(find.text('Cod cameră'), findsOneWidget);
@@ -438,6 +510,8 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Home(player: p)));
     await tester.pumpAndSettle();
     await openSettings(tester);
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete account'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('parentGateOk')), findsOneWidget);
@@ -445,6 +519,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(account.user, isNull);
     expect(p.trophies, 840);
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete account'));
     await tester.pumpAndSettle();
     await passParentGate(tester);
@@ -505,4 +581,180 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('lobby friend room creates and joins online codes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final cloud = FakeCloud();
+    final account = OnlineAccount(FakeAuth(cloud), cloud);
+    final rooms = RoomService(cloud);
+    final hostRoom = await rooms.createRoom('host-uid');
+    OnlinePlay.services = OnlinePlayServices(
+      account: account,
+      rooms: rooms,
+      googleCredential: () async => null,
+    );
+    addTearDown(() => OnlinePlay.services = null);
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CAMERĂ ONLINE'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cameră de prieten'), findsOneWidget);
+    expect(find.text('CREEAZĂ CAMERĂ'), findsOneWidget);
+    expect(find.text('ALĂTURĂ-TE'), findsOneWidget);
+    expect(find.textContaining('ONLINE'), findsWidgets);
+    expect(find.text('BOT'), findsWidgets);
+    await tester.tap(find.text('CREEAZĂ CAMERĂ'));
+    await tester.pumpAndSettle();
+    expect(account.user, isNotNull);
+    expect(cloud.rooms, hasLength(2));
+    final created = cloud.rooms.values.firstWhere(
+      (room) => room.hostUid != 'host-uid',
+    );
+    expect(find.text(created.code), findsOneWidget);
+    await tester.ensureVisible(find.byType(TextField));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), hostRoom.code);
+    await tester.pump();
+    await tester.ensureVisible(find.text('ALĂTURĂ-TE'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ALĂTURĂ-TE'));
+    await tester.pumpAndSettle();
+    expect(cloud.rooms, hasLength(1));
+    expect(find.textContaining('a fost găsită'), findsOneWidget);
+    await closeDialogContaining(tester, 'Cameră de prieten');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings restores cloud profile with Google', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final cloud = FakeCloud();
+    final auth = FakeAuth(cloud);
+    final account = OnlineAccount(auth, cloud);
+    await account.start();
+    await auth.linkGoogle(const GoogleCredential('google-test'));
+    final source = Player(await SharedPreferences.getInstance())
+      ..name = 'CloudCat'
+      ..trophies = 777
+      ..coins = 1234
+      ..cat = 'Bubble'
+      ..owned = {'bow'}
+      ..claims = {300}
+      ..english = true;
+    await account.save(CloudProfile.fromPlayer(source));
+    var credentialCalls = 0;
+    OnlinePlay.services = OnlinePlayServices(
+      account: account,
+      rooms: RoomService(cloud),
+      googleCredential: () async {
+        credentialCalls++;
+        return const GoogleCredential('google-test');
+      },
+    );
+    addTearDown(() => OnlinePlay.services = null);
+    final p = Player(await SharedPreferences.getInstance())..name = 'Local';
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await openSettings(tester);
+    await tester.ensureVisible(find.text('Restore with Google'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Restore with Google'));
+    await tester.pumpAndSettle();
+    await passParentGate(tester);
+    expect(credentialCalls, 1);
+    expect(p.name, 'Local');
+    expect(p.trophies, 777);
+    expect(p.coins, 1234);
+    expect(p.cat, 'Bubble');
+    expect(p.owned, contains('bow'));
+    expect(find.text('Profilul cloud a fost restaurat.'), findsOneWidget);
+    await closeDialogContaining(tester, 'Profilul cloud a fost restaurat.');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings retries Google-linked delete after recent login', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final cloud = FakeCloud();
+    final auth = _RequiresRecentLoginOnceAuth(FakeAuth(cloud));
+    final account = OnlineAccount(auth, cloud);
+    OnlinePlay.services = OnlinePlayServices(
+      account: account,
+      rooms: RoomService(cloud),
+      googleCredential: () async => const GoogleCredential('google-test'),
+    );
+    addTearDown(() => OnlinePlay.services = null);
+    await account.start();
+    await auth.linkGoogle(const GoogleCredential('google-test'));
+    final p = Player(await SharedPreferences.getInstance())
+      ..name = 'Local'
+      ..trophies = 10
+      ..coins = 20;
+    await p.save();
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await openSettings(tester);
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await passParentGate(tester);
+    expect(find.text('Șterge contul?'), findsOneWidget);
+    await tester.tap(find.text('ȘTERGE CONTUL'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('parentGateOk')), findsOneWidget);
+    await passParentGate(tester);
+    expect(auth.deleteAttempts, 2);
+    expect(account.user, isNull);
+    expect(cloud.users, isEmpty);
+    expect(p.trophies, 0);
+    expect(
+      find.text('Contul și datele locale au fost șterse.'),
+      findsOneWidget,
+    );
+    await closeDialogContaining(tester, 'Cont șters');
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _RequiresRecentLoginOnceAuth implements AuthBackend {
+  _RequiresRecentLoginOnceAuth(this._inner);
+
+  final FakeAuth _inner;
+  var deleteAttempts = 0;
+
+  @override
+  OnlineUser? get currentUser => _inner.currentUser;
+
+  @override
+  Future<OnlineUser> signInAnonymously() => _inner.signInAnonymously();
+
+  @override
+  Future<OnlineUser> linkGoogle(GoogleCredential credential) =>
+      _inner.linkGoogle(credential);
+
+  @override
+  Future<OnlineUser> signInWithGoogle(GoogleCredential credential) =>
+      _inner.signInWithGoogle(credential);
+
+  @override
+  Future<void> signOut() => _inner.signOut();
+
+  @override
+  Future<void> deleteCurrentUser() async {
+    deleteAttempts++;
+    if (deleteAttempts == 1) {
+      throw const OnlineException(OnlineErrorCode.requiresRecentLogin);
+    }
+    await _inner.deleteCurrentUser();
+  }
 }
