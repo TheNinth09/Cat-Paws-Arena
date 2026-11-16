@@ -1,9 +1,11 @@
 # Firestore security rules checklist (lane 5)
 
 Status: `backend/firestore.rules` implements every section through
-emotes; `backend/test/rules.test.js` tests them on the emulator (20 tests).
-Moves, match results and events come with later slices and are denied
-until then. Nothing is deployed; the owner deploys (FIREBASE_SWITCH.md §6).
+emotes, including the match record and move log;
+`backend/test/rules.test.js` tests them on the emulator (25 tests). Events
+come with slice 4 and are denied until then. Nothing is deployed; the owner
+deploys (FIREBASE_SWITCH.md §6). No TTL policy is needed (Spark-safe):
+expiry and deadlines are checked with `request.time`.
 
 Binding source: `docs/contract.md` §7 — only the two participants touch a
 match, moves are create-only/ordered/type-checked, peer-visible strings are
@@ -61,38 +63,36 @@ preset IDs only.
 
 ## `matches/{matchId}` — match record
 
-- [ ] Read and write only if
-      `request.auth.uid in [resource.data.hostUid, resource.data.guestUid]`.
-- [ ] Create only inside the room claim: ID `{code}_{room createdAt millis}`,
+- [x] Read only by `hostUid` / `guestUid`; no list.
+- [x] Create only inside the room claim: ID `{code}_{room createdAt millis}`,
       exactly `roomCode`, `hostUid` (from the room), `guestUid == auth.uid`,
-      `createdAt == request.time`, room still live and deleted in the same
-      commit. Seed, `MatchConfig`, versions and loadouts are added by the
-      match slice.
-- [ ] Seed, config, versions, slots and loadouts are immutable after create
-      (`diff(resource.data).affectedKeys()` excludes them).
-- [ ] A player may update only their own final hashes, their own
-      pause/disconnect metadata, and `flag` (a reason code from a fixed list).
-- [ ] A flag, once set, cannot be cleared by a client.
-- [ ] Outcome is written only when both final hashes are present and equal.
-- [ ] `roundDeadline` is written by the deadline function, not by clients.
-- [ ] TTL 30 days after `endedAt` (owner deploys).
+      `createdAt == request.time`, `seed` (int, 0..2^31-1), `config` equal
+      to `MatchConfig.duel().fingerprint`, `engineVersion == 1`,
+      `contractVersion == 1`; room still live and deleted in the same commit.
+- [x] Updates touch only one of: the writer's own `final_first` /
+      `final_second` (once; ints, 16-hex hash, outcome enum), `flag` (once,
+      fixed reason list, never cleared), or `forfeitWinner` + `forfeitAfter`.
+      Seed, config, versions and players are therefore immutable.
+- [x] Forfeit: the writer's own move `forfeitAfter` is the last one and is at
+      least 24 h old (`request.time`); no moves are accepted afterwards.
+- [x] No delete by clients.
+- [ ] Rewards count only when both finals are equal and there is no flag
+      (`MatchSession.counts`); the rules do not compare them.
 
 ## `matches/{matchId}/moves/{moveId}` — move log
 
-- [ ] Create only; no update, no delete.
-- [ ] Document ID is `{slot}_{round}_{index}` and must agree with the fields.
-- [ ] `slot` is the writer's own slot.
-- [ ] `round` in 1..5, `index` in 0..2 (`MatchConfig`: five rounds of three
-      moves).
-- [ ] Ordered: `index == 0` or the move `{slot}_{round}_{index-1}` exists;
-      `round > 1` requires both players' last move of `round - 1`
-      (obstacles from round n land in round n+1).
-- [ ] Move payload fields and types match the serialized `arena_engine`
-      move; coordinates are ints inside the board size.
-- [ ] `stateHash` is a string of the engine hash length; `createdAt ==
-      request.time`.
-- [ ] Rules do not judge legality; each client replays with `arena_engine`
-      and flags a mismatch (no cheat-proof claim).
+- [x] Create only; no update, no delete; read only by the two players.
+- [x] Document ID is the zero-padded `index` (`000`, `001`, …), `index` < 200.
+- [x] Ordered: `index == 0` or move `index - 1` exists (create-only, so two
+      writers of the same index cannot both win).
+- [x] `by == auth.uid`, `slot` is the writer's own slot (host `first`).
+- [x] `move` is exactly a serialized `arena_engine` move: swap with two
+      cells in 0..6, or power `zoomies|shadowPounce|laserChase` with an
+      optional row; no other strings.
+- [x] `hashAfter` is 16 lowercase hex digits; `at == request.time`.
+- [x] Rules do not judge turn order or legality: each phone replays with
+      `arena_engine` and flags `wrong_turn`, `invalid_move`,
+      `hash_mismatch`, `bad_log` or `unknown_version` (no cheat-proof claim).
 
 ## `matches/{matchId}/emotes/{id}` — preset emotes
 
@@ -115,9 +115,10 @@ preset IDs only.
 
 - [ ] `onUserDeleted` (Auth trigger, `europe-west1`): deletes what is left
       of the user, devices, clock and rooms, and writes `deleted` in place of
-      the uid in matches and emotes. The app deletes only the Auth user.
+      the uid in matches and emotes. Backup only: the app already deletes
+      profile, devices, clock and rooms itself before deleting the Auth user.
 - [ ] Push on move create: payload carries only the match ID, no names.
-- [ ] Deadline forfeit (scheduled): uses server time, writes only
-      `roundDeadline`/forfeit fields.
+- [x] No scheduled deadline function: the waiting player claims the forfeit
+      and the rules check the 24 h with server time (works on Spark).
 - [ ] App Check is considered for the release, but not required by the
       contract; *decision for the orchestrator*.

@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import 'fake_backend.dart';
 import 'firebase_backend.dart';
+import 'match_store.dart';
+import 'match_sync.dart';
 import 'online_account.dart';
 import 'online_backend.dart';
 import 'rooms.dart';
@@ -41,6 +43,14 @@ class OnlineServices {
 
   late final account = OnlineAccount(auth, store);
   late final rooms = RoomService(store);
+
+  /// Both stores implement [MatchStore].
+  MatchStore get matches => store as MatchStore;
+
+  /// Opens (or resumes after a restart) a friend match for the signed-in
+  /// player.
+  Future<MatchSession> openMatch(String matchId) =>
+      MatchSession.open(matches, matchId, account.user!.uid);
 
   /// Returns null when online is off. Firebase is initialized only in
   /// `firebase` mode, so other builds never contact Firebase. Signs in

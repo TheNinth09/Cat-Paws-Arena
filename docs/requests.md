@@ -141,3 +141,20 @@ Request: Set `OnlinePlay.services` once during app bootstrap (lib/main.dart befo
 Reason: The settings section is gated by `OnlinePlay.services != null`; lane 4 cannot edit lib/main.dart.
 Status: open — orchestrator will wire `OnlineServices.start()` -> `OnlinePlay.services` in lib/main.dart after this merge.
 ```
+
+```text
+Lane: 2
+Blocking PR: lane-5 match sync
+Request: For the friend duel, use `MatchSession` (lib/online/match_sync.dart): after `rooms.joinRoom` / `rooms.waitForGuest`, `services.openMatch(matchId)` (a `MatchSession`, also used to resume after a restart); render `session.state`; on the player's move call `session.play(move)`; listen to `session.watch()` and also start `session.poll(const Duration(seconds: 20))` and call `refresh()` on app resume (works without Cloud Functions); show `liveMoveLimit` as the live timer and offer `claimForfeit()` once `session.deadline` has passed; award nothing unless `session.counts`; show a "match not counted" state when `session.flag != null`. Emotes: `RoomService`/`CloudStore.sendEmote` with preset `Emote` only.
+Reason: lane 5 cannot edit the duel screen; the match is a seed plus a move log replayed on both phones (docs/contract.md §3–4).
+Status: open
+```
+
+```text
+Lane: 4
+Blocking PR: lane-5 match sync
+Request: When `account.deleteAccount()` throws `OnlineErrorCode.requiresRecentLogin` (Google-linked account), pick Google again through the parent gate and retry with `account.deleteAccount(freshGoogle: credential)`.
+Reason: account deletion now runs on the client without Cloud Functions (Spark-safe) and needs a fresh Google sign-in first so no data is lost if deletion fails.
+Status: open
+```
+

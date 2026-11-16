@@ -49,7 +49,15 @@ SDK (CI fails on them).
 | `signInAnonymously()` | `signInAnonymously()` | default; enough for friend duels |
 | `linkGoogle()` | `currentUser.linkWithCredential(GoogleAuthProvider.credential(idToken))` | same uid. `credential-already-in-use` → `credentialInUse` |
 | `signInWithGoogle()` | `signInWithCredential` | a new user means Google was never linked: it is deleted and `noLinkedAccount` thrown |
-| `deleteCurrentUser()` | `user.delete()` | `requires-recent-login` → `requiresRecentLogin` (sign in with Google again, then retry). Nothing is deleted before this succeeds; `onUserDeleted` then deletes the profile, devices, clock and rooms and anonymizes matches |
+| `reauthenticate()` | `user.reauthenticateWithCredential` | fresh Google sign-in before deleting a linked account |
+| `deleteCurrentUser()` | `user.delete()` | `requires-recent-login` → `requiresRecentLogin` |
+
+`OnlineAccount.deleteAccount({freshGoogle})` works without functions: for a
+Google-linked account it first reauthenticates (without `freshGoogle` it
+throws `requiresRecentLogin` before anything is deleted), then
+`CloudStore.deleteUserData` removes the profile, devices, clock and open
+rooms, then the Auth user is deleted. `onUserDeleted`, when deployed,
+repeats the cleanup and anonymizes matches and emotes.
 
 `OnlineAccount.linkGoogle` and `restoreWithGoogle` require a
 `ParentGateApproval`, which only `ParentGateChallenge.answer` can create
@@ -70,6 +78,24 @@ the Google provider enabled and an OAuth web client in
 | `claimRoom(code, guest)` | **one transaction**: read room, check expiry/own room, create `matches/{code}_{createdAtMillis}`, delete room |
 | `watchJoin(room)` | snapshots of `matches/{room.matchId}` |
 | `sendEmote` / `emotes` | `matches/{id}/emotes`: `{emote: wire ID, from: uid, at: serverTimestamp()}` |
+| `readMatch` / `watchMatch` | `matches/{id}`: seed, `config` fingerprint, versions, `final_first`/`final_second`, `flag`, `forfeitWinner` |
+| `readMoves` / `watchMoves` | `matches/{id}/moves` ordered by `index`: `{index, by, slot, move, hashAfter, at}` |
+| `appendMove` | transaction: `moveConflict` if `moves/{index}` exists, else create |
+| `writeFinal` / `flagMatch` / `claimForfeit` | single-field updates the rules allow once |
+
+### Match sync (`lib/online/match_sync.dart`)
+
+`MatchSession.open(store, matchId, uid)` replays the whole log (resume after
+a restart). `play(move)` applies the move with `arena_engine` and appends it
+with its `stateHash`; a rejected swap is not sent. Opponent moves arrive by
+`watch()` (Firestore listener) or `refresh()` (polling via `poll(every)` and
+on app resume), are replayed and hash-checked; any mismatch flags the match.
+After the last move each phone writes its `MatchFinal`; `counts` is true only
+when both are equal and nothing is flagged. Push (`onMoveCreated`) is an
+optimization: without functions, `watch`/`poll` still deliver every move.
+The slow-play limit is 24 h from the last move (`roundLimit`); the waiting
+player calls `claimForfeit()`. `liveMoveLimit` (30 s) is the suggested live
+timer for the duel screen.
 
 Expiry is always `createdAt + 24 h` in server time; rules enforce it with
 `request.time`.
@@ -87,7 +113,7 @@ Expiry is always `createdAt + 24 h` in server time; rules enforce it with
 
 ## 4. Server side (`backend/`)
 
-- `firestore.rules`: checklist in `SECURITY_RULES.md`; 20 emulator tests in
+- `firestore.rules`: checklist in `SECURITY_RULES.md`; 25 emulator tests in
   `test/rules.test.js` (`npm run test:rules`, demo project, CI job
   "Firestore rules and functions").
 - `functions/src/index.ts` (region `europe-west1`):
@@ -97,8 +123,6 @@ Expiry is always `createdAt + 24 h` in server time; rules enforce it with
   - `onMoveCreated` / `notifyTurn` send the your-turn push with
     `data: {matchId}` only; the text comes from
     `android/app/src/main/res/values*/strings.xml` (`cpa_turn_*`).
-  - Moves do not exist yet, so the trigger stays idle until the match
-    slice adds them.
 - `firebase.json`, `.firebaserc` (`cat-paws-arena`), `firestore.indexes.json`.
 
 ## 5. Tests
@@ -114,9 +138,8 @@ Expiry is always `createdAt + 24 h` in server time; rules enforce it with
 ## 6. Owner actions (lane 5 never deploys)
 
 1. Deploy the rules: `firebase deploy --only firestore:rules` from `backend/`.
-2. TTL policies:
-   - `gcloud firestore fields ttls update expiresAt --collection-group=rooms --enable-ttl`;
-   - matches after 30 days, once the match slice writes `endedAt`.
+2. TTL policies are optional (not available on Spark). Expiry and the
+   24 h limit are enforced by the client and the rules.
 3. Deploy functions: `firebase deploy --only functions`.
    Needs Blaze and the Cloud Build and Eventarc APIs.
 4. To enable Google linking:
