@@ -155,7 +155,7 @@ Lane: 4
 Blocking PR: lane-5 match sync
 Request: When `account.deleteAccount()` throws `OnlineErrorCode.requiresRecentLogin` (Google-linked account), pick Google again through the parent gate and retry with `account.deleteAccount(freshGoogle: credential)`.
 Reason: account deletion now runs on the client without Cloud Functions (Spark-safe) and needs a fresh Google sign-in first so no data is lost if deletion fails.
-Status: open
+Status: answered — lane-4 implemented the retry in 4b7e18b; merged to main in 14e9c18.
 ```
 
 ```text
@@ -163,7 +163,7 @@ Lane: 3
 Blocking PR: lane-3 avatar editor (P2-1 custom user avatar)
 Request: Persist the custom user avatar so it survives save/reload and Google account link. Proposed schema — AvatarSpec in lib/cat_avatar.dart serializes to compact JSON {"s":species 0-3,"f":fur 0-5,"p":pattern 0-4,"e":eyes 0-3,"r":ears 0-3,"a":accessory sprite id or ""}. Ask: (1) lib/profile.dart — add `String avatarSpec` (default '') saved inside the 'player' JSON; (2) lib/online/cloud_profile.dart — add an `avatar` string key copied in fromPlayer/applyTo/toJson/fromJson (schemaVersion bump or tolerant read) so cloud sync does not drop it; (3) orchestrator/lane-4 may later surface AvatarAvatar(player) in PlayerHud/profile — lane 3 already ships loadAvatarSpec/saveAvatarSpec helpers over prefs key 'avatar_spec_v1' as the interim local store.
 Reason: Owner decision for P2-1: a custom user avatar separate from the duel cats; cloud sync must not drop it on Google link. AvatarSpec.fromJsonString tolerates bad data so older/newer clients degrade safely.
-Status: open — orchestrator will add Player.avatarSpec + CloudProfile.avatar and migrate the interim prefs store.
+Status: answered — orchestrator added Player.avatarSpec + CloudProfile.avatar (tolerant read, no schema bump), migrated the prefs store, and allowed the avatar key in Firestore validProfile (fce8aec).
 ```
 
 ```text
@@ -171,7 +171,7 @@ Lane: 4
 Blocking PR: lane-2-online (friend duel presentation)
 Request: Expose match sync through `OnlinePlay.services` (lib/shell/online_play.dart): the lobby needs `openMatch(matchId)` (or the `OnlineServices` object), `services.store` for emotes, and the signed-in uid so it can build `OnlineDuel.open(services, matchLink)` and push `MatchScreen(online: duel)`. `OnlinePlayServices` currently carries only account/rooms/googleCredential.
 Reason: P1-2 wires create/join room UI to the duel; lane 2 cannot edit lane-4 shell files, and `OnlineServices` itself is orchestrator/bootstrap territory.
-Status: open
+Status: answered — orchestrator added `OnlinePlayServices.online` (the full OnlineServices) and wired the friend room panel: host waits via `rooms.waitForGuest`, guest opens from `joinRoom`'s matchId, both call `OnlineDuel.open` and push `MatchScreen(online:)`; without a configured backend the panel keeps the honest "online duels unavailable" notice.
 ```
 
 ```text
@@ -187,5 +187,5 @@ Lane: orchestrator
 Blocking PR: lane-2-online (friend duel presentation)
 Request: Root `flutter analyze` reports ~455 errors, all inside `packages/arena_engine/test/*.dart`: they import `package:test/test.dart`, which is only a dev_dependency of the engine package and does not resolve from the root package config. Either exclude `packages/**` from the root analyzer in analysis_options.yaml or add `test` as a root dev_dependency. `dart test` inside packages/arena_engine passes (57/57); `flutter analyze lib test` is clean.
 Reason: pre-existing on main since the lane-1 engine merges; lane 2 cannot edit analysis_options.yaml or pubspec.yaml.
-Status: open
+Status: answered — orchestrator excluded `packages/**` from the root analyzer (analysis_options.yaml); the engine package keeps its own analysis and `dart test` (57/57).
 ```

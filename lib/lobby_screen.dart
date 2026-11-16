@@ -92,7 +92,8 @@ class LobbyScreen extends StatelessWidget {
               child: _ReturnButton(
                 title: player.english ? 'FRIEND ROOM' : 'CAMERĂ ONLINE',
                 subtitle: player.english ? 'online code' : 'cod online',
-                onTap: () => showFriendRoom(context, english: player.english),
+                onTap: () =>
+                    showFriendRoom(context, english: player.english, player: player),
               ),
             ),
           ],

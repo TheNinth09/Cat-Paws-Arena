@@ -27,6 +27,7 @@ Future<void> main() async {
     OnlinePlay.services = OnlinePlayServices(
       account: online.account,
       rooms: online.rooms,
+      online: online,
       googleCredential: () async {
         try {
           return await online!.google.pick();

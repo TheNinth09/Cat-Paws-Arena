@@ -1,11 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app_dialogs.dart';
+import '../match_controller.dart';
+import '../match_screen.dart';
 import '../online/online_backend.dart';
+import '../profile.dart';
 import '../ui_widgets.dart';
 import 'online_play.dart';
 
-Future<void> showFriendRoom(BuildContext context, {required bool english}) {
+Future<void> showFriendRoom(
+  BuildContext context, {
+  required bool english,
+  required Player player,
+}) {
   final services = OnlinePlay.services;
   if (services == null) {
     return showUnavailable(context, english ? 'Online play' : 'Joc online');
@@ -13,7 +22,19 @@ Future<void> showFriendRoom(BuildContext context, {required bool english}) {
   return showAppDialog(
     context,
     english ? 'Friend room' : 'Cameră de prieten',
-    FriendRoomPanel(english: english, services: services),
+    FriendRoomPanel(
+      english: english,
+      services: services,
+      player: player,
+      onMatch: (duel) {
+        Navigator.of(context).pop();
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => MatchScreen(player: player, mode: 0, online: duel),
+          ),
+        );
+      },
+    ),
   );
 }
 
@@ -22,10 +43,17 @@ class FriendRoomPanel extends StatefulWidget {
     super.key,
     required this.english,
     required this.services,
+    required this.player,
+    this.onMatch,
   });
 
   final bool english;
   final OnlinePlayServices services;
+  final Player player;
+
+  /// Called once the friend match session is open; the host shell closes
+  /// the room dialog and pushes the duel screen.
+  final void Function(OnlineDuel duel)? onMatch;
 
   @override
   State<FriendRoomPanel> createState() => _FriendRoomPanelState();
@@ -34,7 +62,7 @@ class FriendRoomPanel extends StatefulWidget {
 class _FriendRoomPanelState extends State<FriendRoomPanel> {
   final roomCode = TextEditingController();
   RoomRecord? createdRoom;
-  bool busy = false;
+  bool busy = false, waitingForGuest = false, matchOpened = false;
   String? notice;
 
   OnlinePlayServices get services => widget.services;
@@ -69,6 +97,7 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
             ? 'Share this code with a friend. House cats stay labelled BOT; this room is ONLINE.'
             : 'Trimite codul unui prieten. Pisicile casei rămân BOT; această cameră este ONLINE.';
       });
+      unawaited(_waitForGuest());
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -93,11 +122,14 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
       final joined = await services.rooms.joinRoom(roomCode.text, user.uid);
       if (!mounted) return;
       roomCode.clear();
-      setState(() {
-        notice = english
-            ? 'Room ${joined.code} found. Online duels are not available yet; keep practising locally.'
-            : 'Camera ${joined.code} a fost găsită. Meciurile online nu sunt încă disponibile; continuă antrenamentul local.';
-      });
+      await _openDuel(
+        MatchLink(
+          matchId: joined.matchId,
+          roomCode: joined.code,
+          hostUid: joined.hostUid,
+          guestUid: joined.guestUid,
+        ),
+      );
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -111,10 +143,69 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
     }
   }
 
+  /// Host side: waits until the friend claims the room, then opens the
+  /// shared match session and hands the duel to the shell.
+  Future<void> _waitForGuest() async {
+    final room = createdRoom;
+    if (room == null) return;
+    setState(() => waitingForGuest = true);
+    try {
+      final link = await services.rooms.waitForGuest(room);
+      if (!mounted || matchOpened) return;
+      await _openDuel(link);
+    } on Object {
+      if (mounted) {
+        setState(() {
+          notice = english
+              ? 'The friend room connection failed. Create a new room and try again.'
+              : 'Conexiunea camerei a eșuat. Creează o cameră nouă și încearcă din nou.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => waitingForGuest = false);
+    }
+  }
+
+  /// Opens the lane-5 match session for [link] and starts the online duel.
+  /// Without a configured backend the room flow stays honest: the player
+  /// is told online duels are unavailable and keeps practising locally.
+  Future<void> _openDuel(MatchLink link) async {
+    if (matchOpened) return;
+    final online = services.online;
+    if (online == null) {
+      setState(() {
+        notice = english
+            ? 'Room ${link.roomCode} found. Online duels are not available yet; keep practising locally.'
+            : 'Camera ${link.roomCode} a fost găsită. Meciurile online nu sunt încă disponibile; continuă antrenamentul local.';
+      });
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      final duel = await OnlineDuel.open(online, link);
+      if (!mounted) return;
+      matchOpened = true;
+      widget.onMatch?.call(duel);
+    } on Object {
+      if (mounted) {
+        setState(() {
+          notice = english
+              ? 'The online match could not be opened. Try again.'
+              : 'Meciul online nu a putut fi deschis. Încearcă din nou.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _cancel() async {
     final room = createdRoom;
     if (room == null || busy) return;
-    setState(() => busy = true);
+    setState(() {
+      busy = true;
+      waitingForGuest = false;
+    });
     try {
       await services.rooms.cancelRoom(room);
       if (!mounted) return;
@@ -151,7 +242,7 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
       ArenaButton(
         text: english ? 'CREATE ROOM' : 'CREEAZĂ CAMERĂ',
         green: true,
-        onPressed: busy ? null : _create,
+        onPressed: busy || waitingForGuest ? null : _create,
       ),
       if (createdRoom != null) ...[
         const SizedBox(height: 8),
@@ -173,6 +264,20 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
             ),
           ),
         ),
+        if (waitingForGuest) ...[
+          const SizedBox(height: 8),
+          Text(
+            english
+                ? 'Waiting for your friend to join…'
+                : 'Așteptăm prietenul să intre…',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xff8a6242),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         ArenaButton(
           text: english ? 'CANCEL ROOM' : 'ANULEAZĂ CAMERA',
