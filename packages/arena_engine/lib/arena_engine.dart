@@ -12,3 +12,4 @@ library;
 
 export 'src/bots.dart';
 export 'src/engine.dart';
+export 'src/sync.dart';

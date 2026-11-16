@@ -166,6 +166,64 @@ class MatchConfig {
       'rainbow:${rainbowRule.name}|'
       'powers:${powerConfiguration.name}';
 
+  /// Stable JSON encoding for match documents and move-log headers.
+  /// Every field is stored explicitly so [fromJson] can reconstruct an
+  /// identical config; no defaults are re-applied on decode.
+  Map<String, Object?> toJson() => {
+    'engineVersion': engineVersion,
+    'boardWidth': boardWidth,
+    'boardHeight': boardHeight,
+    'colourCount': colourCount,
+    'rounds': rounds,
+    'movesPerRound': movesPerRound,
+    'rainbowRule': rainbowRule.name,
+    'powerConfiguration': powerConfiguration.name,
+  };
+
+  /// Decodes a config produced by [toJson]. Returns `null` on any
+  /// malformed input — missing fields, wrong types or unknown enum
+  /// names — so callers can reject corrupt match data instead of
+  /// silently falling back to local defaults (forbidden by the
+  /// contract). The decoded config still goes through [newMatch]
+  /// validation, so out-of-range values are rejected there too.
+  static MatchConfig? fromJson(Object? json) {
+    if (json is! Map) return null;
+    int? intField(String key) {
+      final v = json[key];
+      return v is int ? v : null;
+    }
+
+    final engineVersion = intField('engineVersion');
+    final boardWidth = intField('boardWidth');
+    final boardHeight = intField('boardHeight');
+    final colourCount = intField('colourCount');
+    final rounds = intField('rounds');
+    final movesPerRound = intField('movesPerRound');
+    if (engineVersion == null ||
+        boardWidth == null ||
+        boardHeight == null ||
+        colourCount == null ||
+        rounds == null ||
+        movesPerRound == null) {
+      return null;
+    }
+    final rainbowRule = RainbowRule.values.asNameMap()[json['rainbowRule']];
+    final powerConfiguration = PowerRuleset.values.asNameMap()[
+      json['powerConfiguration']
+    ];
+    if (rainbowRule == null || powerConfiguration == null) return null;
+    return MatchConfig(
+      boardWidth: boardWidth,
+      boardHeight: boardHeight,
+      colourCount: colourCount,
+      rounds: rounds,
+      movesPerRound: movesPerRound,
+      rainbowRule: rainbowRule,
+      engineVersion: engineVersion,
+      powerConfiguration: powerConfiguration,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       other is MatchConfig &&
