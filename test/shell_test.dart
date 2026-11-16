@@ -684,7 +684,7 @@ void main() {
   ) async {
     SharedPreferences.setMockInitialValues({});
     final cloud = FakeCloud();
-    final auth = FakeAuth(cloud)..requireRecentLogin = true;
+    final auth = FakeAuth(cloud);
     final account = OnlineAccount(auth, cloud);
     OnlinePlay.services = OnlinePlayServices(
       account: account,
@@ -694,6 +694,7 @@ void main() {
     addTearDown(() => OnlinePlay.services = null);
     await account.start();
     await auth.linkGoogle(const GoogleCredential('google-test'));
+    auth.requireRecentLogin = true;
     final p = Player(await SharedPreferences.getInstance())
       ..name = 'Local'
       ..trophies = 10
@@ -712,6 +713,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('parentGateOk')), findsOneWidget);
     await passParentGate(tester);
+    expect(auth.requireRecentLogin, isFalse);
     expect(account.user, isNull);
     expect(cloud.users, isEmpty);
     expect(p.trophies, 0);
@@ -723,4 +725,3 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
-
