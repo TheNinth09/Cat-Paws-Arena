@@ -132,6 +132,39 @@ gravity → powers: `PowerCharged`(-cost) → `PowerFired` →
 cascades → `Shuffled` (if needed) → `RoundEnded`/`MatchEnded`.
 `SwapRejected` is the only event of a rejected swap.
 
+## Online 1v1 sync
+
+`lib/src/sync.dart` holds the pure helpers a match-sync layer needs —
+no I/O, no clocks, no platform APIs. It maps directly onto the friend
+duel flow in `backend/PROPOSAL.md`:
+
+- `MatchConfig.toJson()` / `MatchConfig.fromJson()` — full config
+  round-trip for the match document. `fromJson` is strict: missing
+  fields, wrong types or unknown enum names return `null` rather than
+  silently defaulting (contract: never clamp a friend's config).
+- `MoveLogEntry` — one shared-log record `{index, move, hashAfter?}`
+  with `toJson`/`fromJson`. `index` is the 0-based position in the
+  interleaved accepted-move log; `hashAfter` is the writer's claimed
+  post-move state hash.
+- `replayEntries(seed, config, entries)` — validated replay that plain
+  `replay` cannot do: contiguous indices (gaps/duplicates/out-of-order
+  rejected as `index-not-contiguous`), per-step `hashAfter` verification
+  (`hash-mismatch`), plus all `applyMove` checks (wrong turn, bad
+  coordinates, moves after finish). Failures carry `position` + `reason`.
+- `summarizeLog(seed, config, entries)` — same validation, plus the log
+  reorganized into `RoundMoveLog`s: per-round, per-player accepted moves
+  and rejected swap attempts — the per-round move logs a saved match
+  record stores (contract §4).
+- `syncHashes(state)` / `initialSyncHashes(seed, config)` — the
+  `{state, first, second}` digest triple clients exchange at match
+  start and compare at match end (`MatchEnded.finalHashes` agrees).
+- `isLegalMove(state, move)` — membership check against `legalMoves`
+  without mutating state.
+
+`Move.toJson`/`Move.fromJson` already provide the per-move document
+payload; `MoveResult.hashAfter` is what a client stores as each move
+document's state hash.
+
 ## Determinism
 
 - RNG: Lehmer/Park-Miller LCG, `state = state * 48271 mod (2^31 - 1)`,
