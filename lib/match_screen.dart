@@ -11,6 +11,7 @@ import 'catalog.dart';
 import 'duel_audio.dart';
 import 'duel_events.dart';
 import 'match_controller.dart';
+import 'online/emotes.dart';
 import 'profile.dart';
 import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
@@ -33,11 +34,25 @@ const _barGradient = LinearGradient(
 );
 const _modeIcons = [Icons.group, Icons.bolt, Icons.shield, Icons.emoji_events];
 const _powerShort = ['ZOOMIES', 'SHADOW POUNCE', 'LASER CHASE'];
+
+/// Preset emotes offered in the duel. Only these wire values ever leave the
+/// device (contract: preset emotes only, never free text). Three sprites
+/// back six presets; the caption disambiguates at send time.
 const _emoteItems = [
-  ('emote_laugh', 'RÂDE'),
-  ('emote_angry', 'FURIE'),
-  ('emote_love', 'DRAGOSTE'),
+  ('emote_laugh', 'SALUT', Emote.hello),
+  ('emote_laugh', 'WOW', Emote.wow),
+  ('emote_love', 'BRAVO', Emote.goodGame),
+  ('emote_angry', 'OPS', Emote.oops),
+  ('emote_love', 'MERCI', Emote.thanks),
+  ('emote_love', 'PURR', Emote.purr),
 ];
+
+/// Sprite shown for a received preset emote.
+String emoteSpriteFor(Emote emote) => switch (emote) {
+  Emote.hello || Emote.wow => 'emote_laugh',
+  Emote.oops => 'emote_angry',
+  _ => 'emote_love',
+};
 
 class MatchScreen extends StatefulWidget {
   const MatchScreen({
@@ -47,6 +62,7 @@ class MatchScreen extends StatefulWidget {
     this.botLevel,
     this.legacyRace,
     this.opponent,
+    this.online,
   });
   final Player player;
   final int mode;
@@ -61,6 +77,10 @@ class MatchScreen extends StatefulWidget {
   /// House Tour opponent (lane-4 request): when set, the duel starts
   /// against this house cat instead of a rotating house bot.
   final HouseCat? opponent;
+
+  /// Live friend-duel session (lane-5 `MatchSession` wrapped in
+  /// [OnlineDuel]): when set, the duel runs online 1v1.
+  final OnlineDuel? online;
   @override
   State<MatchScreen> createState() => _MatchScreenState();
 }
@@ -74,6 +94,9 @@ class _MatchScreenState extends State<MatchScreen>
   final _boardKey = GlobalKey<BoardViewState>();
   Timer? emoteTimer;
   String emote = '';
+  String opponentEmote = '';
+  Timer? opponentEmoteTimer;
+  StreamSubscription<Emote>? _emoteSub;
   bool showingDialog = false;
   PowerKind? _momentPower;
   Player get p => widget.player;
@@ -109,10 +132,19 @@ class _MatchScreenState extends State<MatchScreen>
               trophies: widget.opponent!.trophies,
               level: widget.opponent!.level,
             ),
+      online: widget.online,
     );
     match.eventSink = (events) {
       _boardKey.currentState?.play(events);
     };
+    _emoteSub = match.opponentEmotes.listen((e) {
+      if (!mounted) return;
+      setState(() => opponentEmote = emoteSpriteFor(e));
+      opponentEmoteTimer?.cancel();
+      opponentEmoteTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => opponentEmote = '');
+      });
+    });
     _audio = DuelAudio(enabled: () => p.sfx);
     _momentFx = AnimationController(
       vsync: this,
@@ -128,11 +160,18 @@ class _MatchScreenState extends State<MatchScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     match.pause(background: state != AppLifecycleState.resumed);
+    if (state == AppLifecycleState.resumed) {
+      // Catch up on opponent moves and match-record changes missed while
+      // the app was suspended (the 20 s poll covers the rest).
+      unawaited(match.refreshOnline());
+    }
   }
 
   @override
   void dispose() {
     emoteTimer?.cancel();
+    opponentEmoteTimer?.cancel();
+    _emoteSub?.cancel();
     fx.dispose();
     _momentFx.dispose();
     _audio.dispose();
@@ -170,10 +209,12 @@ class _MatchScreenState extends State<MatchScreen>
           children: [
             sprite('emote_angry', size: 62),
             const SizedBox(height: 8),
-            const Text(
-              'Vei pierde 25 de trofee.',
+            Text(
+              match.isOnline
+                  ? 'Meciul se anulează pentru amândoi — fără recompense.'
+                  : 'Vei pierde 25 de trofee.',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Color(0xff8a6242),
                 fontWeight: FontWeight.w700,
               ),
@@ -208,7 +249,7 @@ class _MatchScreenState extends State<MatchScreen>
     if (!mounted) return;
     showingDialog = false;
     match.pause(modal: false);
-    if (yes == true) match.finish(-1);
+    if (yes == true) match.forfeit();
   }
 
   Future<void> pause() async {
@@ -247,25 +288,28 @@ class _MatchScreenState extends State<MatchScreen>
               ),
             ),
             const SizedBox(height: 12),
-            Row(
+            GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 0.92,
               children: [
-                for (var i = 0; i < _emoteItems.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 10),
-                  Expanded(
-                    child: _EmoteCard(
-                      spriteName: _emoteItems[i].$1,
-                      caption: _emoteItems[i].$2,
-                      onTap: () {
-                        Navigator.pop(c);
-                        emoteTimer?.cancel();
-                        setState(() => emote = _emoteItems[i].$1);
-                        emoteTimer = Timer(const Duration(seconds: 2), () {
-                          if (mounted) setState(() => emote = '');
-                        });
-                      },
-                    ),
+                for (final item in _emoteItems)
+                  _EmoteCard(
+                    spriteName: item.$1,
+                    caption: item.$2,
+                    onTap: () {
+                      Navigator.pop(c);
+                      emoteTimer?.cancel();
+                      setState(() => emote = item.$1);
+                      emoteTimer = Timer(const Duration(seconds: 2), () {
+                        if (mounted) setState(() => emote = '');
+                      });
+                      match.sendEmote(item.$3);
+                    },
                   ),
-                ],
               ],
             ),
           ],
@@ -355,9 +399,15 @@ class _MatchScreenState extends State<MatchScreen>
         child: _ModeChip(icon: _modeIcons[modeIndex], text: modeName),
       ),
       const SizedBox(height: 9),
-      label('ANTRENAMENT OFFLINE', size: 24),
+      label(match.isOnline ? 'PRIETEN ONLINE' : 'ANTRENAMENT OFFLINE', size: 24),
       const SizedBox(height: 3),
-      label('Adversar bot • ±75 trofee', size: 13, color: _muted),
+      label(
+        match.isOnline
+            ? 'Meci prieteni • provocare 1v1'
+            : 'Adversar bot • ±75 trofee',
+        size: 13,
+        color: _muted,
+      ),
       const SizedBox(height: 18),
       Stack(
         clipBehavior: Clip.none,
@@ -377,8 +427,8 @@ class _MatchScreenState extends State<MatchScreen>
               const SizedBox(width: 56),
               Expanded(
                 child: _FighterCard(
-                  tag: 'BOT',
-                  avatar: _botAvatar(48),
+                  tag: match.isOnline ? 'PRIETEN' : 'BOT',
+                  avatar: _opponentAvatar(48),
                   name: match.botName,
                   detail:
                       '${match.botLevelName} • ${match.botTrophies} trofee',
@@ -396,8 +446,9 @@ class _MatchScreenState extends State<MatchScreen>
         ],
       ),
       const SizedBox(height: 14),
-      if (match.isEngine && match.opponent == null) _botLevelPicker(),
-      if (match.isEngine && match.opponent == null)
+      if (match.isEngine && match.opponent == null && !match.isOnline)
+        _botLevelPicker(),
+      if (match.isEngine && match.opponent == null && !match.isOnline)
         const SizedBox(height: 10),
       _rewardsPanel(),
       const SizedBox(height: 14),
@@ -510,17 +561,42 @@ class _MatchScreenState extends State<MatchScreen>
             ],
           ),
           const SizedBox(height: 9),
-          label('Se caută adversarul...', size: 15, color: _muted),
+          label(
+            match.isOnline ? 'Se pregătește meciul...' : 'Se caută adversarul...',
+            size: 15,
+            color: _muted,
+          ),
         ],
       );
     },
   );
 
-  /// Bot avatar: the resident house cat's look when a House Tour
-  /// opponent is set, otherwise the generic bot head.
-  Widget _botAvatar(double size) => widget.opponent == null
-      ? _BotHead(size: size)
-      : CatAvatar(houseCatPlayer(p.prefs, widget.opponent!), size: size);
+  /// Opponent avatar: the friend's cat loadout for online duels, the
+  /// resident house cat's look for House Tour battles, otherwise the
+  /// generic bot head.
+  Widget _opponentAvatar(double size) {
+    final online = widget.online;
+    if (online != null) {
+      // Synthetic player carrying only the opponent's visual fields; it is
+      // never saved, exactly like houseCatPlayer for house cats.
+      final spec = Player(p.prefs)
+        ..name = online.opponent.name
+        ..cat = online.opponent.cat
+        ..trophies = online.opponent.trophies
+        ..coins = 0
+        ..fur = online.opponent.fur
+        ..eyes = online.opponent.eyes
+        ..ears = online.opponent.ears
+        ..pattern = online.opponent.pattern
+        ..accessory = online.opponent.accessory
+        ..power = online.opponent.power
+        ..photo = null;
+      return CatAvatar(spec, size: size, allowPhoto: false);
+    }
+    return widget.opponent == null
+        ? _BotHead(size: size)
+        : CatAvatar(houseCatPlayer(p.prefs, widget.opponent!), size: size);
+  }
 
   /// House-cat difficulty, pickable while the VS phase searches.
   Widget _botLevelPicker() => Row(
@@ -556,7 +632,9 @@ class _MatchScreenState extends State<MatchScreen>
           Flexible(
             child: Text(
               'Runda ${match.round}/${match.totalRounds} • '
-              '${match.movesLeft} mutări',
+              '${match.movesLeft} mutări'
+              '${match.opponentTurn ? ' • adversarul mută' : ''}'
+              '${match.liveMoveSecondsLeft != null ? ' • ${match.liveMoveSecondsLeft}s' : ''}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -594,6 +672,18 @@ class _MatchScreenState extends State<MatchScreen>
       ),
     );
   }
+
+  /// 24-hour slow-play claim: offered only after `session.deadline` has
+  /// passed with the turn on the opponent (lane-5 match-sync contract).
+  Widget _forfeitBanner() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    child: ArenaButton(
+      text: 'Adversarul a întârziat — revendică victoria',
+      green: true,
+      singleLine: true,
+      onPressed: () => unawaited(match.claimForfeit()),
+    ),
+  );
 
   /// First-match coach mark: explains the three-move round and highlights
   /// a suggested swap on the board.
@@ -642,6 +732,10 @@ class _MatchScreenState extends State<MatchScreen>
       if (match.isEngine) ...[
         const SizedBox(height: 3),
         _duelStatus(),
+      ],
+      if (match.canClaimForfeit) ...[
+        const SizedBox(height: 4),
+        _forfeitBanner(),
       ],
       const SizedBox(height: 4),
       Expanded(child: _board()),
@@ -708,8 +802,10 @@ class _MatchScreenState extends State<MatchScreen>
         const SizedBox(width: 6),
         Expanded(
           child: _ScoreChip(
-            avatar: _botAvatar(36),
-            name: '${match.botName} · BOT',
+            avatar: _opponentAvatar(36),
+            name: match.isOnline
+                ? match.botName
+                : '${match.botName} · BOT',
             score: match.botScore,
           ),
         ),
@@ -766,6 +862,12 @@ class _MatchScreenState extends State<MatchScreen>
                     hintCells: hint == null ? null : {hint.$1, hint.$2},
                   ),
                 ),
+                if (opponentEmote.isNotEmpty)
+                  Positioned(
+                    left: 6,
+                    top: 6,
+                    child: IgnorePointer(child: _EmoteBubble(opponentEmote)),
+                  ),
                 if (emote.isNotEmpty)
                   Positioned(
                     right: 6,
@@ -875,6 +977,8 @@ class _MatchScreenState extends State<MatchScreen>
   );
 
   Widget result() {
+    final aborted = match.abortReason != null;
+    final flagged = match.isFlagged;
     final outcome = match.result ?? 0;
     final win = outcome > 0;
     final loss = outcome < 0;
@@ -886,20 +990,26 @@ class _MatchScreenState extends State<MatchScreen>
           child: AnimatedBuilder(
             animation: fx,
             builder: (context, _) => Transform.scale(
-              scale: win || draw ? 1 + 0.03 * fx.value : 1,
-              child: _ResultEmblem(win: win, draw: draw),
+              scale: win || draw || aborted ? 1 + 0.03 * fx.value : 1,
+              child: _ResultEmblem(win: win, draw: draw || aborted),
             ),
           ),
         ),
         const SizedBox(height: 10),
         label(
-          win
+          aborted
+              ? (flagged ? 'REZULTAT INVALIDAT' : 'MECI ÎNTRERUPT')
+              : win
               ? 'VICTORIE!'
               : loss
               ? 'ÎNFRÂNGERE'
               : 'EGALITATE',
-          size: 34,
+          size: 30,
         ),
+        if (aborted) ...[
+          const SizedBox(height: 4),
+          label(_abortText(match.abortReason!), size: 13, color: _muted),
+        ],
         const SizedBox(height: 2),
         label(
           '${match.playerScore} — ${match.botScore}',
@@ -909,7 +1019,8 @@ class _MatchScreenState extends State<MatchScreen>
         if (match.isEngine) ...[
           const SizedBox(height: 2),
           label(
-            'vs ${match.botName} (BOT) • ${match.totalRounds} runde',
+            'vs ${match.botName} (${match.isOnline ? 'PRIETEN' : 'BOT'}) • '
+            '${match.totalRounds} runde',
             size: 12,
             color: _muted,
           ),
@@ -917,22 +1028,30 @@ class _MatchScreenState extends State<MatchScreen>
         const SizedBox(height: 14),
         _scoreStrip(),
         const SizedBox(height: 12),
-        _resultRewards(win, loss),
+        if (aborted)
+          _abortRewards()
+        else if (match.isOnline && match.rewardsPending)
+          _pendingRewards()
+        else if (match.isOnline && !match.rewardsCounted)
+          _deniedRewards()
+        else
+          _resultRewards(win, loss),
         const SizedBox(height: 12),
-        ArenaButton(
-          text: 'REVANȘĂ',
-          green: true,
-          spriteName: 'btn_play_paw',
-          onPressed: match.isEngine
-              ? match.rematch
-              : () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        MatchScreen(player: p, mode: widget.mode),
+        if (!aborted && !match.isOnline)
+          ArenaButton(
+            text: 'REVANȘĂ',
+            green: true,
+            spriteName: 'btn_play_paw',
+            onPressed: match.isEngine
+                ? match.rematch
+                : () => Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          MatchScreen(player: p, mode: widget.mode),
+                    ),
                   ),
-                ),
-        ),
+          ),
         ArenaButton(
           text: 'ACASĂ',
           secondary: true,
@@ -943,6 +1062,63 @@ class _MatchScreenState extends State<MatchScreen>
       ],
     );
   }
+
+  static String _abortText(OnlineAbort reason) => switch (reason) {
+    OnlineAbort.flagged =>
+      'Verificarea meciului a eșuat — meci neverificat, fără recompense.',
+    OnlineAbort.connectionLost =>
+      'Conexiunea s-a pierdut — meci anulat, fără recompense.',
+    OnlineAbort.surrendered =>
+      'Ai părăsit meciul — fără recompense.',
+  };
+
+  Widget _abortRewards() => panel(
+    const Padding(
+      padding: EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        'Fără trofee și fără lăbuțe la meciurile anulate.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Color(0xff8a6242),
+          fontSize: 13.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
+  );
+
+  /// Online result while both phones' finals are still arriving.
+  Widget _pendingRewards() => panel(
+    const Padding(
+      padding: EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        'Se confirmă rezultatul cu adversarul…',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Color(0xff8a6242),
+          fontSize: 13.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
+  );
+
+  /// Online result that settled without counting: finals disagreed or a
+  /// flag landed — trophies and paws are never awarded.
+  Widget _deniedRewards() => panel(
+    const Padding(
+      padding: EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        'REZULTAT NEVERIFICAT — fără trofee, fără lăbuțe.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Color(0xff8a6242),
+          fontSize: 13.5,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ),
+  );
 
   Widget _resultRewards(bool win, bool loss) => panel(
     Column(

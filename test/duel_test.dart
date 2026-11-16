@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +13,11 @@ import 'package:cat_paws_arena/duel_events.dart';
 import 'package:cat_paws_arena/engine_events.dart';
 import 'package:cat_paws_arena/match_controller.dart';
 import 'package:cat_paws_arena/match_screen.dart';
+import 'package:cat_paws_arena/online/emotes.dart';
+import 'package:cat_paws_arena/online/fake_backend.dart';
+import 'package:cat_paws_arena/online/match_store.dart';
+import 'package:cat_paws_arena/online/match_sync.dart';
+import 'package:cat_paws_arena/online/rooms.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/shell/house_tour.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -974,6 +980,297 @@ void main() {
     expect(m.phase, MatchPhase.playing);
     expect(m.round, 1);
     expect(m.movesLeft, 3);
+  });
+
+  // --- online friend duel (lane-5 MatchSession over FakeCloud) -----------
+
+  /// Creates a room, joins it and opens both match sessions — the same
+  /// path lane 4's lobby will use with `OnlineServices`.
+  Future<(FakeCloud, MatchSession, MatchSession, String)> startOnlineMatch([
+    int seed = 7,
+  ]) async {
+    final cloud = FakeCloud(random: Random(seed));
+    final rooms = RoomService(cloud, random: Random(seed));
+    final room = await rooms.createRoom('host');
+    final joined = await rooms.joinRoom(room.code, 'guest');
+    return (
+      cloud,
+      await MatchSession.open(cloud, joined.matchId, 'host'),
+      await MatchSession.open(cloud, joined.matchId, 'guest'),
+      joined.matchId,
+    );
+  }
+
+  OnlineDuel onlineDuel(
+    MatchSession session,
+    FakeCloud cloud,
+    String uid,
+    String opponentName,
+  ) => OnlineDuel(
+    session: session,
+    cloud: cloud,
+    uid: uid,
+    opponent: OnlineOpponentInfo(
+      name: opponentName,
+      trophies: 100,
+      cat: 'Custom',
+    ),
+  );
+
+  /// Drives both clients until finished: whoever can move plays their
+  /// first legal swap; stream deliveries are flushed with pumps.
+  Future<void> playOnlineMatch(
+    WidgetTester tester,
+    ArenaMatchController a,
+    ArenaMatchController b,
+  ) async {
+    var guard = 0, stalls = 0;
+    while ((a.phase == MatchPhase.playing ||
+            b.phase == MatchPhase.playing) &&
+        guard++ < 500) {
+      if (a.acceptingInput) {
+        stalls = 0;
+        final s = a.legalSwaps.first;
+        a.tryMove(s.$1, s.$2);
+      } else if (b.acceptingInput) {
+        stalls = 0;
+        final s = b.legalSwaps.first;
+        b.tryMove(s.$1, s.$2);
+      } else {
+        stalls++;
+        expect(
+          stalls,
+          lessThan(80),
+          reason: 'deadlock: neither client can move',
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 5));
+    }
+    // Let finals propagate through watchMatch and rewards settle.
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
+  testWidgets('online duel: two clients converge on hash, score and rewards', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final pA = Player(prefs)..name = 'Andrei';
+    final pB = Player(prefs)..name = 'Maria';
+    final (cloud, host, guest, _) = await startOnlineMatch(11);
+    final mA = ArenaMatchController(
+      pA,
+      0,
+      online: onlineDuel(host, cloud, 'host', 'Maria'),
+    );
+    final mB = ArenaMatchController(
+      pB,
+      0,
+      online: onlineDuel(guest, cloud, 'guest', 'Andrei'),
+    );
+    addTearDown(mA.dispose);
+    addTearDown(mB.dispose);
+    mA.eventSink = (_) => mA.onBoardIdle();
+    mB.eventSink = (_) => mB.onBoardIdle();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+    await tester.pump();
+    expect(mA.phase, MatchPhase.playing);
+    expect(mB.phase, MatchPhase.playing);
+    expect(mA.isOnline, isTrue);
+    expect(mA.botName, 'Maria');
+    expect(mB.botName, 'Andrei');
+    expect(mA.botLevelName, 'Prieten');
+
+    await playOnlineMatch(tester, mA, mB);
+
+    expect(mA.phase, MatchPhase.finished);
+    expect(mB.phase, MatchPhase.finished);
+    expect(mA.abortReason, isNull);
+    expect(mB.abortReason, isNull);
+    expect(mA.isFlagged, isFalse);
+    expect(mB.isFlagged, isFalse);
+    // Both clients replayed the same log to the same state.
+    expect(mA.stateHashForTest, isNotNull);
+    expect(mA.stateHashForTest, mB.stateHashForTest);
+    expect(mA.playerScore, mB.botScore);
+    expect(mA.botScore, mB.playerScore);
+    expect(mA.result, isNotNull);
+    expect(mB.result, isNotNull);
+    expect(mA.result, -mB.result!);
+    // Both finals agreed and nobody flagged: rewards were awarded.
+    expect(mA.rewardsCounted, isTrue);
+    expect(mB.rewardsCounted, isTrue);
+    final expected = switch (mA.result) {
+      1 => 30,
+      -1 => 0, // loss floors trophies at 0
+      _ => 0,
+    };
+    expect(pA.trophies, expected);
+  });
+
+  testWidgets('tampered online move flags the duel and awards nothing', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final pA = Player(prefs)..name = 'Andrei';
+    final pB = Player(prefs)..name = 'Maria';
+    final trophiesBeforeA = pA.trophies, coinsBeforeA = pA.coins;
+    final trophiesBeforeB = pB.trophies, coinsBeforeB = pB.coins;
+    final (cloud, host, guest, matchId) = await startOnlineMatch(12);
+    final mA = ArenaMatchController(
+      pA,
+      0,
+      online: onlineDuel(host, cloud, 'host', 'Maria'),
+    );
+    final mB = ArenaMatchController(
+      pB,
+      0,
+      online: onlineDuel(guest, cloud, 'guest', 'Andrei'),
+    );
+    addTearDown(mA.dispose);
+    addTearDown(mB.dispose);
+    mA.eventSink = (_) => mA.onBoardIdle();
+    mB.eventSink = (_) => mB.onBoardIdle();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+    await tester.pump();
+
+    // Host opens the match with one clean move.
+    var guard = 0;
+    while (!mA.acceptingInput && guard++ < 200) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    final swap = mA.legalSwaps.first;
+    mA.tryMove(swap.$1, swap.$2);
+    guard = 0;
+    while ((host.movesApplied < 1 || guest.movesApplied < 1) &&
+        guard++ < 200) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(host.movesApplied, 1);
+    expect(guest.movesApplied, 1);
+
+    // Forge the guest's next log entry: a legal move with a bogus hash.
+    final legal = engine.legalMoves(guest.state);
+    expect(legal, isA<engine.EngineOk<List<engine.Move>>>());
+    final move = (legal as engine.EngineOk<List<engine.Move>>).value.first;
+    await cloud.appendMove(
+      matchId,
+      MoveRecord(
+        index: 1,
+        uid: 'guest',
+        slot: engine.PlayerSlot.second,
+        move: move.toJson(),
+        hashAfter: '0000000000000000',
+        next: engine.PlayerSlot.first,
+      ),
+    );
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(mA.phase, MatchPhase.finished);
+    expect(mA.isFlagged, isTrue);
+    expect(mA.rewardsCounted, isFalse);
+    expect(pA.trophies, trophiesBeforeA);
+    expect(pA.coins, coinsBeforeA);
+    // The guest's session flags the same entry symmetrically.
+    expect(mB.isFlagged, isTrue);
+    expect(mB.rewardsCounted, isFalse);
+    expect(pB.trophies, trophiesBeforeB);
+    expect(pB.coins, coinsBeforeB);
+  });
+
+  testWidgets('online emotes reach only the opponent', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final pA = Player(prefs)..name = 'Andrei';
+    final pB = Player(prefs)..name = 'Maria';
+    final (cloud, host, guest, _) = await startOnlineMatch(13);
+    final mA = ArenaMatchController(
+      pA,
+      0,
+      online: onlineDuel(host, cloud, 'host', 'Maria'),
+    );
+    final mB = ArenaMatchController(
+      pB,
+      0,
+      online: onlineDuel(guest, cloud, 'guest', 'Andrei'),
+    );
+    addTearDown(mA.dispose);
+    addTearDown(mB.dispose);
+    final gotByB = <Emote>[];
+    final gotByA = <Emote>[];
+    final subB = mB.opponentEmotes.listen(gotByB.add);
+    final subA = mA.opponentEmotes.listen(gotByA.add);
+    addTearDown(() => subB.cancel());
+    addTearDown(() => subA.cancel());
+    await tester.pump();
+
+    mA.sendEmote(Emote.purr);
+    mB.sendEmote(Emote.goodGame);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(gotByB, [Emote.purr]);
+    expect(gotByA, [Emote.goodGame]);
+    // Dispose inside the body: pending versus/poll timers must not leak
+    // past the test's invariant check.
+    mA.dispose();
+    mB.dispose();
+  });
+
+  testWidgets('online VS shows the friend and surrender awards nothing', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final p = Player(prefs)..name = 'Andrei';
+    final trophiesBefore = p.trophies, coinsBefore = p.coins;
+    final (cloud, host, _, _) = await startOnlineMatch(14);
+    // Only this client's session is needed for the VS/result flow; the
+    // screen builds its own controller around the same OnlineDuel.
+    final duel = onlineDuel(host, cloud, 'host', 'Maria');
+    await tester.pumpWidget(
+      MaterialApp(home: MatchScreen(player: p, mode: 0, online: duel)),
+    );
+    final st = tester.state(find.byType(MatchScreen)) as dynamic;
+    final m = st.match as ArenaMatchController;
+    // VS screen: friend labels, opponent name, no BOT or difficulty chips.
+    expect(find.text('PRIETEN ONLINE'), findsOneWidget);
+    expect(find.text('PRIETEN'), findsWidgets);
+    expect(find.text('Maria'), findsWidgets);
+    expect(find.textContaining('Prieten'), findsWidgets);
+    expect(find.text('BOT'), findsNothing);
+    expect(find.text('Greu'), findsNothing);
+    expect(find.text('Mediu'), findsNothing);
+    expect(find.text('Ușor'), findsNothing);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(m.phase, MatchPhase.playing);
+    expect(find.textContaining('BOT'), findsNothing);
+
+    // Surrender: the match is voided, no rewards, no rematch button.
+    await tester.tap(find.text('Renunță'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('RENUNȚĂ'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(m.phase, MatchPhase.finished);
+    expect(m.abortReason, OnlineAbort.surrendered);
+    expect(find.text('MECI ÎNTRERUPT'), findsOneWidget);
+    expect(find.textContaining('Fără trofee'), findsWidgets);
+    expect(find.text('REVANȘĂ'), findsNothing);
+    expect(p.trophies, trophiesBefore);
+    expect(p.coins, coinsBefore);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
 

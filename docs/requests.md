@@ -147,7 +147,7 @@ Lane: 2
 Blocking PR: lane-5 match sync
 Request: For the friend duel, use `MatchSession` (lib/online/match_sync.dart): after `rooms.joinRoom` / `rooms.waitForGuest`, `services.openMatch(matchId)` (a `MatchSession`, also used to resume after a restart); render `session.state`; on the player's move call `session.play(move)`; listen to `session.watch()` and also start `session.poll(const Duration(seconds: 20))` and call `refresh()` on app resume (works without Cloud Functions); show `liveMoveLimit` as the live timer and offer `claimForfeit()` once `session.deadline` has passed; award nothing unless `session.counts`; show a "match not counted" state when `session.flag != null`. Emotes: `RoomService`/`CloudStore.sendEmote` with preset `Emote` only.
 Reason: lane 5 cannot edit the duel screen; the match is a seed plus a move log replayed on both phones (docs/contract.md §3–4).
-Status: open
+Status: answered — lane-2-online consumes `MatchSession` exactly this way: `session.play`/`watch`/`poll(20s)`/`refresh` on resume, `liveMoveLimit` countdown in the HUD, `claimForfeit` banner after `deadline`, rewards gated on `session.counts`, "REZULTAT NEVERIFICAT" when finals disagree or a flag lands, preset emotes via `CloudStore.sendEmote`/`emotes`.
 ```
 
 ```text
@@ -164,4 +164,28 @@ Blocking PR: lane-3 avatar editor (P2-1 custom user avatar)
 Request: Persist the custom user avatar so it survives save/reload and Google account link. Proposed schema — AvatarSpec in lib/cat_avatar.dart serializes to compact JSON {"s":species 0-3,"f":fur 0-5,"p":pattern 0-4,"e":eyes 0-3,"r":ears 0-3,"a":accessory sprite id or ""}. Ask: (1) lib/profile.dart — add `String avatarSpec` (default '') saved inside the 'player' JSON; (2) lib/online/cloud_profile.dart — add an `avatar` string key copied in fromPlayer/applyTo/toJson/fromJson (schemaVersion bump or tolerant read) so cloud sync does not drop it; (3) orchestrator/lane-4 may later surface AvatarAvatar(player) in PlayerHud/profile — lane 3 already ships loadAvatarSpec/saveAvatarSpec helpers over prefs key 'avatar_spec_v1' as the interim local store.
 Reason: Owner decision for P2-1: a custom user avatar separate from the duel cats; cloud sync must not drop it on Google link. AvatarSpec.fromJsonString tolerates bad data so older/newer clients degrade safely.
 Status: open — orchestrator will add Player.avatarSpec + CloudProfile.avatar and migrate the interim prefs store.
+```
+
+```text
+Lane: 4
+Blocking PR: lane-2-online (friend duel presentation)
+Request: Expose match sync through `OnlinePlay.services` (lib/shell/online_play.dart): the lobby needs `openMatch(matchId)` (or the `OnlineServices` object), `services.store` for emotes, and the signed-in uid so it can build `OnlineDuel.open(services, matchLink)` and push `MatchScreen(online: duel)`. `OnlinePlayServices` currently carries only account/rooms/googleCredential.
+Reason: P1-2 wires create/join room UI to the duel; lane 2 cannot edit lane-4 shell files, and `OnlineServices` itself is orchestrator/bootstrap territory.
+Status: open
+```
+
+```text
+Lane: 5
+Blocking PR: lane-2-online (friend duel presentation)
+Request: (optional, schema) The opponent's preset cat name is not in `CloudProfile`, so a custom-cat friend shows as generic 'Pisică' on the VS/result screens (typed names must never leave the device; `catPresetNames` are preset-safe). If peer-visible cat names are wanted, add a preset-name field to `CloudProfile` — lane 2 will consume it via `OnlineOpponentInfo.fromCloudProfile`.
+Reason: docs/contract.md allows preset names only; today only Tzuki/Bubble are peer-visible through `CloudProfile.cat`.
+Status: open
+```
+
+```text
+Lane: orchestrator
+Blocking PR: lane-2-online (friend duel presentation)
+Request: Root `flutter analyze` reports ~455 errors, all inside `packages/arena_engine/test/*.dart`: they import `package:test/test.dart`, which is only a dev_dependency of the engine package and does not resolve from the root package config. Either exclude `packages/**` from the root analyzer in analysis_options.yaml or add `test` as a root dev_dependency. `dart test` inside packages/arena_engine passes (57/57); `flutter analyze lib test` is clean.
+Reason: pre-existing on main since the lane-1 engine merges; lane 2 cannot edit analysis_options.yaml or pubspec.yaml.
+Status: open
 ```

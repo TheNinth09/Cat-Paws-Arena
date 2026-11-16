@@ -10,13 +10,24 @@ import 'duel_events.dart';
 /// `row * width + col`, resolves obstacle kinds from the post-move board,
 /// and inserts a [BoardReset] after each non-final [RoundEnded] so events
 /// that follow a round boundary land on the freshly dealt board.
+///
+/// [localSlot] is the engine slot this client plays (host = first, guest =
+/// second in online duels); only events acting on that slot reach the view.
 class EngineViewAdapter {
-  EngineViewAdapter({this.width = 7, this.height = 7});
+  EngineViewAdapter({
+    this.width = 7,
+    this.height = 7,
+    this.localSlot = engine.PlayerSlot.first,
+  });
 
   final int width;
   final int height;
 
-  /// The human always plays [PlayerSlot.first]; the bot is `second`.
+  /// Engine slot of the human player whose board this view shows.
+  final engine.PlayerSlot localSlot;
+
+  /// Events are always emitted for the view's own [PlayerSlot.first]; the
+  /// board widget does not distinguish slots.
   static const _viewPlayer = PlayerSlot.first;
 
   int _nextId = 1;
@@ -91,7 +102,7 @@ class EngineViewAdapter {
   }
 
   /// Adapts [result] into view events for the human's board. Only events
-  /// acting on [PlayerSlot.first] are kept, plus round/match meta events.
+  /// acting on [localSlot] are kept, plus round/match meta events.
   /// [before] is the pre-move state (unused today, kept for symmetry).
   List<BoardEvent> adaptMove(engine.MoveResult result, {engine.MatchState? before}) {
     final out = <BoardEvent>[];
@@ -99,7 +110,7 @@ class EngineViewAdapter {
     for (final e in result.events) {
       switch (e) {
         case engine.Swapped(:final player, :final firstCell, :final secondCell)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             Swapped(
               player: _viewPlayer,
@@ -113,7 +124,7 @@ class EngineViewAdapter {
           :final secondCell,
           :final reason,
         )
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             SwapRejected(
               player: _viewPlayer,
@@ -123,7 +134,7 @@ class EngineViewAdapter {
             ),
           );
         case engine.Cleared(:final player, :final cells, :final points)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             Cleared(
               player: _viewPlayer,
@@ -137,7 +148,7 @@ class EngineViewAdapter {
           :final orientation,
           :final cell,
         )
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             SpecialCreated(
               player: _viewPlayer,
@@ -146,7 +157,7 @@ class EngineViewAdapter {
             ),
           );
         case engine.SpecialFired(:final player, :final kind, :final cells, :final points)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             SpecialFired(
               player: _viewPlayer,
@@ -156,10 +167,10 @@ class EngineViewAdapter {
             ),
           );
         case engine.Fell(:final player, :final from, :final to)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(Fell(player: _viewPlayer, from: _idx(from), to: _idx(to)));
         case engine.Refilled(:final player, :final cell, :final piece)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             Refilled(
               player: _viewPlayer,
@@ -168,7 +179,7 @@ class EngineViewAdapter {
             ),
           );
         case engine.ObstacleQueued(:final player, :final sourceRound, :final count)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             ObstacleQueued(
               player: _viewPlayer,
@@ -177,7 +188,7 @@ class EngineViewAdapter {
             ),
           );
         case engine.ObstacleLanded(:final player, :final cells)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           // The engine event does not carry kinds; resolve each cell from
           // the post-move board and group by kind for the view.
           final board = state.boardOf(player);
@@ -201,7 +212,7 @@ class EngineViewAdapter {
             );
           }
         case engine.ObstacleBroken(:final player, :final cells)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             ObstacleBroken(
               player: _viewPlayer,
@@ -209,7 +220,7 @@ class EngineViewAdapter {
             ),
           );
         case engine.PowerCharged(:final player)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             PowerCharged(player: _viewPlayer, amount: state.chargeOf(player)),
           );
@@ -219,7 +230,7 @@ class EngineViewAdapter {
           :final cells,
           :final points,
         )
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             PowerFired(
               player: _viewPlayer,
@@ -229,7 +240,7 @@ class EngineViewAdapter {
             ),
           );
         case engine.Shuffled(:final player, :final cells, :final reason)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           final board = state.boardOf(player);
           final pieces = <int, BoardPiece>{};
           for (final c in cells) {
@@ -246,7 +257,7 @@ class EngineViewAdapter {
             ),
           );
         case engine.ExtraMove(:final player, :final round, :final movesRemaining)
-            when player == engine.PlayerSlot.first:
+            when player == localSlot:
           out.add(
             ExtraMove(
               player: _viewPlayer,
@@ -265,7 +276,7 @@ class EngineViewAdapter {
           if (outcome == null) {
             out.add(
               BoardReset(
-                snapshot: snapshotOf(state, engine.PlayerSlot.first),
+                snapshot: snapshotOf(state, localSlot),
               ),
             );
           }
