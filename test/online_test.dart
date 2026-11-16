@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -495,6 +496,7 @@ void main() {
           slot: real.slot,
           move: real.move,
           hashAfter: '0000000000000000',
+          next: real.next,
         ),
       );
       await guest.refresh();
@@ -527,6 +529,7 @@ void main() {
           slot: PlayerSlot.second,
           move: move.toJson(),
           hashAfter: res.value.hashAfter,
+          next: res.value.state.activePlayer,
         ),
       );
       await host.refresh();
@@ -567,10 +570,30 @@ void main() {
             slot: PlayerSlot.first,
             move: {},
             hashAfter: 'x',
+            next: null,
           ),
         ),
         throwsOnline(OnlineErrorCode.notInMatch),
       );
+    });
+
+    test('watch and play together count each move once', () async {
+      final (_, host, guest) = await start(9);
+      final seen = <int>[];
+      final sub = host.watch().listen((m) => seen.add(m.index));
+      final bot = botForLevel(HouseCatLevel.medium);
+      await host.play(bot.chooseMove(host.state));
+      await pumpEventQueue();
+      expect(host.movesApplied, 1);
+      expect(host.deadline, isNotNull);
+      await guest.refresh();
+      await guest.play(bot.chooseMove(guest.state));
+      await pumpEventQueue();
+      expect(host.movesApplied, 2);
+      expect(host.flag, isNull);
+      expect(seen, [1]);
+      expect(stateHash(host.state), stateHash(guest.state));
+      unawaited(sub.cancel());
     });
 
     test('forfeit only after the 24-hour limit', () async {

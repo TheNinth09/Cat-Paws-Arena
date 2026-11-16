@@ -327,11 +327,13 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
   static MoveRecord? _moveRecord(Map<String, dynamic> d) {
     final index = d['index'], by = d['by'], slot = _slot(d['slot']);
     final move = d['move'], hash = d['hashAfter'], at = d['at'];
+    final next = d['next'];
     if (index is! int ||
         by is! String ||
         slot == null ||
         move is! Map ||
-        hash is! String) {
+        hash is! String ||
+        (next != 'none' && _slot(next) == null)) {
       return null;
     }
     return MoveRecord(
@@ -340,6 +342,7 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
       slot: slot,
       move: Map<String, Object?>.from(move),
       hashAfter: hash,
+      next: _slot(next),
       at: at is Timestamp ? at.toDate().toUtc() : null,
     );
   }
@@ -396,6 +399,7 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
         'slot': move.slot.name,
         'move': move.move,
         'hashAfter': move.hashAfter,
+        'next': move.next?.name ?? 'none',
         'at': FieldValue.serverTimestamp(),
       });
     });
@@ -427,8 +431,10 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
             .orderBy('index', descending: true)
             .limit(1)
             .get();
-        final at = last.docs.isEmpty ? null : last.docs.first.data()['at'];
-        if (at is! Timestamp ||
+        final data = last.docs.isEmpty ? null : last.docs.first.data();
+        final at = data?['at'];
+        if (data?['next'] != winner.other.name ||
+            at is! Timestamp ||
             serverNow().isBefore(at.toDate().toUtc().add(roundLimit))) {
           throw const MatchException(MatchErrorCode.deadlineNotPassed);
         }

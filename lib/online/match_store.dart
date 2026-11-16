@@ -145,6 +145,7 @@ class MoveRecord {
     required this.slot,
     required this.move,
     required this.hashAfter,
+    required this.next,
     this.at,
   });
   final int index;
@@ -156,6 +157,10 @@ class MoveRecord {
 
   /// `stateHash` after the move, as the sender computed it.
   final String hashAfter;
+
+  /// Who moves next after this move (null: the match is over). The rules
+  /// use it for the forfeit check; each phone verifies it on replay.
+  final PlayerSlot? next;
 
   /// Server time of the write; null until the server stamps it.
   final DateTime? at;
@@ -177,7 +182,7 @@ abstract interface class MatchStore {
   /// Sets the flag once; later flags are ignored.
   Future<void> flagMatch(String matchId, MatchFlag reason);
 
-  /// Records a forfeit win for [winner]; the rules require the round
-  /// deadline to have passed.
+  /// Records a forfeit win for [winner]; the rules require the last move to
+  /// hand the turn to the loser at least [roundLimit] ago.
   Future<void> claimForfeit(String matchId, PlayerSlot winner);
 }

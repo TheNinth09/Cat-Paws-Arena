@@ -79,23 +79,30 @@ class MatchSession {
     }
     final res = result.value;
     if (_isRejected(res)) return res;
+    final index = _applied;
     try {
       await store.appendMove(
         matchId,
         MoveRecord(
-          index: _applied,
+          index: index,
           uid: uid,
           slot: slot,
           move: move.toJson(),
           hashAfter: res.hashAfter,
+          next: _nextOf(res.state),
         ),
       );
     } on MatchException catch (e) {
       if (e.code == MatchErrorCode.moveConflict) await refresh();
       rethrow;
     }
-    _state = res.state;
-    _applied++;
+    // [watch] may already have accepted this move from the store.
+    if (_applied == index) {
+      _state = res.state;
+      _applied++;
+      // Local estimate until [refresh] reads the server time.
+      _lastMoveAt = DateTime.now().toUtc();
+    }
     await _maybeFinish();
     return res;
   }
@@ -105,11 +112,15 @@ class MatchSession {
   Future<int> refresh() async {
     final before = _applied;
     for (final move in await store.readMoves(matchId)) {
-      if (move.index < _applied) continue;
+      if (move.index < _applied) {
+        _lastMoveAt = move.at ?? _lastMoveAt;
+        continue;
+      }
       if (!await _accept(move)) break;
     }
     record = await store.readMatch(matchId) ?? record;
     _flag ??= record.flag;
+    await _maybeFinish();
     await _checkFinals();
     return _applied - before;
   }
@@ -127,7 +138,8 @@ class MatchSession {
   /// no push function is deployed. Cancel the returned timer when done.
   Timer poll(Duration every, {void Function(int applied)? onChange}) =>
       Timer.periodic(every, (_) async {
-        if (isOver || _flag != null) return;
+        if (_flag != null || record.forfeitWinner != null) return;
+        if (record.finals.length == PlayerSlot.values.length) return;
         final n = await refresh();
         if (n > 0) onChange?.call(n);
       });
@@ -149,6 +161,9 @@ class MatchSession {
     return _flag == null && a != null && a == b;
   }
 
+  static PlayerSlot? _nextOf(MatchState s) =>
+      s.outcome == null ? s.activePlayer : null;
+
   static bool _isRejected(MoveResult res) =>
       res.hashBefore == res.hashAfter &&
       res.events.length == 1 &&
@@ -169,6 +184,9 @@ class MatchSession {
     }
     if (result.value.hashAfter != move.hashAfter) {
       return _raise(MatchFlag.hashMismatch);
+    }
+    if (move.next != _nextOf(result.value.state)) {
+      return _raise(MatchFlag.wrongTurn);
     }
     _state = result.value.state;
     _applied++;

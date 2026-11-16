@@ -243,6 +243,7 @@ class FakeCloud implements CloudStore, MatchStore {
         slot: move.slot,
         move: Map.of(move.move),
         hashAfter: move.hashAfter,
+        next: move.next,
         at: serverNow(),
       ),
     );
@@ -269,8 +270,12 @@ class FakeCloud implements CloudStore, MatchStore {
   @override
   Future<void> claimForfeit(String matchId, PlayerSlot winner) async {
     final log = moveLog[matchId] ?? const [];
-    final last = log.isEmpty ? null : log.last.at;
-    if (last == null || serverNow().isBefore(last.add(roundLimit))) {
+    final last = log.isEmpty ? null : log.last;
+    final at = last?.at;
+    if (last == null ||
+        last.next != winner.other ||
+        at == null ||
+        serverNow().isBefore(at.add(roundLimit))) {
       throw const MatchException(MatchErrorCode.deadlineNotPassed);
     }
     _update(matchId, (m) => _copyMatch(m, forfeitWinner: winner));
