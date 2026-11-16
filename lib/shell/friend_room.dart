@@ -83,10 +83,25 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
     try {
       final previous = createdRoom;
       if (previous != null) {
+        var replacePrevious = true;
         try {
           await services.rooms.cancelRoom(previous);
-        } catch (_) {}
+        } catch (_) {
+          final store = services.rooms.store;
+          final remaining = await store.readRoom(previous.code);
+          replacePrevious =
+              remaining == null ||
+              !remaining.expiresAt.isAfter(store.serverNow());
+        }
         if (!mounted) return;
+        if (!replacePrevious) {
+          setState(() {
+            notice = english
+                ? 'The previous room could not be cancelled. Try again.'
+                : 'Camera anterioară nu a putut fi anulată. Încearcă din nou.';
+          });
+          return;
+        }
         createdRoom = null;
       }
       final user = await services.account.start();

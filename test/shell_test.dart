@@ -21,6 +21,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
 
+class _FriendRoomFailureCloud extends FakeCloud {
+  String? failingDeleteCode;
+  int deleteAttempts = 0;
+
+  @override
+  Future<void> deleteRoom(String code) async {
+    if (code == failingDeleteCode) {
+      deleteAttempts++;
+      throw StateError('delete failed');
+    }
+    await super.deleteRoom(code);
+  }
+
+  @override
+  Stream<MatchLink> watchJoin(RoomRecord room) =>
+      Stream<MatchLink>.error(StateError('watch failed'));
+}
+
 void main() {
   Future<void> openSettings(WidgetTester tester) async {
     await tester.tap(find.byTooltip('Meniu'));
@@ -630,6 +648,46 @@ void main() {
     expect(cloud.rooms, hasLength(1));
     expect(find.textContaining('a fost găsită'), findsOneWidget);
     await closeDialogContaining(tester, 'Cameră de prieten');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('friend room keeps previous code when cancel fails', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final cloud = _FriendRoomFailureCloud();
+    final account = OnlineAccount(FakeAuth(cloud), cloud);
+    OnlinePlay.services = OnlinePlayServices(
+      account: account,
+      rooms: RoomService(cloud),
+      googleCredential: () async => null,
+    );
+    addTearDown(() => OnlinePlay.services = null);
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CAMERĂ ONLINE'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CREEAZĂ CAMERĂ'));
+    await tester.pumpAndSettle();
+    expect(cloud.rooms, hasLength(1));
+    final firstCode = cloud.rooms.keys.single;
+    cloud.failingDeleteCode = firstCode;
+    await tester.tap(find.text('CREEAZĂ CAMERĂ'));
+    await tester.pumpAndSettle();
+    expect(cloud.deleteAttempts, 1);
+    expect(cloud.rooms.keys.single, firstCode);
+    expect(find.text(firstCode), findsOneWidget);
+    expect(
+      find.text('Camera anterioară nu a putut fi anulată. Încearcă din nou.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
