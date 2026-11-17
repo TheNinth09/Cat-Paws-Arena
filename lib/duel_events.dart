@@ -170,20 +170,19 @@ final class Refilled extends BoardEvent {
   final BoardPiece piece;
 }
 
-/// Obstacle earned this round, queued for the opponent's next round.
+/// Obstacles earned during a turn, queued for the opponent's next turn.
 final class ObstacleQueued extends BoardEvent {
   const ObstacleQueued({
     required this.player,
-    required this.sourceRound,
+    required this.sourceTurn,
     required this.count,
   });
   final PlayerSlot player;
-  final int sourceRound;
+  final int sourceTurn;
   final int count;
 }
 
-/// Obstacles appearing at round start. [obstacle] is a provisional additive
-/// field so the view can pick the right sprite until the engine freezes kinds.
+/// Obstacles appearing at the start of the player's next turn.
 final class ObstacleLanded extends BoardEvent {
   const ObstacleLanded({
     required this.player,
@@ -239,22 +238,11 @@ final class Shuffled extends BoardEvent {
   final Map<int, BoardPiece> pieces;
 }
 
-/// An extra move was awarded (only if rules award one).
-final class ExtraMove extends BoardEvent {
-  const ExtraMove({
-    required this.player,
-    required this.round,
-    required this.movesRemaining,
-  });
-  final PlayerSlot player;
-  final int round;
-  final int movesRemaining;
-}
-
-/// Round boundary snapshot.
-final class RoundEnded extends BoardEvent {
-  const RoundEnded({required this.round, required this.scores, this.outcome});
-  final int round;
+/// Turn boundary snapshot. Emitted when a player ends their turn; the
+/// next turn begins immediately after.
+final class TurnEnded extends BoardEvent {
+  const TurnEnded({required this.turn, required this.scores, this.outcome});
+  final int turn;
   final ({int first, int second}) scores;
   final MatchOutcome? outcome;
 }
@@ -271,9 +259,9 @@ final class MatchEnded extends BoardEvent {
   final ({String first, String second}) finalHashes;
 }
 
-/// The board was redealt for a new round. Inserted by the adapter right
-/// after [RoundEnded] (when the match continues) so following events such
-/// as [ObstacleLanded] apply to the fresh board.
+/// The board contents were replaced wholesale (kept for scripted tests and
+/// future use; timed-turn matches keep persistent boards, so the engine
+/// adapter no longer emits this).
 final class BoardReset extends BoardEvent {
   const BoardReset({required this.snapshot});
   final BoardSnapshot snapshot;

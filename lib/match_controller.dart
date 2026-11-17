@@ -156,8 +156,8 @@ class BotOpponent {
 /// Owns match timers, pause reasons, one-time rewards and the event queue
 /// for both duel formats:
 ///
-/// * engine duel (default): `packages/arena_engine`, five rounds of three
-///   moves per player against a [HouseBot];
+/// * engine duel (default): `packages/arena_engine`, five timed turns per
+///   player (30 s each, early end allowed) against a [HouseBot];
 /// * legacy 90-second race ([legacyRace]): kept behind a debug switch
 ///   until the humans decide Gate 1.
 ///
@@ -252,9 +252,27 @@ class ArenaMatchController extends ChangeNotifier {
   int _playerMoves = 0;
   int _acceptedMoves = 0;
   int _remoteMoves = 0;
-  bool _zoomiesArmed = false;
   bool _tutorialDone = true;
   DateTime? _matchStart;
+
+  // --- timed-turn clock ----------------------------------------------------
+
+  /// Identity of the turn currently on the clock (`turn:activeSlot`).
+  String? _turnKey;
+
+  /// Half-second ticks left on the current turn (2 per second). Counted,
+  /// not wall-clock based: the ticker itself pauses with the game, and the
+  /// countdown stays deterministic under `tester.pump`.
+  int _turnTicksLeft = 0;
+
+  /// 500 ms ticker driving the turn countdown and auto-end.
+  Timer? _turnClock;
+
+  /// Paces the house bot's moves inside its turn.
+  Timer? _botTimer;
+
+  /// Delay between house-bot moves; tests shrink it to zero.
+  Duration botMoveDelay = const Duration(milliseconds: 750);
 
   // --- online duel state --------------------------------------------------
 
@@ -270,10 +288,9 @@ class ArenaMatchController extends ChangeNotifier {
   int _onlineCursor = 0;
 
   final List<StreamSubscription<dynamic>> _onlineSubs = [];
-  Timer? _pollTimer, _onlineClock, _settleTimer;
+  Timer? _pollTimer, _settleTimer;
   bool _syncing = false, _syncAgain = false, _localFlag = false;
   bool _rewardsSettled = false, _rewardsCounted = false;
-  DateTime? _lastOnlineMoveAt;
 
   /// Set when an online duel ends without a scored result; null for normal
   /// finishes and all local modes.
@@ -299,16 +316,54 @@ class ArenaMatchController extends ChangeNotifier {
         .map((e) => e.emote);
   }
 
-  /// Seconds left on the suggested live-move timer (contract: 30 s per
-  /// move, display only — the match never auto-passes a turn).
-  int? get liveMoveSecondsLeft {
-    if (!isOnline || phase != MatchPhase.playing || _lastOnlineMoveAt == null) {
-      return null;
+  /// Seconds left on the current turn's clock (contract: 30 s per turn).
+  /// Counts down for whichever side holds the turn; at zero the active
+  /// player auto-ends (this client only ever ends its own online turn).
+  int get turnSecondsLeft =>
+      phase == MatchPhase.playing && _turnTicksLeft > 0
+          ? (_turnTicksLeft + 1) ~/ 2
+          : 0;
+
+  /// The engine turn number currently in play (`1..2*turnsPerPlayer`).
+  int get turn => _state?.turn ?? 1;
+
+  /// Turns each player has left, including the turn in progress.
+  int get playerTurnsLeft =>
+      _state?.turnsLeft(_localSlot) ?? 0;
+  int get botTurnsLeft =>
+      _state?.turnsLeft(_opponentSlot) ?? 0;
+
+  /// Turns per player from the match config (5 in the agreed duel).
+  int get turnsPerPlayer => _state?.config.turnsPerPlayer ?? 5;
+
+  /// True while the local player holds the turn.
+  bool get playerTurn =>
+      isEngine &&
+      _state != null &&
+      !isFlagged &&
+      phase == MatchPhase.playing &&
+      _state!.activePlayer == _localSlot;
+
+  /// The power this client's cat brought into the match (engine config for
+  /// engine duels; the profile pick for the legacy race).
+  PowerKind get playerPower {
+    if (!isEngine) {
+      return switch (player.power.clamp(0, 2)) {
+        1 => PowerKind.shadowPounce,
+        2 => PowerKind.laserChase,
+        _ => PowerKind.zoomies,
+      };
     }
-    final left = liveMoveLimit.inSeconds -
-        DateTime.now().difference(_lastOnlineMoveAt!).inSeconds;
-    return left < 0 ? 0 : left;
+    return switch (_state?.config.powerFor(_localSlot)) {
+      engine.PowerKind.shadowPounce => PowerKind.shadowPounce,
+      engine.PowerKind.laserChase => PowerKind.laserChase,
+      _ => PowerKind.zoomies,
+    };
   }
+
+  /// Opponent's power meter charge (0–100), display only.
+  int get botCharge =>
+      isEngine ? _state?.chargeOf(_opponentSlot) ?? 0 : bot.charge;
 
   /// True once the 24-hour slow-play deadline passed and it is the
   /// opponent's move — the UI may offer [claimForfeit].
@@ -378,13 +433,9 @@ class ArenaMatchController extends ChangeNotifier {
       isEngine ? _state?.chargeOf(_localSlot) ?? 0 : board.charge;
   int get botScore =>
       isEngine ? _state?.scoreOf(_opponentSlot) ?? 0 : bot.score;
-  int get round => isEngine ? _state?.round ?? 1 : 1;
-  int get totalRounds => isEngine ? _state?.config.rounds ?? 5 : 1;
-  int get movesLeft =>
-      isEngine ? _state?.movesLeft(_localSlot) ?? 0 : -1;
-  bool get zoomiesArmed => _zoomiesArmed;
 
-  /// Obstacles the player will receive at the start of the next round.
+  /// Obstacles the player will receive as cardboard boxes at the start of
+  /// their next turn.
   List<ObstacleKind> get incomingObstacles {
     if (!isEngine) return const [];
     final pending =
@@ -446,8 +497,17 @@ class ArenaMatchController extends ChangeNotifier {
   }
 
   void pause({bool? background, bool? modal}) {
+    final wasPaused = paused;
     if (background != null) _background = background;
     if (modal != null) _modal = modal;
+    if (!wasPaused && paused) {
+      _botTimer?.cancel();
+      _botTimer = null;
+    } else if (wasPaused && !paused) {
+      // The tick counter already froze while paused — the player gets
+      // the full remaining turn back for free.
+      _maybeBotTurn();
+    }
     refresh();
   }
 
@@ -467,7 +527,12 @@ class ArenaMatchController extends ChangeNotifier {
       _startOnline();
       return;
     }
-    final res = engine.newMatch(_seed, const engine.MatchConfig.duel());
+    _botSeed = _seed ^ 0x5f3759df;
+    final config = engine.MatchConfig(
+      firstPower: engine.PowerKind.values[player.power.clamp(0, 2)],
+      secondPower: engine.PowerKind.values[_botSeed % 3],
+    );
+    final res = engine.newMatch(_seed, config);
     if (res is engine.EngineOk<engine.MatchState>) {
       _state = res.value;
       _adapter = EngineViewAdapter(
@@ -477,10 +542,9 @@ class ArenaMatchController extends ChangeNotifier {
       );
       initialSnapshot = _adapter!.snapshotOf(_state!, _localSlot);
       _matchStart = DateTime.now();
-      _zoomiesArmed = false;
       phase = MatchPhase.playing;
-      _botSeed = _seed ^ 0x5f3759df;
       _bot = HouseBot(level: botLevel, seed: _botSeed);
+      _armTurnClock();
     } else {
       phase = MatchPhase.finished;
       result = 0;
@@ -503,15 +567,11 @@ class ArenaMatchController extends ChangeNotifier {
     );
     initialSnapshot = _adapter!.snapshotOf(_state!, _localSlot);
     _matchStart = DateTime.now();
-    _lastOnlineMoveAt = s.lastMoveAt?.toLocal() ?? DateTime.now();
-    _zoomiesArmed = false;
     _pollTimer = s.poll(
       const Duration(seconds: 20),
       onChange: (_) => unawaited(_syncOnline()),
     );
-    _onlineClock = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (phase == MatchPhase.playing) refresh();
-    });
+    _armTurnClock();
     phase = MatchPhase.playing;
     if (_state!.isFinished || s.isOver) {
       // The match ended while this client was still on the versus screen
@@ -519,6 +579,63 @@ class ArenaMatchController extends ChangeNotifier {
       _finishOnline(_outcomeFor(_state!.outcome));
     }
     refresh();
+  }
+
+  /// Arms the 30-second turn clock for the current state and starts the
+  /// shared ticker (local and online engine matches).
+  void _armTurnClock() {
+    final s = _state;
+    if (s == null) return;
+    _turnKey = '${s.turn}:${s.activePlayer.index}';
+    _turnTicksLeft = s.config.turnSeconds * 2;
+    _turnClock ??= Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _turnTick(),
+    );
+  }
+
+  void _turnTick() {
+    if (_disposed || phase != MatchPhase.playing) return;
+    if (!paused && _turnTicksLeft > 0) _turnTicksLeft--;
+    _maybeAutoEndTurn();
+    if (!_disposed) refresh();
+  }
+
+  /// When the turn clock expires, ends the turn: the local player (or the
+  /// house bot) locally, and this client online — the opponent's own
+  /// client ends their turn, we only display the countdown.
+  void _maybeAutoEndTurn() {
+    final s = _state;
+    if (s == null ||
+        s.isFinished ||
+        phase != MatchPhase.playing ||
+        paused ||
+        _busy ||
+        turnSecondsLeft > 0) {
+      return;
+    }
+    if (isOnline) {
+      final session = online!.session;
+      if (session.isMyTurn && _onlineCursor == session.movesApplied) {
+        _applyEngine(const engine.EndTurnMove(), isPlayerMove: true);
+      }
+      return;
+    }
+    _applyEngine(
+      const engine.EndTurnMove(),
+      isPlayerMove: s.activePlayer == _localSlot,
+    );
+  }
+
+  /// Resets the turn clock whenever the committed state changed turn or
+  /// active player (called from [_commitEngineMove]).
+  void _trackTurn() {
+    final s = _state;
+    if (s == null) return;
+    final key = '${s.turn}:${s.activePlayer.index}';
+    if (key == _turnKey) return;
+    _turnKey = key;
+    _turnTicksLeft = s.config.turnSeconds * 2;
   }
 
   Future<void> _loadTutorialFlag() async {
@@ -545,7 +662,6 @@ class ArenaMatchController extends ChangeNotifier {
   void tryMove(int a, int b) {
     if (!acceptingInput) return;
     if (isEngine) {
-      _zoomiesArmed = false;
       final w = _state!.config.boardWidth;
       _applyEngine(
         engine.SwapMove(
@@ -571,18 +687,12 @@ class ArenaMatchController extends ChangeNotifier {
     _emit();
   }
 
-  /// Fires a power. [targetRow] is required for [PowerKind.zoomies] on the
-  /// engine path; the legacy race picks its own row.
-  void firePower(PowerKind power, {int? targetRow}) {
+  /// Fires the cat's configured power once its meter is full (0–100 %).
+  /// The engine validates the power against the match config; a tap while
+  /// the meter is not full is rejected inside `applyMove`.
+  void firePower(PowerKind power) {
     if (!acceptingInput) return;
     if (isEngine) {
-      if (power == PowerKind.zoomies && targetRow == null) {
-        // First tap arms row targeting; a second tap cancels it.
-        _zoomiesArmed = !_zoomiesArmed;
-        refresh();
-        return;
-      }
-      _zoomiesArmed = false;
       _applyEngine(
         engine.PowerMove(
           power: switch (power) {
@@ -590,7 +700,6 @@ class ArenaMatchController extends ChangeNotifier {
             PowerKind.shadowPounce => engine.PowerKind.shadowPounce,
             PowerKind.laserChase => engine.PowerKind.laserChase,
           },
-          targetRow: targetRow,
         ),
         isPlayerMove: true,
       );
@@ -608,6 +717,15 @@ class ArenaMatchController extends ChangeNotifier {
     if (board.attacks > attacks) bot.obstacle();
     bot.takeEvents();
     _emit();
+  }
+
+  /// Ends the current turn early (RENUNTA). The 30 s clock would end it
+  /// anyway; this just skips the remaining seconds. Online, the move goes
+  /// through the shared log like any other.
+  void endTurn() {
+    if (!acceptingInput) return;
+    if (!isEngine) return;
+    _applyEngine(const engine.EndTurnMove(), isPlayerMove: true);
   }
 
   void _applyEngine(engine.Move move, {required bool isPlayerMove}) {
@@ -648,6 +766,7 @@ class ArenaMatchController extends ChangeNotifier {
     required bool isPlayerMove,
   }) {
     _state = mr.state;
+    _trackTurn();
     final events = _adapter!.adaptMove(mr, before: prev);
     final accepted = mr.hashAfter != mr.hashBefore;
     if (isPlayerMove && accepted) {
@@ -665,13 +784,36 @@ class ArenaMatchController extends ChangeNotifier {
     if (!isOnline) _maybeBotTurn();
   }
 
+  /// Paces the house bot through its turn: one move per [botMoveDelay]
+  /// until it ends the turn (or the turn clock expires). Re-armed after
+  /// every committed move and after a pause/resume.
   void _maybeBotTurn() {
-    if (isOnline) return;
+    _botTimer?.cancel();
+    _botTimer = null;
+    if (isOnline || _disposed) return;
     final s = _state;
-    if (s == null || s.isFinished || s.activePlayer != engine.PlayerSlot.second) {
+    if (s == null ||
+        s.isFinished ||
+        s.activePlayer != engine.PlayerSlot.second ||
+        paused) {
       return;
     }
-    _applyEngine(_bot!.choose(s), isPlayerMove: false);
+    _botTimer = Timer(botMoveDelay, () {
+      _botTimer = null;
+      if (_disposed) return;
+      final cur = _state;
+      if (cur == null ||
+          cur.isFinished ||
+          cur.activePlayer != engine.PlayerSlot.second) {
+        return;
+      }
+      if (paused) {
+        // Resume re-arms via pause(); nothing to do meanwhile.
+        return;
+      }
+      _applyEngine(_bot!.choose(cur), isPlayerMove: false);
+      // _commitEngineMove re-arms the next step, or the turn flips back.
+    });
   }
 
   // --- online duel ---------------------------------------------------------
@@ -711,7 +853,6 @@ class ArenaMatchController extends ChangeNotifier {
       final mr = await session.play(move);
       if (_disposed || phase == MatchPhase.finished) return;
       _onlineCursor = session.movesApplied;
-      _lastOnlineMoveAt = DateTime.now();
       _commitEngineMove(mr, _state!, isPlayerMove: true);
       unawaited(_syncOnline());
     } on MatchException {
@@ -749,7 +890,6 @@ class ArenaMatchController extends ChangeNotifier {
       _flagOnline();
       return;
     }
-    _lastOnlineMoveAt = DateTime.now();
     _commitEngineMove(mr, prev, isPlayerMove: false);
     _onlineCursor++;
   }
@@ -840,7 +980,8 @@ class ArenaMatchController extends ChangeNotifier {
     _search?.cancel();
     _clock?.cancel();
     _pollTimer?.cancel();
-    _onlineClock?.cancel();
+    _turnClock?.cancel();
+    _botTimer?.cancel();
     _busy = false;
     phase = MatchPhase.finished;
     refresh();
@@ -965,7 +1106,8 @@ class ArenaMatchController extends ChangeNotifier {
     _search?.cancel();
     _clock?.cancel();
     _pollTimer?.cancel();
-    _onlineClock?.cancel();
+    _turnClock?.cancel();
+    _botTimer?.cancel();
     _busy = false;
     result = outcome;
     phase = MatchPhase.finished;
@@ -1026,6 +1168,10 @@ class ArenaMatchController extends ChangeNotifier {
     if (_disposed || phase != MatchPhase.finished || isOnline) return;
     _search?.cancel();
     _clock?.cancel();
+    _turnClock?.cancel();
+    _botTimer?.cancel();
+    _turnKey = null;
+    _turnTicksLeft = 0;
     if (isEngine) {
       _seed = Random().nextInt(1 << 30);
       _state = null;
@@ -1033,7 +1179,6 @@ class ArenaMatchController extends ChangeNotifier {
       _playerMoves = 0;
       _acceptedMoves = 0;
       _remoteMoves = 0;
-      _zoomiesArmed = false;
       _busy = false;
       _started = false;
     } else {
@@ -1058,6 +1203,8 @@ class ArenaMatchController extends ChangeNotifier {
     if (_disposed || phase == MatchPhase.finished) return;
     _search?.cancel();
     _clock?.cancel();
+    _turnClock?.cancel();
+    _botTimer?.cancel();
     _busy = false;
     result = outcome;
     phase = MatchPhase.finished;
@@ -1072,7 +1219,8 @@ class ArenaMatchController extends ChangeNotifier {
     _search?.cancel();
     _clock?.cancel();
     _pollTimer?.cancel();
-    _onlineClock?.cancel();
+    _turnClock?.cancel();
+    _botTimer?.cancel();
     _settleTimer?.cancel();
     for (final sub in _onlineSubs) {
       sub.cancel();

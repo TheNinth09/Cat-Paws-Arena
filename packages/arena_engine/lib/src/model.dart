@@ -46,14 +46,27 @@ enum PowerRuleset {
 }
 
 /// The three agreed powers, in fixed order.
+///
+/// Each cat brings exactly one of them, chosen in the cat editor; all
+/// three are free and of equal strength — none is sold.
+///
+/// Exact effects (timed-turn contract, engineVersion 2): every power
+/// clears a burst of pieces on the caster's own board AND queues
+/// [kPowerObstacleCount] cardboard boxes for the opponent (they land on
+/// the opponent's board at the start of their next turn). The burst
+/// differs per power but the strength is identical:
+/// * [zoomies] — every piece in the fullest row (ties: lowest row).
+/// * [shadowPounce] — every piece of the most common colour (ties: lowest
+///   colour code).
+/// * [laserChase] — [kLaserBreakCount] randomly chosen pieces.
 enum PowerKind {
-  /// Clears a chosen row and sends two obstacles to the opponent.
+  /// Clears the fullest row and sends boxes to the opponent.
   zoomies,
 
   /// Clears the most common colour on your own board.
   shadowPounce,
 
-  /// Breaks a fixed number of random pieces and clears your own obstacles.
+  /// Breaks a fixed number of random pieces.
   laserChase,
 }
 
@@ -83,7 +96,11 @@ enum LineOrientation {
   column,
 }
 
-/// Obstacle kinds that can land on a board at the start of a round.
+/// Obstacle kinds that can land on a board at the start of a turn.
+///
+/// Timed-turn matches only ever *earn* [box] (cardboard boxes sent by
+/// powers); [yarn] remains in the codec so older saved states still
+/// decode, but nothing generates it anymore.
 enum ObstacleKind {
   /// Blocks a cell until a piece next to it is cleared.
   box,
@@ -116,11 +133,12 @@ class MatchConfig {
   /// Number of regular piece colours: `5` or `6`.
   final int colourCount;
 
-  /// Number of rounds in the duel. The agreed duel uses `5`.
-  final int rounds;
+  /// Turns each player gets in the duel. The agreed duel uses `5`.
+  final int turnsPerPlayer;
 
-  /// Accepted moves each player gets per round. The agreed duel uses `3`.
-  final int movesPerRound;
+  /// Seconds the active player has per turn. Presentation-side timer
+  /// only — the engine never reads a clock. The agreed duel uses `30`.
+  final int turnSeconds;
 
   /// Rainbow resolution rule.
   final RainbowRule rainbowRule;
@@ -132,28 +150,43 @@ class MatchConfig {
   /// Identifies the power set; the agreed powers are free and equal.
   final PowerRuleset powerConfiguration;
 
+  /// The power [PlayerSlot.first]'s cat brings into the match.
+  final PowerKind firstPower;
+
+  /// The power [PlayerSlot.second]'s cat brings into the match.
+  final PowerKind secondPower;
+
   const MatchConfig({
     this.boardWidth = 7,
     this.boardHeight = 7,
     this.colourCount = 5,
-    this.rounds = 5,
-    this.movesPerRound = 3,
+    this.turnsPerPlayer = 5,
+    this.turnSeconds = 30,
     this.rainbowRule = RainbowRule.clearOneColour,
     this.engineVersion = kEngineVersion,
     this.powerConfiguration = PowerRuleset.threeFreeEqual,
+    this.firstPower = PowerKind.zoomies,
+    this.secondPower = PowerKind.zoomies,
   });
 
-  /// The agreed duel configuration: 7x7, five colours, five rounds of
-  /// three moves, rainbow clears one colour.
+  /// The power [player]'s cat brings into the match.
+  PowerKind powerFor(PlayerSlot player) =>
+      player == PlayerSlot.first ? firstPower : secondPower;
+
+  /// The agreed duel configuration: 7x7, five colours, five turns each,
+  /// 30-second turns, rainbow clears one colour, both cats on Zoomies
+  /// (per-cat powers are part of the loadout, not the duel default).
   const MatchConfig.duel()
     : boardWidth = 7,
       boardHeight = 7,
       colourCount = 5,
-      rounds = 5,
-      movesPerRound = 3,
+      turnsPerPlayer = 5,
+      turnSeconds = 30,
       rainbowRule = RainbowRule.clearOneColour,
       engineVersion = kEngineVersion,
-      powerConfiguration = PowerRuleset.threeFreeEqual;
+      powerConfiguration = PowerRuleset.threeFreeEqual,
+      firstPower = PowerKind.zoomies,
+      secondPower = PowerKind.zoomies;
 
   /// Canonical string identifying this configuration, for logs and
   /// cross-checks. Field order is fixed.
@@ -161,10 +194,10 @@ class MatchConfig {
       'v$engineVersion|'
       '${boardWidth}x$boardHeight|'
       'c$colourCount|'
-      'r$rounds|'
-      'm$movesPerRound|'
+      't$turnsPerPlayer/${turnSeconds}s|'
       'rainbow:${rainbowRule.name}|'
-      'powers:${powerConfiguration.name}';
+      'powers:${powerConfiguration.name}|'
+      'loadout:${firstPower.name}/${secondPower.name}';
 
   /// Stable JSON encoding for match documents and move-log headers.
   /// Every field is stored explicitly so [fromJson] can reconstruct an
@@ -174,10 +207,12 @@ class MatchConfig {
     'boardWidth': boardWidth,
     'boardHeight': boardHeight,
     'colourCount': colourCount,
-    'rounds': rounds,
-    'movesPerRound': movesPerRound,
+    'turnsPerPlayer': turnsPerPlayer,
+    'turnSeconds': turnSeconds,
     'rainbowRule': rainbowRule.name,
     'powerConfiguration': powerConfiguration.name,
+    'firstPower': firstPower.name,
+    'secondPower': secondPower.name,
   };
 
   /// Decodes a config produced by [toJson]. Returns `null` on any
@@ -197,30 +232,39 @@ class MatchConfig {
     final boardWidth = intField('boardWidth');
     final boardHeight = intField('boardHeight');
     final colourCount = intField('colourCount');
-    final rounds = intField('rounds');
-    final movesPerRound = intField('movesPerRound');
+    final turnsPerPlayer = intField('turnsPerPlayer');
+    final turnSeconds = intField('turnSeconds');
     if (engineVersion == null ||
         boardWidth == null ||
         boardHeight == null ||
         colourCount == null ||
-        rounds == null ||
-        movesPerRound == null) {
+        turnsPerPlayer == null ||
+        turnSeconds == null) {
       return null;
     }
     final rainbowRule = RainbowRule.values.asNameMap()[json['rainbowRule']];
     final powerConfiguration = PowerRuleset.values.asNameMap()[
       json['powerConfiguration']
     ];
-    if (rainbowRule == null || powerConfiguration == null) return null;
+    final firstPower = PowerKind.values.asNameMap()[json['firstPower']];
+    final secondPower = PowerKind.values.asNameMap()[json['secondPower']];
+    if (rainbowRule == null ||
+        powerConfiguration == null ||
+        firstPower == null ||
+        secondPower == null) {
+      return null;
+    }
     return MatchConfig(
       boardWidth: boardWidth,
       boardHeight: boardHeight,
       colourCount: colourCount,
-      rounds: rounds,
-      movesPerRound: movesPerRound,
+      turnsPerPlayer: turnsPerPlayer,
+      turnSeconds: turnSeconds,
       rainbowRule: rainbowRule,
       engineVersion: engineVersion,
       powerConfiguration: powerConfiguration,
+      firstPower: firstPower,
+      secondPower: secondPower,
     );
   }
 
@@ -230,67 +274,61 @@ class MatchConfig {
       other.boardWidth == boardWidth &&
       other.boardHeight == boardHeight &&
       other.colourCount == colourCount &&
-      other.rounds == rounds &&
-      other.movesPerRound == movesPerRound &&
+      other.turnsPerPlayer == turnsPerPlayer &&
+      other.turnSeconds == turnSeconds &&
       other.rainbowRule == rainbowRule &&
       other.engineVersion == engineVersion &&
-      other.powerConfiguration == powerConfiguration;
+      other.powerConfiguration == powerConfiguration &&
+      other.firstPower == firstPower &&
+      other.secondPower == secondPower;
 
   @override
   int get hashCode => Object.hash(
     boardWidth,
     boardHeight,
     colourCount,
-    rounds,
-    movesPerRound,
+    turnsPerPlayer,
+    turnSeconds,
     rainbowRule,
     engineVersion,
     powerConfiguration,
+    firstPower,
+    secondPower,
   );
 }
 
 /// Supported rules/serialization version. Bump only via an announced
 /// contract change; [MatchConfig.engineVersion] must match it.
-const int kEngineVersion = 1;
+///
+/// Version 2: timed turns replace the 3-moves/5-rounds model —
+/// [MatchState.turn]/[MatchState.turnsRemaining]/[MatchState.turnMoves]
+/// replace round/move counters, [EndTurnMove] and [TurnEnded] replace
+/// per-move turn consumption and [RoundEnded], powers fire from a shared
+/// 0..100 meter and always queue cardboard boxes.
+const int kEngineVersion = 2;
 
 /// Maximum pending obstacles queued for one player. Obstacles earned beyond
 /// this cap are discarded (the oldest queued obstacles are kept).
 const int kMaxPendingObstacles = 12;
 
-/// Maximum power charge. Cleared pieces add [kChargePerPiece] charge each,
-/// capped at this value.
-const int kPowerCost = 500;
+/// Power meter maximum and fire threshold, in percent. The meter charges
+/// from cleared pieces up to this hard cap — it can never exceed 100.
+const int kPowerMeterMax = 100;
 
-/// Charge a [PowerKind.zoomies] activation costs. Powers are free and of
-/// equal strength; per-kind costs are the slice-3 balance tuning numbers
-/// (see `report/harness.md`). Each cost sits above the charge its own
-/// effect regenerates, so no power can fuel itself.
-const int kZoomiesChargeCost = 460;
-
-/// Charge a [PowerKind.shadowPounce] activation costs.
-const int kShadowPounceChargeCost = 500;
-
-/// Charge a [PowerKind.laserChase] activation costs.
-const int kLaserChaseChargeCost = 175;
-
-/// Pieces removed by [PowerKind.laserChase].
-const int kLaserBreakCount = 8;
-
-/// Charge cost of firing [power].
-int powerChargeCost(PowerKind power) => switch (power) {
-  PowerKind.zoomies => kZoomiesChargeCost,
-  PowerKind.shadowPounce => kShadowPounceChargeCost,
-  PowerKind.laserChase => kLaserChaseChargeCost,
-};
-
-/// Charge gained per cleared piece.
-const int kChargePerPiece = 4;
+/// Charge gained per cleared piece, in percent. Two points per piece means
+/// a full meter takes about fifty cleared pieces — roughly one power per
+/// match for an average player.
+const int kChargePerPiece = 2;
 
 /// Points awarded per cleared piece. Flat scoring: no cascade multiplier.
 const int kPointsPerPiece = 10;
 
-/// Obstacles sent to the opponent by [PowerKind.zoomies].
-const int kZoomiesObstacleCount = 2;
+/// Cardboard boxes every power queues for the opponent. All three powers
+/// are equal strength: same obstacle count, same meter cost.
+const int kPowerObstacleCount = 2;
+
+/// Pieces removed by [PowerKind.laserChase].
+const int kLaserBreakCount = 8;
 
 /// Pieces removed by a rainbow under [RainbowRule.removeRandomPieces].
 const int kRainbowRemoveCount = 12;
@@ -310,9 +348,9 @@ class BoardState {
   final List<int> cells;
 
   /// Per-column refill generator state (Lehmer raw state), parallel to
-  /// columns. The refill stream for column `c` of round `r` is derived from
-  /// `(seed, r, c)` and is the same for both players; each board stores its
-  /// own continuation of that stream.
+  /// columns. The refill stream for column `c` is derived once from the
+  /// match seed; each board stores its own continuation of that stream so
+  /// refills stay deterministic across the whole match.
   final List<int> refillState;
 
   BoardState._(this.width, this.height, List<int> cells, List<int> refill)
@@ -345,26 +383,35 @@ class MatchState {
   /// Immutable configuration shared by both players.
   final MatchConfig config;
 
-  /// Current round, `1..config.rounds`.
-  final int round;
+  /// Current turn, `1..2 * config.turnsPerPlayer`. Turns alternate:
+  /// odd turns belong to [PlayerSlot.first], even turns to
+  /// [PlayerSlot.second].
+  final int turn;
 
   /// Player allowed to move now.
   final PlayerSlot activePlayer;
 
-  /// Accepted moves left this round, indexed by [PlayerSlot.index].
-  final List<int> movesRemaining;
+  /// Turns each player still has to play, indexed by [PlayerSlot.index].
+  /// The active player's in-progress turn counts as remaining until it
+  /// ends; both reach `0` exactly when the match ends.
+  final List<int> turnsRemaining;
+
+  /// Accepted moves (swaps and power activations) made during the
+  /// current turn. Informational — turns end only via [EndTurnMove].
+  final int turnMoves;
 
   /// Cumulative scores, indexed by [PlayerSlot.index].
   final List<int> scores;
 
   /// One independent board per player, indexed by [PlayerSlot.index].
+  /// Boards persist across turns — only obstacles change them.
   final List<BoardState> boards;
 
-  /// Obstacles each player will receive at the start of their next round,
-  /// indexed by [PlayerSlot.index]. Cleared when the round ends.
+  /// Obstacles each player will receive at the start of their next turn,
+  /// indexed by [PlayerSlot.index]. Cleared when they land.
   final List<List<ObstacleKind>> pendingObstacles;
 
-  /// Power charge `0..kPowerCost`, indexed by [PlayerSlot.index].
+  /// Power meter `0..kPowerMeterMax`, indexed by [PlayerSlot.index].
   final List<int> powerCharge;
 
   /// Per-player deterministic effect RNG state (Lehmer), indexed by
@@ -378,16 +425,17 @@ class MatchState {
     required this.engineVersion,
     required this.seed,
     required this.config,
-    required this.round,
+    required this.turn,
     required this.activePlayer,
-    required List<int> movesRemaining,
+    required List<int> turnsRemaining,
+    required this.turnMoves,
     required List<int> scores,
     required List<BoardState> boards,
     required List<List<ObstacleKind>> pendingObstacles,
     required List<int> powerCharge,
     required List<int> rngState,
     required this.outcome,
-  }) : movesRemaining = List.unmodifiable(movesRemaining),
+  }) : turnsRemaining = List.unmodifiable(turnsRemaining),
        scores = List.unmodifiable(scores),
        boards = List.unmodifiable(boards),
        pendingObstacles = List.unmodifiable([
@@ -399,9 +447,10 @@ class MatchState {
   factory MatchState.create({
     required int seed,
     required MatchConfig config,
-    required int round,
+    required int turn,
     required PlayerSlot activePlayer,
-    required List<int> movesRemaining,
+    required List<int> turnsRemaining,
+    required int turnMoves,
     required List<int> scores,
     required List<BoardState> boards,
     required List<List<ObstacleKind>> pendingObstacles,
@@ -413,9 +462,10 @@ class MatchState {
       engineVersion: config.engineVersion,
       seed: seed,
       config: config,
-      round: round,
+      turn: turn,
       activePlayer: activePlayer,
-      movesRemaining: movesRemaining,
+      turnsRemaining: turnsRemaining,
+      turnMoves: turnMoves,
       scores: scores,
       boards: boards,
       pendingObstacles: pendingObstacles,
@@ -432,17 +482,27 @@ class MatchState {
   ScorePair get scorePair =>
       (first: scores[PlayerSlot.first.index], second: scores[PlayerSlot.second.index]);
 
-  /// Moves left for [player] this round.
-  int movesLeft(PlayerSlot player) => movesRemaining[player.index];
+  /// Turns left for [player] (the in-progress turn counts until it ends).
+  int turnsLeft(PlayerSlot player) => turnsRemaining[player.index];
 
   /// Score of [player].
   int scoreOf(PlayerSlot player) => scores[player.index];
+
+  /// Compatibility shim for clients written against the rounds model:
+  /// reads the current [turn] number. New code uses [turn] directly —
+  /// a turn is one player's 30-second window, not a round pair.
+  @Deprecated('Timed-turn model: use turn')
+  int get round => turn;
 
   /// Board of [player].
   BoardState boardOf(PlayerSlot player) => boards[player.index];
 
   /// Charge of [player].
   int chargeOf(PlayerSlot player) => powerCharge[player.index];
+
+  /// Whether [player]'s power meter is full and fireable.
+  bool canFirePower(PlayerSlot player) =>
+      powerCharge[player.index] >= kPowerMeterMax;
 }
 
 /// A player action. The acting player is always [MatchState.activePlayer];
@@ -467,9 +527,10 @@ sealed class Move {
     if (kind == 'power') {
       final power = PowerKind.values.asNameMap()[json['power']];
       if (power == null) return null;
-      final row = json['row'];
-      if (row != null && row is! int) return null;
-      return PowerMove(power: power, targetRow: row as int?);
+      return PowerMove(power: power);
+    }
+    if (kind == 'endTurn') {
+      return const EndTurnMove();
     }
     return null;
   }
@@ -507,27 +568,39 @@ final class SwapMove extends Move {
   int get hashCode => Object.hash(firstCell, secondCell);
 }
 
-/// Fire a power. [targetRow] is required by [PowerKind.zoomies] (the row to
-/// clear, `0..boardHeight-1`) and must be `null` for the other powers.
+/// Fire the acting player's power. [power] must equal the power the
+/// active player's cat brought into the match ([MatchConfig.powerFor]);
+/// the meter must be full ([MatchState.canFirePower]).
 final class PowerMove extends Move {
   final PowerKind power;
-  final int? targetRow;
 
-  const PowerMove({required this.power, this.targetRow});
+  const PowerMove({required this.power});
 
   @override
-  Map<String, Object?> toJson() => {
-    'kind': 'power',
-    'power': power.name,
-    if (targetRow != null) 'row': targetRow,
-  };
+  Map<String, Object?> toJson() => {'kind': 'power', 'power': power.name};
 
   @override
   bool operator ==(Object other) =>
-      other is PowerMove && other.power == power && other.targetRow == targetRow;
+      other is PowerMove && other.power == power;
 
   @override
-  int get hashCode => Object.hash(power, targetRow);
+  int get hashCode => power.hashCode;
+}
+
+/// End the current turn early. The 30-second timer is presentation-side;
+/// this explicit move is what actually hands the turn over — the client
+/// submits it when the player taps "end turn" or the timer expires.
+final class EndTurnMove extends Move {
+  const EndTurnMove();
+
+  @override
+  Map<String, Object?> toJson() => {'kind': 'endTurn'};
+
+  @override
+  bool operator ==(Object other) => other is EndTurnMove;
+
+  @override
+  int get hashCode => 0;
 }
 
 /// Immutable gameplay event. Every event carries the acting [player] where
@@ -623,20 +696,20 @@ final class Refilled extends GameEvent {
   const Refilled({required this.player, required this.cell, required this.piece});
 }
 
-/// Obstacles earned during [sourceRound] for the opponent's next round.
-/// [player] is the player who will receive them.
+/// Cardboard boxes earned during [sourceTurn] for the opponent's next
+/// turn. [player] is the player who will receive them.
 final class ObstacleQueued extends GameEvent {
   final PlayerSlot player;
-  final int sourceRound;
+  final int sourceTurn;
   final int count;
   const ObstacleQueued({
     required this.player,
-    required this.sourceRound,
+    required this.sourceTurn,
     required this.count,
   });
 }
 
-/// Obstacles appearing on [player]'s board at the start of a round.
+/// Obstacles appearing on [player]'s board at the start of their turn.
 final class ObstacleLanded extends GameEvent {
   final PlayerSlot player;
   final List<CellPos> cells;
@@ -651,8 +724,8 @@ final class ObstacleBroken extends GameEvent {
   const ObstacleBroken({required this.player, required this.cells});
 }
 
-/// Power charge changed by [amount] (a signed delta, documented
-/// consistently). Emitted only when the charge actually changes.
+/// Power charge changed by [amount] (a signed delta). Emitted only when
+/// the charge actually changes.
 final class PowerCharged extends GameEvent {
   final PlayerSlot player;
   final int amount;
@@ -683,26 +756,13 @@ final class Shuffled extends GameEvent {
   const Shuffled({required this.player, required this.cells, required this.reason});
 }
 
-/// A match of four or more awarded one extra move this round.
-/// [movesRemaining] is the player's total after the award.
-final class ExtraMove extends GameEvent {
-  final PlayerSlot player;
-  final int round;
-  final int movesRemaining;
-  const ExtraMove({
-    required this.player,
-    required this.round,
-    required this.movesRemaining,
-  });
-}
-
-/// A round boundary snapshot. [outcome] is `null` while the match continues
-/// and carries the final result on the last round.
-final class RoundEnded extends GameEvent {
-  final int round;
+/// A turn boundary snapshot. [outcome] is `null` while the match continues
+/// and carries the final result on the last turn.
+final class TurnEnded extends GameEvent {
+  final int turn;
   final ScorePair scores;
   final MatchOutcome? outcome;
-  const RoundEnded({required this.round, required this.scores, required this.outcome});
+  const TurnEnded({required this.turn, required this.scores, required this.outcome});
 }
 
 /// Terminal result with per-player final state hashes.
@@ -730,10 +790,10 @@ enum EngineErrorCode {
   matchFinished,
 
   /// Move is structurally invalid: bad coordinates, non-adjacent cells,
-  /// blocked/locked cells, bad power target, and similar.
+  /// blocked/locked cells, wrong power for the loadout, and similar.
   invalidMove,
 
-  /// Power fired without enough charge.
+  /// Power fired without a full meter.
   insufficientCharge,
 
   /// A replay log step failed; [EngineError.details] carries `position`
@@ -786,8 +846,7 @@ class MoveResult {
   });
 }
 
-/// Outcome of [replay]: the final state, its hash and how many log entries
-/// were applied.
+/// Outcome of [replay]/[replayEntries]: final state, hash and count.
 class ReplayResult {
   final MatchState state;
   final String hash;

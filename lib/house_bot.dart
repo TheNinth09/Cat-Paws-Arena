@@ -8,6 +8,8 @@ import 'package:arena_engine/arena_engine.dart' as engine;
 /// * `1` — greedy: best immediate score gain.
 /// * `2` — greedy plus charge, special creation and obstacles sent.
 ///
+/// Timed turns allow unlimited swaps, so the bot budgets itself and hands
+/// the turn back with [engine.EndTurnMove] once its move budget is spent.
 /// Deterministic per [seed] so a match replays identically.
 class HouseBot {
   HouseBot({required this.level, required int seed})
@@ -17,23 +19,33 @@ class HouseBot {
   final int level;
   final Random _rng;
 
+  /// Swaps/powers played per turn before the bot ends it.
+  int get _budget => switch (level) {
+    <= 0 => 4,
+    1 => 7,
+    _ => 9,
+  };
+
   engine.Move choose(engine.MatchState state) {
     final legal = engine.legalMoves(state);
     if (legal is! engine.EngineOk<List<engine.Move>>) {
-      // The engine guarantees a move exists (it reshuffles otherwise);
+      // The engine guarantees EndTurnMove exists while the match runs;
       // this is only a defensive fallback.
-      return const engine.SwapMove(
-        firstCell: (row: 0, col: 0),
-        secondCell: (row: 0, col: 1),
-      );
+      return const engine.EndTurnMove();
     }
-    final moves = legal.value;
-    if (moves.isEmpty || level <= 0) {
-      return moves[_rng.nextInt(moves.length)];
+    final playable = [
+      for (final m in legal.value)
+        if (m is! engine.EndTurnMove) m,
+    ];
+    if (playable.isEmpty || state.turnMoves >= _budget) {
+      return const engine.EndTurnMove();
     }
-    var best = moves.first;
+    if (level <= 0) {
+      return playable[_rng.nextInt(playable.length)];
+    }
+    var best = playable.first;
     var bestScore = -1e18;
-    for (final m in moves) {
+    for (final m in playable) {
       final s = _evaluate(state, m);
       if (s > bestScore || (s == bestScore && _rng.nextBool())) {
         bestScore = s;

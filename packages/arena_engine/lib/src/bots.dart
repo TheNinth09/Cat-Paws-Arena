@@ -22,6 +22,30 @@ abstract class ArenaBot {
 List<Move> _moves(MatchState state) =>
     (legalMoves(state) as EngineOk<List<Move>>).value;
 
+/// How many swaps/powers a bot plays before handing the turn back.
+/// Timed turns allow unlimited moves, so bots budget themselves to keep
+/// matches lively and deterministic.
+int _turnBudget(ArenaBot bot) => switch (bot) {
+  RandomBot() => 5,
+  GreedyBot() => 8,
+  LookaheadBot() => 8,
+  PowerBot() => 8,
+  _ => 6,
+};
+
+/// Ends the turn when the bot's budget is spent or no productive move
+/// remains; otherwise returns [pick]'s choice among the real moves.
+Move _withinTurn(MatchState state, ArenaBot bot, Move Function() pick) {
+  final playable = [
+    for (final m in _moves(state))
+      if (m is! EndTurnMove) m,
+  ];
+  if (playable.isEmpty || state.turnMoves >= _turnBudget(bot)) {
+    return const EndTurnMove();
+  }
+  return pick();
+}
+
 /// Uniform random legal move. [rng] is the bot's own stream; seed it
 /// differently per match side for independent play.
 final class RandomBot extends ArenaBot {
@@ -34,8 +58,13 @@ final class RandomBot extends ArenaBot {
 
   @override
   Move chooseMove(MatchState state) {
-    final moves = _moves(state);
-    return moves[rng.nextInt(moves.length)];
+    return _withinTurn(state, this, () {
+      final playable = [
+        for (final m in _moves(state))
+          if (m is! EndTurnMove) m,
+      ];
+      return playable[rng.nextInt(playable.length)];
+    });
   }
 }
 
@@ -82,12 +111,15 @@ double _powerEstimate(MatchState state, PowerMove move) {
   final w = board.width;
   switch (move.power) {
     case PowerKind.zoomies:
-      final row = move.targetRow ?? 0;
-      var n = 0;
-      for (var c = 0; c < w; c++) {
-        if (isPieceCode(board.cells[row * w + c])) n++;
+      var best = 0;
+      for (var r = 0; r < board.height; r++) {
+        var n = 0;
+        for (var c = 0; c < w; c++) {
+          if (isPieceCode(board.cells[r * w + c])) n++;
+        }
+        if (n > best) best = n;
       }
-      return n * 10.0;
+      return best * 10.0;
     case PowerKind.shadowPounce:
       final counts = List<int>.filled(kPieceColours, 0);
       for (final code in board.cells) {
@@ -102,8 +134,8 @@ double _powerEstimate(MatchState state, PowerMove move) {
 
 /// Picks the move with the largest immediate clear ("largest first
 /// clear"). Swap candidates are scored by first-wave match size on a
-/// scratch board; power candidates by their real resolution. Deterministic:
-/// ties keep the earliest move in [legalMoves] order.
+/// scratch board; the power candidate is scored by its real resolution.
+/// Deterministic: ties keep the earliest move in [legalMoves] order.
 final class GreedyBot extends ArenaBot {
   const GreedyBot();
 
@@ -113,24 +145,32 @@ final class GreedyBot extends ArenaBot {
   @override
   Move chooseMove(MatchState state) {
     final w = state.boardOf(state.activePlayer).width;
-    var best = _moves(state).first;
-    var bestScore = -1.0;
-    for (final m in _moves(state)) {
-      final double score;
-      if (m is SwapMove) {
-        score = _swapEstimate(state, m, w);
-      } else {
-        final res = applyMove(state, m);
-        score = res is EngineOk<MoveResult>
-            ? _movePoints(res.value, state.activePlayer)
-            : -1;
+    return _withinTurn(state, this, () {
+      Move best = const SwapMove(
+        firstCell: (row: 0, col: 0),
+        secondCell: (row: 0, col: 1),
+      );
+      var bestScore = -1.0;
+      var found = false;
+      for (final m in _moves(state)) {
+        if (m is EndTurnMove) continue;
+        final double score;
+        if (m is SwapMove) {
+          score = _swapEstimate(state, m, w);
+        } else {
+          final res = applyMove(state, m);
+          score = res is EngineOk<MoveResult>
+              ? _movePoints(res.value, state.activePlayer)
+              : -1;
+        }
+        if (!found || score > bestScore) {
+          found = true;
+          bestScore = score;
+          best = m;
+        }
       }
-      if (score > bestScore) {
-        bestScore = score;
-        best = m;
-      }
-    }
-    return best;
+      return found ? best : const EndTurnMove();
+    });
   }
 }
 
@@ -185,91 +225,83 @@ final class LookaheadBot extends ArenaBot {
 
   List<Move> _topMoves(MatchState state, int k) {
     final scored = [
-      for (final m in _moves(state)) (m, _quickScore(state, m)),
+      for (final m in _moves(state))
+        if (m is! EndTurnMove) (m, _quickScore(state, m)),
     ]..sort((a, b) => b.$2.compareTo(a.$2));
     return [for (final (m, _) in scored.take(k)) m];
   }
 
   @override
   Move chooseMove(MatchState state) {
-    final me = state.activePlayer;
-    Move? best;
-    var bestValue = double.negativeInfinity;
-    for (final m in _topMoves(state, ownTopK)) {
-      final res = applyMove(state, m);
-      if (res is! EngineOk<MoveResult>) continue;
-      var next = res.value.state;
-      // Opponent replies with their best quick move (bounded).
-      if (!next.isFinished) {
-        final reply = _topMoves(next, replyTopK).first;
-        final res2 = applyMove(next, reply);
-        if (res2 is EngineOk<MoveResult>) next = res2.value.state;
+    return _withinTurn(state, this, () {
+      final me = state.activePlayer;
+      Move? best;
+      var bestValue = double.negativeInfinity;
+      for (final m in _topMoves(state, ownTopK)) {
+        final res = applyMove(state, m);
+        if (res is! EngineOk<MoveResult>) continue;
+        var next = res.value.state;
+        // Opponent replies with their best quick move (bounded).
+        if (!next.isFinished) {
+          final replies = _topMoves(next, replyTopK);
+          if (replies.isNotEmpty) {
+            final res2 = applyMove(next, replies.first);
+            if (res2 is EngineOk<MoveResult>) next = res2.value.state;
+          }
+        }
+        final value = _evaluate(next, me);
+        if (value > bestValue) {
+          bestValue = value;
+          best = m;
+        }
       }
-      final value = _evaluate(next, me);
-      if (value > bestValue) {
-        bestValue = value;
-        best = m;
-      }
-    }
-    return best ?? _moves(state).first;
+      return best ?? const EndTurnMove();
+    });
   }
 }
 
-/// A bot that fires [power] whenever it is affordable (zoomies picks the
-/// row with the most pieces), and otherwise plays swap-only greedy — it
-/// never touches the other powers, so harness power settings stay clean.
+/// A bot that fires its configured power whenever the meter is full and
+/// the burst beats the best swap, and otherwise plays swap-only greedy.
+/// In timed turns each cat has exactly one power ([MatchConfig.powerFor]);
+/// this bot fires whatever power the match config gives it.
 final class PowerBot extends ArenaBot {
-  final PowerKind power;
-
-  const PowerBot(this.power);
+  const PowerBot();
 
   @override
-  String get label => 'power:${power.name}';
+  String get label => 'power';
 
   @override
   Move chooseMove(MatchState state) {
     final moves = _moves(state);
     final w = state.boardOf(state.activePlayer).width;
+    final slot = state.activePlayer;
 
-    // Best swap by first-wave estimate.
-    Move? bestSwap;
-    var bestSwapScore = -1.0;
-    for (final m in moves) {
-      if (m is! SwapMove) continue;
-      final score = _swapEstimate(state, m, w);
-      if (score > bestSwapScore) {
-        bestSwapScore = score;
-        bestSwap = m;
+    return _withinTurn(state, this, () {
+      // Best swap by first-wave estimate.
+      Move? bestSwap;
+      var bestSwapScore = -1.0;
+      for (final m in moves) {
+        if (m is! SwapMove) continue;
+        final score = _swapEstimate(state, m, w);
+        if (score > bestSwapScore) {
+          bestSwapScore = score;
+          bestSwap = m;
+        }
       }
-    }
-    if (bestSwap == null) return moves.first;
+      if (bestSwap == null) return const EndTurnMove();
 
-    // Use the power only when its estimate beats the best swap.
-    if (state.chargeOf(state.activePlayer) >= powerChargeCost(power)) {
-      if (power == PowerKind.zoomies) {
-        final board = state.boardOf(state.activePlayer);
-        var bestRow = 0, bestEst = -1.0;
-        for (var r = 0; r < board.height; r++) {
-          final est = _powerEstimate(
-            state,
-            PowerMove(power: power, targetRow: r),
-          );
-          if (est > bestEst) {
-            bestEst = est;
-            bestRow = r;
-          }
-        }
-        if (bestEst >= bestSwapScore) {
-          return PowerMove(power: power, targetRow: bestRow);
-        }
-      } else {
-        final est = _powerEstimate(state, PowerMove(power: power));
+      // Fire the cat's power only when its estimate beats the best swap.
+      if (state.canFirePower(slot)) {
+        final est = _powerEstimate(
+          state,
+          PowerMove(power: state.config.powerFor(slot)),
+        );
         if (est >= bestSwapScore) {
-          return PowerMove(power: power);
+          return PowerMove(power: state.config.powerFor(slot));
         }
       }
-    }
-    return bestSwap;
+      return bestSwap;
+    });
   }
 }
 

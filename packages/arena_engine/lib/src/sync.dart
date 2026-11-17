@@ -115,15 +115,15 @@ class RejectedAttempt {
   const RejectedAttempt({required this.move, required this.reason});
 }
 
-/// One round's moves, split by player and by accepted/rejected.
-class RoundMoveLog {
-  /// Round number, `1..config.rounds`.
-  final int round;
+/// One turn's moves, split by player and by accepted/rejected.
+class TurnMoveLog {
+  /// Turn number, `1..2 * config.turnsPerPlayer`.
+  final int turn;
 
-  /// Accepted moves played by [PlayerSlot.first] during [round].
+  /// Accepted moves played by [PlayerSlot.first] during [turn].
   final List<Move> firstAccepted;
 
-  /// Accepted moves played by [PlayerSlot.second] during [round].
+  /// Accepted moves played by [PlayerSlot.second] during [turn].
   final List<Move> secondAccepted;
 
   /// Non-productive swap attempts by [PlayerSlot.first].
@@ -132,20 +132,20 @@ class RoundMoveLog {
   /// Non-productive swap attempts by [PlayerSlot.second].
   final List<RejectedAttempt> secondRejected;
 
-  RoundMoveLog._(this.round)
+  TurnMoveLog._(this.turn)
     : firstAccepted = [],
       secondAccepted = [],
       firstRejected = [],
       secondRejected = [];
 }
 
-/// Outcome of [summarizeLog]: the move log reorganized into per-round,
+/// Outcome of [summarizeLog]: the move log reorganized into per-turn,
 /// per-player buckets plus the final state hashes — the shape match
-/// records need (contract §4: per-round move logs for both players with
+/// records need (contract §4: per-turn move logs for both players with
 /// accepted/rejected attempts distinguished).
 class LogSummary {
-  /// One entry per round that received at least one log entry, in order.
-  final List<RoundMoveLog> rounds;
+  /// One entry per turn that received at least one log entry, in order.
+  final List<TurnMoveLog> turns;
 
   /// Final match outcome, or `null` if the log ends mid-match.
   final MatchOutcome? outcome;
@@ -157,7 +157,7 @@ class LogSummary {
   final HashPair playerHashes;
 
   const LogSummary({
-    required this.rounds,
+    required this.turns,
     required this.outcome,
     required this.stateHash,
     required this.playerHashes,
@@ -227,13 +227,13 @@ EngineResult<ReplayResult> replayEntries(
 }
 
 /// Replays [entries] like [replayEntries] but additionally buckets every
-/// entry into its round and player, separating accepted moves from
-/// non-productive swap attempts — the per-round move logs a saved match
+/// entry into its turn and player, separating accepted moves from
+/// non-productive swap attempts — the per-turn move logs a saved match
 /// record stores.
 ///
-/// Entries are attributed to the round and player that were active
-/// *before* the move applied, so a round-ending move still counts toward
-/// the round that produced it and extra moves stay with their player.
+/// Entries are attributed to the turn and player that were active
+/// *before* the move applied, so a turn-ending move still counts toward
+/// the turn that produced it.
 EngineResult<LogSummary> summarizeLog(
   int seed,
   MatchConfig config,
@@ -243,9 +243,9 @@ EngineResult<LogSummary> summarizeLog(
   if (start is EngineFailure<MatchState>) return EngineFailure(start.error);
   var state = (start as EngineOk<MatchState>).value;
 
-  final byRound = <int, RoundMoveLog>{};
-  RoundMoveLog bucketFor(int round) =>
-      byRound.putIfAbsent(round, () => RoundMoveLog._(round));
+  final byTurn = <int, TurnMoveLog>{};
+  TurnMoveLog bucketFor(int turn) =>
+      byTurn.putIfAbsent(turn, () => TurnMoveLog._(turn));
 
   for (var i = 0; i < entries.length; i++) {
     final entry = entries[i];
@@ -262,14 +262,14 @@ EngineResult<LogSummary> summarizeLog(
         ),
       );
     }
-    final round = state.round;
+    final turn = state.turn;
     final player = state.activePlayer;
     final applied = _applyEntry(state, entry, i);
     if (applied is EngineFailure<_Step>) return EngineFailure(applied.error);
     final step = (applied as EngineOk<_Step>).value;
     state = step.state;
 
-    final bucket = bucketFor(round);
+    final bucket = bucketFor(turn);
     final isFirst = player == PlayerSlot.first;
     if (step.rejectedReason != null) {
       final attempt = RejectedAttempt(
@@ -292,11 +292,11 @@ EngineResult<LogSummary> summarizeLog(
     }
   }
 
-  final rounds = byRound.values.toList()
-    ..sort((a, b) => a.round.compareTo(b.round));
+  final turns = byTurn.values.toList()
+    ..sort((a, b) => a.turn.compareTo(b.turn));
   return EngineOk(
     LogSummary(
-      rounds: List.unmodifiable(rounds),
+      turns: List.unmodifiable(turns),
       outcome: state.outcome,
       stateHash: stateHash(state),
       playerHashes: (

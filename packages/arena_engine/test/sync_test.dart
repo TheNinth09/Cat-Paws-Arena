@@ -45,11 +45,13 @@ void main() {
         boardWidth: 8,
         boardHeight: 6,
         colourCount: 6,
-        rounds: 3,
-        movesPerRound: 4,
+        turnsPerPlayer: 3,
+        turnSeconds: 12,
         rainbowRule: RainbowRule.removeRandomPieces,
         engineVersion: kEngineVersion,
         powerConfiguration: PowerRuleset.threeFreeEqual,
+        firstPower: PowerKind.laserChase,
+        secondPower: PowerKind.shadowPounce,
       );
       expect(MatchConfig.fromJson(custom.toJson()), custom);
     });
@@ -62,7 +64,7 @@ void main() {
         ..remove('colourCount');
       expect(MatchConfig.fromJson(missing), isNull);
       final badType = Map<String, Object?>.of(config.toJson())
-        ..['rounds'] = 'five';
+        ..['turnsPerPlayer'] = 'five';
       expect(MatchConfig.fromJson(badType), isNull);
       final badEnum = Map<String, Object?>.of(config.toJson())
         ..['rainbowRule'] = 'explode';
@@ -91,12 +93,14 @@ void main() {
         firstCell: (row: 0, col: 0),
         secondCell: (row: 0, col: 1),
       );
-      const power = PowerMove(power: PowerKind.zoomies, targetRow: 3);
+      const power = PowerMove(power: PowerKind.zoomies);
       const laser = PowerMove(power: PowerKind.laserChase);
+      const endTurn = EndTurnMove();
       for (final entry in [
         const MoveLogEntry(index: 0, move: swap),
         const MoveLogEntry(index: 7, move: power, hashAfter: 'abc123'),
         const MoveLogEntry(index: 9, move: laser),
+        const MoveLogEntry(index: 10, move: endTurn),
       ]) {
         final back = MoveLogEntry.fromJson(entry.toJson());
         expect(back, entry);
@@ -287,7 +291,7 @@ void main() {
   });
 
   group('summarizeLog', () {
-    test('buckets a full match per round and player', () {
+    test('buckets a full match per turn and player', () {
       final (entries, finalState) = playLogged(314, Random(19));
       final res = summarizeLog(314, config, entries);
       expect(res, isA<EngineOk<LogSummary>>());
@@ -302,20 +306,31 @@ void main() {
 
       // Every accepted entry appears exactly once across the buckets.
       var accepted = 0;
-      var byRound = <int, int>{};
-      for (final r in summary.rounds) {
-        accepted += r.firstAccepted.length + r.secondAccepted.length;
-        byRound[r.round] =
-            r.firstAccepted.length + r.secondAccepted.length;
+      var byTurn = <int, int>{};
+      for (final t in summary.turns) {
+        accepted += t.firstAccepted.length + t.secondAccepted.length;
+        byTurn[t.turn] =
+            t.firstAccepted.length + t.secondAccepted.length;
       }
       expect(accepted, entries.length);
-      expect(byRound.keys, orderedEquals(byRound.keys.toList()..sort()));
-      // Five rounds were played.
-      expect(summary.rounds.length, config.rounds);
-      // Both players moved in every round.
-      for (final r in summary.rounds) {
-        expect(r.firstAccepted, isNotEmpty);
-        expect(r.secondAccepted, isNotEmpty);
+      expect(byTurn.keys, orderedEquals(byTurn.keys.toList()..sort()));
+      // All ten turns were played (five each).
+      expect(summary.turns.length, 2 * config.turnsPerPlayer);
+      // Each turn belongs to exactly one player, alternating.
+      for (var i = 0; i < summary.turns.length; i++) {
+        final t = summary.turns[i];
+        expect(t.turn, i + 1);
+        final firstCount =
+            t.firstAccepted.length + t.firstRejected.length;
+        final secondCount =
+            t.secondAccepted.length + t.secondRejected.length;
+        if (i.isEven) {
+          expect(firstCount, greaterThan(0));
+          expect(secondCount, 0);
+        } else {
+          expect(secondCount, greaterThan(0));
+          expect(firstCount, 0);
+        }
       }
     });
 
@@ -355,12 +370,12 @@ void main() {
       final res = summarizeLog(6, config, entries);
       expect(res, isA<EngineOk<LogSummary>>());
       final summary = (res as EngineOk<LogSummary>).value;
-      final round = summary.rounds.single;
-      expect(round.firstRejected, hasLength(1));
-      expect(round.firstRejected.single.move, rejectedMove);
-      expect(round.firstRejected.single.reason, 'no-match');
-      expect(round.firstAccepted, [followUp]);
-      expect(round.secondAccepted, isEmpty);
+      final turn = summary.turns.single;
+      expect(turn.firstRejected, hasLength(1));
+      expect(turn.firstRejected.single.move, rejectedMove);
+      expect(turn.firstRejected.single.reason, 'no-match');
+      expect(turn.firstAccepted, [followUp]);
+      expect(turn.secondAccepted, isEmpty);
     });
 
     test('rejects the same corruptions as replayEntries', () {
@@ -381,7 +396,7 @@ void main() {
       final init = (newMatch(9, config) as EngineOk<MatchState>).value;
       expect(summary.stateHash, stateHash(init));
       expect(summary.outcome, isNull);
-      expect(summary.rounds, isEmpty);
+      expect(summary.turns, isEmpty);
     });
   });
 

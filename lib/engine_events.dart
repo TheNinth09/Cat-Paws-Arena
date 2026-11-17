@@ -7,9 +7,9 @@ import 'duel_events.dart';
 ///
 /// The engine tracks piece *codes*, not identities, and emits `CellPos`
 /// records; this adapter assigns stable piece ids, flattens positions to
-/// `row * width + col`, resolves obstacle kinds from the post-move board,
-/// and inserts a [BoardReset] after each non-final [RoundEnded] so events
-/// that follow a round boundary land on the freshly dealt board.
+/// `row * width + col` and resolves obstacle kinds from the post-move
+/// board. Boards persist across turns, so no reset event is needed at
+/// turn boundaries.
 ///
 /// [localSlot] is the engine slot this client plays (host = first, guest =
 /// second in online duels); only events acting on that slot reach the view.
@@ -178,12 +178,12 @@ class EngineViewAdapter {
               piece: BoardPiece(id: _nextId++, kind: piece.clamp(0, 5)),
             ),
           );
-        case engine.ObstacleQueued(:final player, :final sourceRound, :final count)
+        case engine.ObstacleQueued(:final player, :final sourceTurn, :final count)
             when player == localSlot:
           out.add(
             ObstacleQueued(
               player: _viewPlayer,
-              sourceRound: sourceRound,
+              sourceTurn: sourceTurn,
               count: count,
             ),
           );
@@ -256,30 +256,14 @@ class EngineViewAdapter {
               pieces: pieces,
             ),
           );
-        case engine.ExtraMove(:final player, :final round, :final movesRemaining)
-            when player == localSlot:
+        case engine.TurnEnded(:final turn, :final scores, :final outcome):
           out.add(
-            ExtraMove(
-              player: _viewPlayer,
-              round: round,
-              movesRemaining: movesRemaining,
-            ),
-          );
-        case engine.RoundEnded(:final round, :final scores, :final outcome):
-          out.add(
-            RoundEnded(
-              round: round,
+            TurnEnded(
+              turn: turn,
               scores: (first: scores.first, second: scores.second),
               outcome: outcome == null ? null : _outcome(outcome),
             ),
           );
-          if (outcome == null) {
-            out.add(
-              BoardReset(
-                snapshot: snapshotOf(state, localSlot),
-              ),
-            );
-          }
         case engine.MatchEnded(
           :final outcome,
           :final scores,
