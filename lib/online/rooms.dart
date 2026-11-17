@@ -24,9 +24,13 @@ class RoomService {
   final CloudStore store;
   final Random? random;
 
-  Future<RoomRecord> createRoom(String hostUid) async {
+  Future<RoomRecord> createRoom(String hostUid, {int power = 0}) async {
     for (var i = 0; i < maxAttempts; i++) {
-      final room = await store.createRoom(RoomCode.generate(random), hostUid);
+      final room = await store.createRoom(
+        RoomCode.generate(random),
+        hostUid,
+        power: power,
+      );
       if (room != null) return room;
     }
     throw const OnlineException(OnlineErrorCode.roomCodeExhausted);
@@ -34,12 +38,16 @@ class RoomService {
 
   /// [input] is what the player typed; spaces, dashes and lower case are
   /// accepted.
-  Future<JoinedRoom> joinRoom(String input, String guestUid) async {
+  Future<JoinedRoom> joinRoom(
+    String input,
+    String guestUid, {
+    int power = 0,
+  }) async {
     final code = RoomCode.normalize(input);
     if (code == null) {
       throw const OnlineException(OnlineErrorCode.invalidRoomCode);
     }
-    final (claim, room) = await store.claimRoom(code, guestUid);
+    final (claim, room) = await store.claimRoom(code, guestUid, power: power);
     return switch (claim) {
       RoomClaim.joined => JoinedRoom(
         code: code,

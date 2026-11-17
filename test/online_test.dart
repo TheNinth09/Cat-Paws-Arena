@@ -605,15 +605,17 @@ void main() {
       final sub = host.watch().listen((m) => seen.add(m.index));
       final bot = botForLevel(HouseCatLevel.medium);
       await host.play(bot.chooseMove(host.state));
+      // The bot may pass the turn itself; end it explicitly otherwise.
+      if (host.isMyTurn) await host.play(const EndTurnMove());
       await pumpEventQueue();
-      expect(host.movesApplied, 1);
+      final hostMoves = host.movesApplied;
       expect(host.deadline, isNotNull);
       await guest.refresh();
       await guest.play(bot.chooseMove(guest.state));
       await pumpEventQueue();
-      expect(host.movesApplied, 2);
+      expect(host.movesApplied, hostMoves + 1);
       expect(host.flag, isNull);
-      expect(seen, [1]);
+      expect(seen, [hostMoves]);
       expect(stateHash(host.state), stateHash(guest.state));
       unawaited(sub.cancel());
     });
@@ -631,7 +633,7 @@ void main() {
       await host.play(botForLevel(HouseCatLevel.medium).chooseMove(host.state));
       await host.refresh();
       await expectLater(
-        host.claimForfeit(),
+        guest.claimForfeit(),
         throwsA(
           isA<MatchException>().having(
             (e) => e.code,
@@ -641,12 +643,12 @@ void main() {
         ),
       );
       now = now.add(roundLimit);
-      await host.claimForfeit();
-      expect(host.record.forfeitWinner, PlayerSlot.first);
-      expect(host.isOver, isTrue);
-      await guest.refresh();
+      await guest.claimForfeit();
+      expect(guest.record.forfeitWinner, PlayerSlot.second);
       expect(guest.isOver, isTrue);
-      expect(guest.record.forfeitWinner, PlayerSlot.first);
+      await host.refresh();
+      expect(host.isOver, isTrue);
+      expect(host.record.forfeitWinner, PlayerSlot.second);
     });
   });
 

@@ -79,8 +79,9 @@ async function hostRoom(code = 'ABC234', uid = 'host') {
 
 const matchFields = {
   seed: 12345,
-  config: 'v1|7x7|c5|r5|m3|rainbow:clearOneColour|powers:threeFreeEqual',
-  engineVersion: 1,
+  config:
+    'v2|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
+  engineVersion: 2,
   contractVersion: 1,
 };
 
@@ -312,10 +313,47 @@ describe('match sync', () => {
     const batch = writeBatch(g);
     batch.set(doc(g, 'matches', matchIdOf('ABC234', room)), {
       roomCode: 'ABC234', hostUid: 'host', guestUid: 'guest', createdAt: serverTimestamp(),
-      ...matchFields, config: 'v1|9x9|c6|r5|m3|rainbow:clearOneColour|powers:threeFreeEqual',
+      ...matchFields, config: 'v2|9x9|c6|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
     });
     batch.delete(doc(g, 'rooms', 'ABC234'));
     await assertFails(batch.commit());
+  });
+
+  test('the loadout in the config fingerprint must match the power fields', async () => {
+    const room = await hostRoom();
+    const g = db('guest');
+    const id = matchIdOf('ABC234', room);
+    const data = {
+      roomCode: 'ABC234', hostUid: 'host', guestUid: 'guest', createdAt: serverTimestamp(),
+      ...matchFields,
+      power1: 1, power2: 2,
+      config:
+        'v2|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:shadowPounce/laserChase',
+    };
+    const batch = writeBatch(g);
+    batch.set(doc(g, 'matches', id), data);
+    batch.delete(doc(g, 'rooms', 'ABC234'));
+    await assertSucceeds(batch.commit());
+  });
+
+  test('a power field that disagrees with the fingerprint is denied', async () => {
+    const room = await hostRoom();
+    const g = db('guest');
+    const batch = writeBatch(g);
+    batch.set(doc(g, 'matches', matchIdOf('ABC234', room)), {
+      roomCode: 'ABC234', hostUid: 'host', guestUid: 'guest', createdAt: serverTimestamp(),
+      ...matchFields, power1: 1,
+    });
+    batch.delete(doc(g, 'rooms', 'ABC234'));
+    await assertFails(batch.commit());
+  });
+
+  test('end-turn moves are accepted alongside swaps and powers', async () => {
+    const id = await seedMatch();
+    await assertSucceeds(put('host', id, 0, move(0, 'host', 'first')));
+    await assertSucceeds(
+      put('host', id, 1, move(1, 'host', 'first', { kind: 'endTurn' })),
+    );
   });
 
   test('players append moves in order, own slot, create-only', async () => {

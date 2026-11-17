@@ -412,7 +412,11 @@ class _OnlineSettingsState extends State<_OnlineSettings> {
     });
     try {
       final user = await services.account.start();
-      final joined = await services.rooms.joinRoom(roomCode.text, user.uid);
+      final joined = await services.rooms.joinRoom(
+        roomCode.text,
+        user.uid,
+        power: player.power,
+      );
       if (!mounted) return;
       roomCode.clear();
       await showAppDialog(

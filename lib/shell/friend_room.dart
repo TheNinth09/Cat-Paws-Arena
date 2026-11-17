@@ -110,7 +110,10 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
         createdRoom = null;
       }
       final user = await services.account.start();
-      final room = await services.rooms.createRoom(user.uid);
+      final room = await services.rooms.createRoom(
+        user.uid,
+        power: widget.player.power,
+      );
       if (!mounted) return;
       setState(() {
         createdRoom = room;
@@ -141,7 +144,11 @@ class _FriendRoomPanelState extends State<FriendRoomPanel> {
     });
     try {
       final user = await services.account.start();
-      final joined = await services.rooms.joinRoom(roomCode.text, user.uid);
+      final joined = await services.rooms.joinRoom(
+        roomCode.text,
+        user.uid,
+        power: widget.player.power,
+      );
       if (!mounted) return;
       roomCode.clear();
       await _openDuel(

@@ -61,6 +61,7 @@ class RoomRecord {
     required this.code,
     required this.hostUid,
     required this.createdAt,
+    this.power = 0,
   });
 
   /// A room lives 24 hours (server time) or until a friend joins it.
@@ -68,6 +69,10 @@ class RoomRecord {
 
   final String code;
   final String hostUid;
+
+  /// The host cat's chosen power index (0-2); carried into the match
+  /// loadout at claim time.
+  final int power;
 
   /// Server time the room was created.
   final DateTime createdAt;
@@ -107,16 +112,20 @@ abstract interface class CloudStore {
   Future<void> writeProfile(String uid, Map<String, Object?> data);
 
   /// Creates `rooms/{code}` stamped with server time; null when the code
-  /// is taken.
-  Future<RoomRecord?> createRoom(String code, String hostUid);
+  /// is taken. [power] is the host cat's chosen power index (0-2).
+  Future<RoomRecord?> createRoom(String code, String hostUid, {int power = 0});
   Future<RoomRecord?> readRoom(String code);
   Future<void> deleteRoom(String code);
 
   /// Atomically claims [code] for [guestUid] (a Firestore transaction), so
   /// only one guest can join. On [RoomClaim.joined] the same transaction
   /// creates the match `room.matchId` and deletes the room; an expired room
-  /// is deleted too.
-  Future<(RoomClaim, RoomRecord?)> claimRoom(String code, String guestUid);
+  /// is deleted too. [power] is the guest cat's chosen power index (0-2).
+  Future<(RoomClaim, RoomRecord?)> claimRoom(
+    String code,
+    String guestUid, {
+    int power = 0,
+  });
 
   /// Emits once a guest has claimed [room].
   Stream<MatchLink> watchJoin(RoomRecord room);

@@ -115,6 +115,8 @@ class MatchRecord {
     required this.config,
     required this.engineVersion,
     required this.contractVersion,
+    this.power1 = 0,
+    this.power2 = 0,
     this.finals = const {},
     this.flag,
     this.forfeitWinner,
@@ -123,9 +125,14 @@ class MatchRecord {
   final String matchId, roomCode, hostUid, guestUid;
   final int seed;
 
-  /// `MatchConfig.fingerprint`; only the agreed duel is accepted.
+  /// `MatchConfig.fingerprint`; only the agreed duel (plus the recorded
+  /// power loadout) is accepted.
   final String config;
   final int engineVersion, contractVersion;
+
+  /// Each player's chosen power index (0-2), recorded at claim time so both
+  /// phones build the same `MatchConfig` loadout.
+  final int power1, power2;
   final Map<PlayerSlot, MatchFinal> finals;
   final MatchFlag? flag;
 

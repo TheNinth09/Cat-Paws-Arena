@@ -59,12 +59,17 @@ class FakeCloud implements CloudStore, MatchStore {
   }
 
   @override
-  Future<RoomRecord?> createRoom(String code, String hostUid) async {
+  Future<RoomRecord?> createRoom(
+    String code,
+    String hostUid, {
+    int power = 0,
+  }) async {
     if (rooms.containsKey(code)) return null;
     return rooms[code] = RoomRecord(
       code: code,
       hostUid: hostUid,
       createdAt: serverNow(),
+      power: power,
     );
   }
 
@@ -77,8 +82,9 @@ class FakeCloud implements CloudStore, MatchStore {
   @override
   Future<(RoomClaim, RoomRecord?)> claimRoom(
     String code,
-    String guestUid,
-  ) async {
+    String guestUid, {
+    int power = 0,
+  }) async {
     final room = rooms[code];
     if (room == null) return (RoomClaim.notFound, null);
     if (!serverNow().isBefore(room.expiresAt)) {
@@ -100,9 +106,14 @@ class FakeCloud implements CloudStore, MatchStore {
       hostUid: room.hostUid,
       guestUid: guestUid,
       seed: _random.nextInt(1 << 31),
-      config: const MatchConfig.duel().fingerprint,
+      config: MatchConfig(
+        firstPower: PowerKind.values[room.power.clamp(0, 2)],
+        secondPower: PowerKind.values[power.clamp(0, 2)],
+      ).fingerprint,
       engineVersion: kEngineVersion,
       contractVersion: kMatchContractVersion,
+      power1: room.power,
+      power2: power,
     );
     _joins.add(match);
     return (RoomClaim.joined, room);
@@ -169,6 +180,8 @@ class FakeCloud implements CloudStore, MatchStore {
     config: m.config,
     engineVersion: m.engineVersion,
     contractVersion: m.contractVersion,
+    power1: m.power1,
+    power2: m.power2,
     finals: finals ?? m.finals,
     flag: flag ?? m.flag,
     forfeitWinner: forfeitWinner ?? m.forfeitWinner,

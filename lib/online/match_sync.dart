@@ -14,7 +14,12 @@ import 'online_errors.dart';
 class MatchSession {
   MatchSession._(this.store, this.record, this.uid, this.slot, this._state);
 
-  static const config = MatchConfig.duel();
+  /// The duel config for [record]'s agreed power loadout. Both phones must
+  /// derive the same config or their hashes diverge.
+  static MatchConfig configFor(MatchRecord record) => MatchConfig(
+    firstPower: PowerKind.values[record.power1.clamp(0, 2)],
+    secondPower: PowerKind.values[record.power2.clamp(0, 2)],
+  );
 
   final MatchStore store;
   final String uid;
@@ -37,6 +42,7 @@ class MatchSession {
     final slot =
         record.slotOf(uid) ??
         (throw const OnlineException(OnlineErrorCode.notInMatch));
+    final config = configFor(record);
     final start = newMatch(record.seed, config);
     final session = MatchSession._(
       store,

@@ -102,7 +102,9 @@ service cloud.firestore {
       allow list: if signedIn() && resource.data.hostUid == request.auth.uid;
       allow create: if signedIn()
         && code.matches('^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$')
-        && exactKeys(request.resource.data, ['hostUid', 'createdAt', 'expiresAt'])
+        && request.resource.data.keys().hasOnly(['hostUid', 'createdAt', 'expiresAt', 'power'])
+        && request.resource.data.keys().hasAll(['hostUid', 'createdAt', 'expiresAt'])
+        && (!('power' in request.resource.data) || inRange(request.resource.data.power, 3))
         && request.resource.data.hostUid == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.expiresAt is timestamp
@@ -115,16 +117,35 @@ service cloud.firestore {
         || claimedByMe(code, resource.data));
     }
 
+    // PowerKind order in arena_engine: zoomies, shadowPounce, laserChase.
+    function powerName(i) {
+      return i == 0 ? 'zoomies' : (i == 1 ? 'shadowPounce' : 'laserChase');
+    }
+
+    // The agreed timed-turn duel fingerprint; the loadout part names each
+    // player's chosen power (MatchConfig.fingerprint in the engine).
+    function duelFingerprint(p1, p2) {
+      return 'v2|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:'
+        + powerName(p1) + '/' + powerName(p2);
+    }
+
     // Created only in the room-claim transaction, which deletes the room in
     // the same commit, so one room makes at most one match.
     function validClaim(matchId, d) {
       let roomPath = /databases/$(database)/documents/rooms/$(d.roomCode);
-      return exactKeys(d, ['roomCode', 'hostUid', 'guestUid', 'createdAt',
+      return d.keys().hasOnly(['roomCode', 'hostUid', 'guestUid', 'createdAt',
+            'seed', 'config', 'engineVersion', 'contractVersion',
+            'power1', 'power2'])
+        && d.keys().hasAll(['roomCode', 'hostUid', 'guestUid', 'createdAt',
             'seed', 'config', 'engineVersion', 'contractVersion'])
         && d.roomCode is string
         && d.seed is int && d.seed >= 0 && d.seed < 2147483648
-        && d.config == 'v1|7x7|c5|r5|m3|rainbow:clearOneColour|powers:threeFreeEqual'
-        && d.engineVersion == 1
+        && (!('power1' in d) || inRange(d.power1, 3))
+        && (!('power2' in d) || inRange(d.power2, 3))
+        && d.config == duelFingerprint(
+            ('power1' in d) ? d.power1 : 0,
+            ('power2' in d) ? d.power2 : 0)
+        && d.engineVersion == 2
         && d.contractVersion == 1
         && exists(roomPath)
         && !existsAfter(roomPath)
@@ -174,7 +195,8 @@ service cloud.firestore {
           && m.keys().hasAll(['kind', 'power'])
           && m.keys().hasOnly(['kind', 'power', 'row'])
           && m.power in ['zoomies', 'shadowPounce', 'laserChase']
-          && (!('row' in m) || inRange(m.row, 7))));
+          && (!('row' in m) || inRange(m.row, 7)))
+        || (m.kind == 'endTurn' && exactKeys(m, ['kind'])));
     }
 
     function hash16(h) {
@@ -235,7 +257,7 @@ service cloud.firestore {
         allow create: if isPlayerOf(matchId)
           && exactKeys(request.resource.data,
             ['index', 'by', 'slot', 'move', 'hashAfter', 'next', 'at'])
-          && inRange(request.resource.data.index, 200)
+          && inRange(request.resource.data.index, 500)
           && id == moveId(request.resource.data.index)
           && request.resource.data.by == request.auth.uid
           && request.resource.data.slot == slotOf(

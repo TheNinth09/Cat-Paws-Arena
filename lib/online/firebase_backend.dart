@@ -167,6 +167,7 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
     code: code,
     hostUid: data['hostUid'] as String,
     createdAt: (data['createdAt'] as Timestamp).toDate().toUtc(),
+    power: (data['power'] as int?) ?? 0,
   );
 
   @override
@@ -190,7 +191,11 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
       });
 
   @override
-  Future<RoomRecord?> createRoom(String code, String hostUid) => _guard(
+  Future<RoomRecord?> createRoom(
+    String code,
+    String hostUid, {
+    int power = 0,
+  }) => _guard(
     () async {
       final ref = _rooms.doc(code);
       final created = await _db.runTransaction((tx) async {
@@ -200,6 +205,7 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
           'createdAt': FieldValue.serverTimestamp(),
           // For the Firestore TTL policy only; expiry is createdAt + 24 h.
           'expiresAt': Timestamp.fromDate(serverNow().add(RoomRecord.lifetime)),
+          'power': power,
         });
         return true;
       });
@@ -220,7 +226,11 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
       _guard(() => _rooms.doc(code).delete());
 
   @override
-  Future<(RoomClaim, RoomRecord?)> claimRoom(String code, String guestUid) =>
+  Future<(RoomClaim, RoomRecord?)> claimRoom(
+    String code,
+    String guestUid, {
+    int power = 0,
+  }) =>
       _guard(
         () => _db.runTransaction((tx) async {
           final ref = _rooms.doc(code);
@@ -238,9 +248,14 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
             'guestUid': guestUid,
             'createdAt': FieldValue.serverTimestamp(),
             'seed': Random.secure().nextInt(1 << 31),
-            'config': const MatchConfig.duel().fingerprint,
+            'config': MatchConfig(
+              firstPower: PowerKind.values[room.power.clamp(0, 2)],
+              secondPower: PowerKind.values[power.clamp(0, 2)],
+            ).fingerprint,
             'engineVersion': kEngineVersion,
             'contractVersion': kMatchContractVersion,
+            'power1': room.power,
+            'power2': power,
           });
           tx.delete(ref);
           return (RoomClaim.joined, room);
@@ -316,6 +331,8 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
         config: d['config'] as String,
         engineVersion: d['engineVersion'] as int,
         contractVersion: d['contractVersion'] as int,
+        power1: (d['power1'] as int?) ?? 0,
+        power2: (d['power2'] as int?) ?? 0,
         finals: {
           for (final slot in PlayerSlot.values)
             slot: ?MatchFinal.fromJson(d['final_${slot.name}']),
