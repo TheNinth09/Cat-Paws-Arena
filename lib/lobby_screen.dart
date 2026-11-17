@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import 'app_dialogs.dart';
 import 'cat_avatar.dart';
 import 'catalog.dart';
 import 'profile.dart';
@@ -51,7 +52,29 @@ class LobbyScreen extends StatelessWidget {
   String get _bgAsset =>
       _roomBackgrounds[player.tier.clamp(0, _roomBackgrounds.length - 1)];
 
-  void _fight() => onBattle(pickBattleCat(player));
+  bool get english => player.english;
+
+  void _offline(BuildContext context) {
+    Navigator.of(context).pop();
+    onBattle(pickBattleCat(player));
+  }
+
+  void _online(BuildContext context) {
+    Navigator.of(context).pop();
+    showFriendRoom(context, english: english, player: player);
+  }
+
+  /// LUPTĂ → mode chooser: offline practice against the labelled house
+  /// cats, or the six-character friend room. One calm dialog, no cards.
+  void _modeChooser(BuildContext context) => showAppDialog(
+    context,
+    english ? 'CHOOSE MODE' : 'ALEGE MODUL',
+    _ModeChooser(
+      english: english,
+      onOffline: () => _offline(context),
+      onOnline: () => _online(context),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -61,8 +84,7 @@ class LobbyScreen extends StatelessWidget {
         // Compact when the *page viewport* (not the full screen) is short or
         // text is scaled up — the scene and controls then scroll instead of
         // overflowing.
-        final compact =
-            constraints.maxHeight < 620 || textScale > 1.3;
+        final compact = constraints.maxHeight < 620 || textScale > 1.3;
         final content = compact
             ? ListView(
                 key: const PageStorageKey('lobby-scroll'),
@@ -71,7 +93,7 @@ class LobbyScreen extends StatelessWidget {
                   _progressStrip(),
                   const SizedBox(height: 4),
                   _catScene(context, compact: true),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _controls(context),
                 ],
               )
@@ -206,10 +228,10 @@ class LobbyScreen extends StatelessWidget {
                           Flexible(
                             child: Text(
                               next == null
-                                  ? (player.english
+                                  ? (english
                                         ? 'ALL ROOMS'
                                         : 'TOATE CAMERELE')
-                                  : (player.english
+                                  : (english
                                         ? 'NEXT: ${houseRoomDisplayNamesEn[index + 1]} @ ${next.threshold}'
                                         : 'URM.: ${houseRoomDisplayNames[index + 1]} LA ${next.threshold}'),
                               maxLines: 1,
@@ -262,7 +284,7 @@ class LobbyScreen extends StatelessWidget {
     );
   }
 
-  /// The player's cat sitting on a rug in the middle of the room.
+  /// The player's cat sitting on its cushion in the middle of the room.
   Widget _catScene(BuildContext context, {bool compact = false}) {
     final height = compact ? 170.0 : 205.0;
     final catAsset = switch (player.cat) {
@@ -280,13 +302,21 @@ class LobbyScreen extends StatelessWidget {
             children: [
               Positioned(
                 bottom: 0,
-                child: CustomPaint(
-                  size: Size(min(320, MediaQuery.sizeOf(context).width * .8), 64),
-                  painter: const _RugPainter(),
+                child: arenaImage(
+                  'cat_cushion',
+                  width: min(320, MediaQuery.sizeOf(context).width * .8),
+                  fit: BoxFit.contain,
+                  fallback: CustomPaint(
+                    size: Size(
+                      min(320, MediaQuery.sizeOf(context).width * .8),
+                      64,
+                    ),
+                    painter: const _RugPainter(),
+                  ),
                 ),
               ),
               Positioned(
-                bottom: 30,
+                bottom: 26,
                 child: catAsset == null
                     ? CatCharacter(player, height: height)
                     : arenaImage(
@@ -343,7 +373,7 @@ class LobbyScreen extends StatelessWidget {
                   const Icon(Icons.sports_esports, color: gold, size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    player.english ? 'MODE: 1v1 ARENA' : 'MOD: 1v1 ARENA',
+                    english ? 'MODE: 1v1 ARENA' : 'MOD: 1v1 ARENA',
                     style: const TextStyle(
                       color: cream,
                       fontSize: 11,
@@ -361,38 +391,344 @@ class LobbyScreen extends StatelessWidget {
           width: double.infinity,
           child: ArenaButton(
             key: const ValueKey('lobby-fight'),
-            text: player.english ? 'BATTLE' : 'LUPTĂ',
-            onPressed: _fight,
+            text: english ? 'BATTLE' : 'LUPTĂ',
+            onPressed: () => _modeChooser(context),
             spriteName: 'btn_play_paw',
           ),
         ),
         const SizedBox(height: 6),
-        ArenaButton(
-          text: player.english ? 'ONLINE ROOM' : 'CAMERĂ ONLINE',
-          onPressed: () =>
-              showFriendRoom(context, english: player.english, player: player),
-          secondary: true,
-          singleLine: true,
-        ),
-        const SizedBox(height: 2),
-        Text(
-          player.english
-              ? 'House cats are labelled BOT; friend rooms are ONLINE when the service is configured.'
-              : 'Pisicile casei sunt BOT; camerele de prieten sunt ONLINE când serviciul este configurat.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: cream,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            shadows: [Shadow(color: Color(0x55000000), offset: Offset(0, 1))],
+        _hubRow(context),
+      ],
+    ),
+  );
+
+  /// Compact hub entries on the main screen: friend room, local
+  /// leaderboard and the Google link inside settings. Small dark chips so
+  /// the scene keeps breathing.
+  Widget _hubRow(BuildContext context) {
+    Widget chip(String label, IconData icon, VoidCallback tap, {String? key_}) {
+      return Material(
+        color: const Color(0x9926131e),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          key: key_ == null ? null : ValueKey(key_),
+          onTap: tap,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: gold, size: 15),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: cream,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .6,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ],
+      );
+    }
+
+    return Center(
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        alignment: WrapAlignment.center,
+        children: [
+          chip(
+            english ? 'FRIENDS' : 'PRIETENI',
+            Icons.people_alt_rounded,
+            () => showFriendRoom(context, english: english, player: player),
+            key_: 'hub-friends',
+          ),
+          chip(
+            english ? 'LEADERBOARD' : 'CLASAMENT',
+            Icons.leaderboard_rounded,
+            () => showLeaderboard(context, english: english, player: player),
+            key_: 'hub-ranks',
+          ),
+          chip(
+            english ? 'LINK ACCOUNT' : 'CONECTARE CONT',
+            Icons.account_circle_rounded,
+            () => showSettings(context, player),
+            key_: 'hub-account',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mode chooser shown by the LUPTĂ button: offline against the house cats
+/// (honest BOT label) or the existing six-character friend room.
+class _ModeChooser extends StatelessWidget {
+  const _ModeChooser({
+    required this.english,
+    required this.onOffline,
+    required this.onOnline,
+  });
+  final bool english;
+  final VoidCallback onOffline, onOnline;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ArenaButton(
+        key: const ValueKey('mode-offline'),
+        text: english ? 'VS HOUSE CATS' : 'CONTRA PISICILOR CASEI',
+        green: true,
+        onPressed: onOffline,
+      ),
+      _hint(
+        english
+            ? 'Offline practice — opponents are always labelled BOT.'
+            : 'Antrenament offline — adversarii sunt mereu marcați BOT.',
+      ),
+      ArenaButton(
+        key: const ValueKey('mode-online'),
+        text: english ? 'FRIEND ROOM' : 'CAMERĂ DE PRIETEN',
+        secondary: true,
+        onPressed: onOnline,
+      ),
+      _hint(
+        english
+            ? 'Six-character room code — ONLINE duel when the service is configured.'
+            : 'Cod de șase caractere — duel ONLINE când serviciul este configurat.',
+      ),
+    ],
+  );
+
+  Widget _hint(String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+    child: Text(
+      text,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: Color(0xff8a6242),
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        height: 1.3,
+      ),
     ),
   );
 }
 
-/// Oval rug the cat sits on: wooden rim, woven centre and a stitched edge.
+/// Local leaderboard dialog: the LOCAL tab ranks the player against the
+/// house cats by trophies (all values are real); the GLOBAL tab is plainly
+/// labelled as not available yet — there is no ranked strangers feature.
+Future<void> showLeaderboard(
+  BuildContext context, {
+  required bool english,
+  required Player player,
+}) => showAppDialog(
+  context,
+  english ? 'LEADERBOARD' : 'CLASAMENT',
+  _LeaderboardPanel(english: english, player: player),
+);
+
+class _LeaderboardPanel extends StatefulWidget {
+  const _LeaderboardPanel({required this.english, required this.player});
+  final bool english;
+  final Player player;
+
+  @override
+  State<_LeaderboardPanel> createState() => _LeaderboardPanelState();
+}
+
+class _LeaderboardPanelState extends State<_LeaderboardPanel> {
+  bool global = false;
+
+  bool get english => widget.english;
+  Player get p => widget.player;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = <({String name, int trophies, bool you})>[
+      for (final room in houseRooms)
+        for (final cat in room.cats) (name: cat.name, trophies: cat.trophies, you: false),
+      (name: p.name, trophies: p.trophies, you: true),
+    ]..sort((a, b) => b.trophies.compareTo(a.trophies));
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _tab(
+                english ? 'LOCAL' : 'LOCAL',
+                selected: !global,
+                onTap: () => setState(() => global = false),
+                key_: 'ranks-local',
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _tab(
+                english ? 'GLOBAL' : 'GLOBAL',
+                selected: global,
+                onTap: () => setState(() => global = true),
+                key_: 'ranks-global',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (global)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.public_off_rounded,
+                  color: Color(0xff8a6242),
+                  size: 40,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  english
+                      ? 'Coming soon — there is no ranked play against strangers, so the global board is not live yet.'
+                      : 'În curând — nu există clasament contra străinilor, așa că panoul global nu este încă activ.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xff8a6242),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          // Plain column: AlertDialog measures intrinsic dimensions, which
+          // a scrollable viewport cannot provide.
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < entries.length; i++) _row(i + 1, entries[i]),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _tab(
+    String text, {
+    required bool selected,
+    required VoidCallback onTap,
+    String? key_,
+  }) => Material(
+    color: selected ? gold : const Color(0xfffffbec),
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
+      key: key_ == null ? null : ValueKey(key_),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: selected ? ink : const Color(0xff8a6242),
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _row(int rank, ({String name, int trophies, bool you}) e) {
+    final medal = switch (rank) {
+      1 => const Color(0xffe8a92e),
+      2 => const Color(0xffb9c0c8),
+      3 => const Color(0xffc98f5a),
+      _ => const Color(0xfffffbec),
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: e.you ? const Color(0xffffe9bd) : const Color(0xfffffbec),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: e.you ? gold : const Color(0xffd9b98c),
+          width: e.you ? 1.8 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: medal,
+              border: Border.all(color: ink, width: 1.2),
+            ),
+            child: Text(
+              '$rank',
+              style: const TextStyle(
+                color: ink,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              e.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: ink,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Text(
+            e.you ? (english ? 'YOU' : 'TU') : 'BOT',
+            style: TextStyle(
+              color: e.you ? const Color(0xffb0791f) : const Color(0xff8a6a52),
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 8),
+          sprite('icon_trophy', size: 15),
+          const SizedBox(width: 3),
+          Text(
+            '${e.trophies}',
+            style: const TextStyle(
+              color: ink,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Oval cushion/rug the cat sits on: wooden rim, woven centre and a
+/// stitched edge — procedural fallback for `cat_cushion.png`.
 class _RugPainter extends CustomPainter {
   const _RugPainter();
 

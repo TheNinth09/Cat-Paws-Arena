@@ -243,3 +243,11 @@ Request: Whitelist `assets/images/` in the runtime bundle (pubspec assets sectio
 Reason: docs/contract.md battle-screen spec references assets/images/tile_*.png and cat_* sprites; only the orchestrator (or lane 1 by exception) may edit the pubspec assets section.
 Status: answered — assets/images/ is bundled (bdd4779) and whitelisted (bbbc324); cat_run.png is absent so the procedural fallback runs — add the sprite later if desired.
 ```
+
+```text
+Lane: 3
+Blocking PR: lane-3 v0.4 shell/lobby/profile (this PR)
+Request: Lane 4 — test/shop_social_test.dart "shop shows offer zone, daily reward, paw packs and honest prices" still taps '+200 Lăbuțe', but the daily gift on main is '+5 Lăbuțe' since 712adfc, so the test fails on main already (verified: fails without lane-3 changes). Update the finder to '+5 Lăbuțe' (and expected coins accordingly). Also FYI for the orchestrator: Player has no wins/losses/draws fields, so ProfileScreen shows only real local stats (trophies, paws, owned cosmetics, current room); if win/loss tracking is wanted later, it needs a profile.dart field.
+Reason: test/shop_social_test.dart and lib/profile.dart are outside lane-3 ownership; the profile page is required to show only stats that actually exist.
+Status: open
+```
