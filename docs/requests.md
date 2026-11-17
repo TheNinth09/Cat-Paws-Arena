@@ -115,7 +115,7 @@ Lane: orchestrator
 Blocking PR: lane-5 Firebase backend
 Request: In lib/main.dart, after WidgetsFlutterBinding.ensureInitialized(), call `final online = await OnlineServices.start();` (lib/online/online_config.dart) and set `OnlinePlay.services` from it (lib/shell/online_play.dart) so settings show online controls only when configured.
 Reason: Firebase must be initialized before any online call; lib/main.dart is orchestrator-owned.
-Status: open — orchestrator will wire `OnlineServices.start()` -> `OnlinePlay.services` in lib/main.dart after this merge.
+Status: answered — main.dart bootstraps `OnlineServices.start()` into `OnlinePlay.services` (verified on main).
 ```
 
 ```text
@@ -139,7 +139,7 @@ Lane: 4
 Blocking PR: lane-4 slice 4 (settings UI for online account and rooms)
 Request: Set `OnlinePlay.services` once during app bootstrap (lib/main.dart before runApp) from `OnlineServices.start()`; leave it null until online is configured.
 Reason: The settings section is gated by `OnlinePlay.services != null`; lane 4 cannot edit lib/main.dart.
-Status: open — orchestrator will wire `OnlineServices.start()` -> `OnlinePlay.services` in lib/main.dart after this merge.
+Status: answered — same bootstrap wiring as above, on main.
 ```
 
 ```text
@@ -201,7 +201,7 @@ Request: Lane 5 checked the online sync against timed turns (docs/contract.md §
   5. Naming only, lib/online (not changed now): `roundLimit` = 24 h since the last entry; `liveMoveLimit` (30 s) is now the per-turn budget, so lane 2 should show it per turn, not per move.
   6. Lane 1's `summarizeLog` returns `RoundMoveLog`s and lane 2's `match_controller` exposes `round`/`totalRounds`; both need the turn model. test/online_test.dart no longer reads `state.round`.
 Reason: docs/contract.md now uses timed turns; lane 5 was asked not to change lib/online production code in this pass.
-Status: open
+Status: answered — items 1-2 landed in 322a1ee (rules carry the v2 loadout fingerprint, `power1`/`power2`, `endTurn` and the 500-move cap; emulator cases updated). Item 3: contract keeps the client-side 30 s expiry writing `EndTurnMove` plus the 24 h forfeit. Item 4: no Cloud Functions on Spark, so no push path exists to throttle. Items 5-6 already reflect the turn model on main.
 ```
 
 ```text
@@ -217,7 +217,7 @@ Lane: 2
 Blocking PR: lane-2 timed-turn duel (this PR)
 Request: In lib/profile.dart `Player.result`, change the loss stake from -10 to -25 trophies (win +30, draw 0, loss -25), keeping the existing house-tour floor.
 Reason: The timed-turn contract decision fixes stakes at +30/0/-25; the older -10 value predates the decision. lib/profile.dart is orchestrator-owned.
-Status: open
+Status: answered — `Player.result` applies +30/0/-25 with the house-tour floor on main (322a1ee).
 ```
 
 ```text
@@ -225,7 +225,7 @@ Lane: 2
 Blocking PR: lane-2 timed-turn duel (this PR)
 Request: Lane 5 — `MatchSession` creates online matches with `MatchConfig.duel()`, which now means firstPower/secondPower = zoomies/zoomies, so the cat's chosen power is ignored online. To carry the loadout, the match record needs each player's chosen power index (0-2, preset-safe) at open time, and `MatchConfig` built from them before `newMatch` — or the session accepts an optional `power` argument. lib/online is off-limits for lane 2; until this lands, friend duels fire zoomies for both cats (still equal-strength, no advantage).
 Reason: contract decision: each cat brings one power chosen in the cat editor; the power must be identical on both clients for hash agreement.
-Status: open
+Status: answered — `power1`/`power2` ride the match document and feed `MatchConfig` before `newMatch`; the loadout is part of the fingerprint and the Firestore rules (322a1ee).
 ```
 
 ```text
@@ -233,7 +233,7 @@ Lane: 2
 Blocking PR: lane-2 timed-turn duel (this PR)
 Request: Lane 5 — update test/online_test.dart for the timed-turn move model: a player's turn is now a 30-second window of unlimited swaps that ends ONLY via `EndTurnMove`, so two lane-5 tests encode the old per-move alternation and fail: (a) "watch and play together count each move once" — `guest.play` right after `host.play` now throws MatchException(notYourTurn), which is correct new behavior; insert `engine.EndTurnMove()` before the guest's move. (b) "forfeit only after the 24-hour limit" — after `host.play` the host still holds the turn, so `host.claimForfeit()` throws notYourTurn at match_sync.dart:150; under timed turns it is the GUEST who claims after the host's deadline passes (forfeitWinner flips accordingly). lib/online itself needed no changes: `isMyTurn`/`deadline`/`claimForfeit`/`flag` semantics already map to the new model unchanged.
 Reason: test/online_test.dart and lib/online are not in lane-2 ownership; the engine move model changed per the approved contract while the session surface stayed identical.
-Status: open
+Status: answered — both tests rewritten for timed turns in 322a1ee (explicit EndTurnMove between players; the guest claims the host's 24 h forfeit).
 ```
 
 ```text
