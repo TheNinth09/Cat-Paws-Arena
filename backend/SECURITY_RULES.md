@@ -67,7 +67,8 @@ preset IDs only.
 - [x] Create only inside the room claim: ID `{code}_{room createdAt millis}`,
       exactly `roomCode`, `hostUid` (from the room), `guestUid == auth.uid`,
       `createdAt == request.time`, `seed` (int, 0..2^31-1), `config` equal
-      to `MatchConfig.duel().fingerprint`, `engineVersion == 1`,
+      to `MatchConfig.duel().fingerprint`, `engineVersion == 3` (v0.4:
+      2x2 squares create bombs),
       `contractVersion == 1`; room still live and deleted in the same commit.
 - [x] Updates touch only one of: the writer's own `final_first` /
       `final_second` (once; ints, 16-hex hash, outcome enum), `flag` (once,
@@ -83,13 +84,13 @@ preset IDs only.
 ## `matches/{matchId}/moves/{moveId}` — move log
 
 - [x] Create only; no update, no delete; read only by the two players.
-- [x] Document ID is the zero-padded `index` (`000`, `001`, …), `index` < 200.
+- [x] Document ID is the zero-padded `index` (`000`, `001`, …), `index` < 500.
 - [x] Ordered: `index == 0` or move `index - 1` exists (create-only, so two
       writers of the same index cannot both win).
 - [x] `by == auth.uid`, `slot` is the writer's own slot (host `first`).
 - [x] `move` is exactly a serialized `arena_engine` move: swap with two
-      cells in 0..6, or power `zoomies|shadowPounce|laserChase` with an
-      optional row; no other strings.
+      cells in 0..6, power `zoomies|shadowPounce|laserChase` with an
+      optional row, or `endTurn` with no payload; no other strings.
 - [x] `hashAfter` is 16 lowercase hex digits; `next` is `first|second|none`
       (verified on replay); `at == request.time`.
 - [x] Rules do not judge turn order or legality: each phone replays with
@@ -105,14 +106,13 @@ preset IDs only.
 - [x] Only `emote`, `from`, `at == request.time` (no round or turn field).
 - [ ] Rate limit: none in rules yet; the UI throttles. Revisit if abused.
 
-## Timed turns (v0.3) — rules gaps to close with the engine change
+## Timed turns (v0.3) — closed
 
-- [ ] `config` literal in `matchCreate` is the old fingerprint
-      (`...|r5|m3|...`). Update it, and `engineVersion`, in the same merge
-      as the new `MatchConfig.duel()`; otherwise every room claim is denied.
-- [ ] `validMove` accepts only `swap` and `power`; add the engine's
-      end-turn `Move.toJson()` shape once lane 1 defines it.
-- [ ] No 30 s check in rules: the turn timer is client-side and ends with a
+- [x] `config` literal tracks `MatchConfig.duel().fingerprint` — currently
+      `v3|7x7|c5|t5/30s|...|loadout:<power1>/<power2>` — and
+      `engineVersion == 3`; both update in the same merge as the engine.
+- [x] `validMove` accepts `swap`, `power` and `endTurn`.
+- [x] No 30 s check in rules: the turn timer is client-side and ends with a
       logged end-turn entry; an idle player is only covered by the 24 h
       forfeit (`next` semantics already fit: mid-turn `next` is the mover).
 

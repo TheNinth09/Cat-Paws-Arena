@@ -205,31 +205,88 @@ void main() {
     });
 
     test('a bent five creates a bomb piece', () {
-      final log = <Move>[
-        const SwapMove(firstCell: (row: 1, col: 3), secondCell: (row: 1, col: 4)),
-      ];
-      final rep = replay(9, duel, log);
-      expect(rep, isA<EngineOk<ReplayResult>>());
-      final state = (rep as EngineOk<ReplayResult>).value.state;
-      final events = stateEventsOf(state, log);
+      // Hand-built L of five: row 2 cols 2-4 + col 4 rows 3-4. Swapping
+      // (1,4)<->(2,4) drops the corner piece in place.
+      final cells = fixture(overrides: {
+        idx(2, 2): 0,
+        idx(2, 3): 0,
+        idx(2, 4): 1,
+        idx(2, 5): 1,
+        idx(1, 4): 0,
+        idx(3, 4): 0,
+        idx(4, 4): 0,
+      });
+      expectCleanFixture(cells);
+      final res = mustApply(
+        stateWith(firstCells: cells),
+        const SwapMove(
+          firstCell: (row: 1, col: 4),
+          secondCell: (row: 2, col: 4),
+        ),
+      );
+      final events = res.value.events;
 
       final bomb = events.whereType<SpecialCreated>().firstWhere(
         (e) => e.kind == SpecialKind.bomb,
         orElse: () => throw StateError('no bomb created'),
       );
-      expect(bomb.cell, (row: 1, col: 6));
+      expect(bomb.cell, (row: 2, col: 4));
       expect(bomb.orientation, isNull);
       // Bent five: the four non-anchor cells cleared, anchor becomes bomb.
       final waveCleared = clearedBefore(events, bomb);
-      expect(waveCleared.cells, isNot(contains((row: 1, col: 6))));
+      expect(waveCleared.cells, isNot(contains((row: 2, col: 4))));
       for (final p in [
-        (row: 1, col: 4),
-        (row: 1, col: 5),
-        (row: 2, col: 6),
-        (row: 3, col: 6),
+        (row: 2, col: 2),
+        (row: 2, col: 3),
+        (row: 3, col: 4),
+        (row: 4, col: 4),
       ]) {
         expect(waveCleared.cells, contains(p));
       }
+      expect(findSpecial(res.value.state, PlayerSlot.first, kBomb), isNonNegative);
+    });
+
+    test('a 2x2 square creates a bomb piece', () {
+      // Three corners already placed; swapping (3,3)<->(4,3) fills the
+      // fourth and completes the square at rows 2-3, cols 2-3. (3,1) is
+      // overridden off the fixture's colour-0 diagonal so the square does
+      // not extend into a run.
+      final cells = fixture(overrides: {
+        idx(2, 2): 0,
+        idx(2, 3): 0,
+        idx(3, 1): 1,
+        idx(3, 2): 0,
+        idx(3, 3): 1,
+        idx(4, 2): 1,
+        idx(4, 3): 0,
+      });
+      expectCleanFixture(cells);
+      final res = mustApply(
+        stateWith(firstCells: cells),
+        const SwapMove(
+          firstCell: (row: 3, col: 3),
+          secondCell: (row: 4, col: 3),
+        ),
+      );
+      final events = res.value.events;
+
+      final bomb = events.whereType<SpecialCreated>().firstWhere(
+        (e) => e.kind == SpecialKind.bomb,
+        orElse: () => throw StateError('no bomb created'),
+      );
+      // The anchor is the group's lowest-index cell (top-left corner).
+      expect(bomb.cell, (row: 2, col: 2));
+      expect(bomb.orientation, isNull);
+      final waveCleared = clearedBefore(events, bomb);
+      expect(waveCleared.cells, isNot(contains((row: 2, col: 2))));
+      for (final p in [
+        (row: 2, col: 3),
+        (row: 3, col: 2),
+        (row: 3, col: 3),
+      ]) {
+        expect(waveCleared.cells, contains(p));
+      }
+      expect(findSpecial(res.value.state, PlayerSlot.first, kBomb), isNonNegative);
     });
 
     test('a straight five creates a rainbow piece', () {
@@ -369,15 +426,32 @@ void main() {
   });
 
   test('a fired bomb clears a 3x3 area', () {
-    fireSpecial(
-      seed: 9,
-      log: const [
-        SwapMove(firstCell: (row: 1, col: 3), secondCell: (row: 1, col: 4)),
-      ],
-      config: duel,
-      specialCode: kBomb,
-      kind: SpecialKind.bomb,
+    const w = 7, h = 7;
+    final bombAt = idx(3, 3);
+    final cells = fixture(overrides: {bombAt: kBomb});
+    final state = stateWith(firstCells: cells);
+    final board = state.boardOf(PlayerSlot.first);
+    final partner = neighbourPiece(board, bombAt);
+    expect(partner, isNonNegative, reason: 'bomb needs a swappable neighbour');
+
+    final scratch = List<int>.of(board.cells);
+    final tmp = scratch[bombAt];
+    scratch[bombAt] = scratch[partner];
+    scratch[partner] = tmp;
+
+    final res = mustApply(
+      state,
+      SwapMove(
+        firstCell: (row: bombAt ~/ w, col: bombAt % w),
+        secondCell: (row: partner ~/ w, col: partner % w),
+      ),
     );
+    final fired = res.value.events.whereType<SpecialFired>().firstWhere(
+      (e) => e.kind == SpecialKind.bomb,
+      orElse: () => throw StateError('no SpecialFired event'),
+    );
+    expect(fired.cells, posListOf(w, expectedBlast(scratch, w, h, partner, kBomb)));
+    expect(fired.points, greaterThan(0));
   });
 
   test('a fired rainbow clears the swapped piece colour', () {

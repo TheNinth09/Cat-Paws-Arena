@@ -92,8 +92,10 @@ class MutableBoard {
   }
 }
 
-/// One connected group of matched cells (same colour, 4-connected through
-/// overlapping horizontal/vertical runs of length >= 3).
+/// One connected group of matched cells: either 4-connected same-colour
+/// cells through overlapping horizontal/vertical runs of length >= 3, or a
+/// maximal 2x2 block of same-colour cells not already claimed by a run.
+/// A pure 2x2 square reports `hasHorizontal == hasVertical == false`.
 class MatchGroup {
   /// The regular colour shared by every cell.
   final int colour;
@@ -122,6 +124,9 @@ class MatchGroup {
 
   /// Whether the group bends (contains both orientations).
   bool get isBent => hasHorizontal && hasVertical;
+
+  /// Whether the group is a pure 2x2 square (no qualifying run inside).
+  bool get isSquare => !hasHorizontal && !hasVertical;
 }
 
 /// A maximal run of >= 3 same-colour cells along one axis.
@@ -135,8 +140,11 @@ class _Run {
 /// Scans [board] for all colour matches and returns connected
 /// [MatchGroup]s sorted by their smallest cell index.
 ///
-/// Special pieces never form colour matches; yarned pieces match normally
-/// (the yarn is consumed when they clear).
+/// Two match shapes exist: runs of >= 3 (unioned into connected groups,
+/// covering straight lines and L/T bends) and maximal 2x2 squares whose
+/// cells are not already claimed by a run group. Special pieces never form
+/// colour matches; yarned pieces match normally (the yarn is consumed when
+/// they clear).
 List<MatchGroup> scanMatches(MutableBoard board) {
   final w = board.width;
   final h = board.height;
@@ -252,6 +260,45 @@ List<MatchGroup> scanMatches(MutableBoard board) {
       ),
     );
   }
+
+  // Maximal 2x2 same-colour blocks not already claimed by a run group.
+  // Scanned row-major; overlapping squares resolve to the first (top-left)
+  // block, which keeps the result deterministic.
+  final covered = <int>{
+    for (final g in groups) ...g.cells,
+  };
+  for (var r = 0; r + 1 < h; r++) {
+    for (var c = 0; c + 1 < w; c++) {
+      final tl = r * w + c;
+      final tr = tl + 1, bl = tl + w, br = tl + w + 1;
+      if (covered.contains(tl) ||
+          covered.contains(tr) ||
+          covered.contains(bl) ||
+          covered.contains(br)) {
+        continue;
+      }
+      final code = cells[tl];
+      if (!isColourCode(code)) continue;
+      final colour = basePieceCode(code);
+      if (isColourCode(cells[tr]) &&
+          basePieceCode(cells[tr]) == colour &&
+          isColourCode(cells[bl]) &&
+          basePieceCode(cells[bl]) == colour &&
+          isColourCode(cells[br]) &&
+          basePieceCode(cells[br]) == colour) {
+        groups.add(
+          MatchGroup(
+            colour: colour,
+            cells: [tl, tr, bl, br],
+            hasHorizontal: false,
+            hasVertical: false,
+          ),
+        );
+        covered.addAll([tl, tr, bl, br]);
+      }
+    }
+  }
+
   groups.sort((a, b) => a.cells.first.compareTo(b.cells.first));
   return groups;
 }
@@ -335,8 +382,9 @@ int refillStateSeed(int seed, int round, int column) =>
 /// Deals a fresh board for [round] of [seed]. Identical for both players:
 /// the deal stream depends only on `(seed, round)`, never on the player.
 ///
-/// The deal guarantees no starting matches and at least one legal move;
-/// it redraws deterministically until both hold.
+/// The deal guarantees no starting matches (no runs of 3 and no 2x2
+/// squares) and at least one legal move; it redraws deterministically
+/// until both hold.
 MutableBoard dealBoard(int seed, int round, MatchConfig config) {
   final w = config.boardWidth;
   final h = config.boardHeight;
@@ -356,7 +404,12 @@ MutableBoard dealBoard(int seed, int round, MatchConfig config) {
       do {
         pick = rng.nextInt(colours);
       } while ((c >= 2 && cells[i - 1] == pick && cells[i - 2] == pick) ||
-          (r >= 2 && cells[i - w] == pick && cells[i - 2 * w] == pick));
+          (r >= 2 && cells[i - w] == pick && cells[i - 2 * w] == pick) ||
+          (r >= 1 &&
+              c >= 1 &&
+              cells[i - w - 1] == pick &&
+              cells[i - w] == pick &&
+              cells[i - 1] == pick));
       cells[i] = pick;
     }
     final board = MutableBoard(w, h, cells, List<int>.of(refill));

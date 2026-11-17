@@ -80,8 +80,8 @@ async function hostRoom(code = 'ABC234', uid = 'host') {
 const matchFields = {
   seed: 12345,
   config:
-    'v2|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
-  engineVersion: 2,
+    'v3|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
+  engineVersion: 3,
   contractVersion: 1,
 };
 
@@ -313,7 +313,7 @@ describe('match sync', () => {
     const batch = writeBatch(g);
     batch.set(doc(g, 'matches', matchIdOf('ABC234', room)), {
       roomCode: 'ABC234', hostUid: 'host', guestUid: 'guest', createdAt: serverTimestamp(),
-      ...matchFields, config: 'v2|9x9|c6|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
+      ...matchFields, config: 'v3|9x9|c6|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
     });
     batch.delete(doc(g, 'rooms', 'ABC234'));
     await assertFails(batch.commit());
@@ -328,7 +328,7 @@ describe('match sync', () => {
       ...matchFields,
       power1: 1, power2: 2,
       config:
-        'v2|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:shadowPounce/laserChase',
+        'v3|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:shadowPounce/laserChase',
     };
     const batch = writeBatch(g);
     batch.set(doc(g, 'matches', id), data);

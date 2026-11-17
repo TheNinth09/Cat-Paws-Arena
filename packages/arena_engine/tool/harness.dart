@@ -85,12 +85,13 @@ SettingResult runSetting(
   ArenaBot Function(int sideSeed) makeBotA,
   ArenaBot Function(int sideSeed) makeBotB,
   int matches,
-  int seedBase,
-) {
+  int seedBase, {
+  MatchConfig config = const MatchConfig.duel(),
+}) {
   final r = SettingResult(name);
   for (var i = 0; i < matches; i++) {
     final seed = seedBase + i;
-    final res = playMatch(makeBotA(seed), makeBotB(seed), seed);
+    final res = playMatch(makeBotA(seed), makeBotB(seed), seed, config: config);
     r.matches++;
     r.plies.add(res.plies);
     r.firstScores.add(res.state.scores[0]);
@@ -121,12 +122,20 @@ String _avg(List<int> xs) =>
 /// Bots cannot cross isolate boundaries, so each setting rebuilds its bots
 /// from [BotSpec] inside the worker.
 class SettingJob {
-  SettingJob(this.name, this.specA, this.specB, this.matches, this.seedBase);
+  SettingJob(
+    this.name,
+    this.specA,
+    this.specB,
+    this.matches,
+    this.seedBase, {
+    this.config = const MatchConfig.duel(),
+  });
   final String name;
   final BotSpec specA;
   final BotSpec specB;
   final int matches;
   final int seedBase;
+  final MatchConfig config;
 }
 
 enum BotKind { random, greedy, lookahead, powerZoomies, powerPounce, powerLaser }
@@ -141,9 +150,9 @@ ArenaBot makeBot(BotSpec spec, int sideSeed, int side) => switch (spec.kind) {
   BotKind.random => RandomBot(sideSeed * 2 + side + 1),
   BotKind.greedy => const GreedyBot(),
   BotKind.lookahead => const LookaheadBot(),
-  BotKind.powerZoomies => const PowerBot(PowerKind.zoomies),
-  BotKind.powerPounce => const PowerBot(PowerKind.shadowPounce),
-  BotKind.powerLaser => const PowerBot(PowerKind.laserChase),
+  BotKind.powerZoomies => const PowerBot(),
+  BotKind.powerPounce => const PowerBot(),
+  BotKind.powerLaser => const PowerBot(),
 };
 
 SettingResult runJob(SettingJob job) {
@@ -153,6 +162,7 @@ SettingResult runJob(SettingJob job) {
     (s) => makeBot(job.specB, s, 1),
     job.matches,
     job.seedBase,
+    config: job.config,
   );
 }
 
@@ -191,6 +201,7 @@ Future<void> main(List<String> args) async {
         BotSpec(powerKind(p)),
         matches,
         (55 + p.index * 7) * 1000003,
+        config: MatchConfig(firstPower: p, secondPower: p),
       ),
   ];
 
@@ -264,7 +275,7 @@ Future<void> main(List<String> args) async {
   }
   final grand = powerSettingMeans.values.reduce((a, b) => a + b) /
       powerSettingMeans.length;
-  out.writeln('| power | mean match score | vs mean | charge cost |');
+  out.writeln('| power | mean match score | vs mean | meter cap |');
   out.writeln('|---|---|---|---|');
   var parityOk = true;
   for (final p in PowerKind.values) {
@@ -273,7 +284,7 @@ Future<void> main(List<String> args) async {
     if (dev > 10) parityOk = false;
     out.writeln(
       '| ${p.name} | ${m.toStringAsFixed(1)} | '
-      '${dev.toStringAsFixed(1)}% | ${powerChargeCost(p)} |',
+      '${dev.toStringAsFixed(1)}% | $kPowerMeterMax |',
     );
   }
   out.writeln();

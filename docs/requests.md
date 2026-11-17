@@ -249,5 +249,21 @@ Lane: 3
 Blocking PR: lane-3 v0.4 shell/lobby/profile (this PR)
 Request: Lane 4 — test/shop_social_test.dart "shop shows offer zone, daily reward, paw packs and honest prices" still taps '+200 Lăbuțe', but the daily gift on main is '+5 Lăbuțe' since 712adfc, so the test fails on main already (verified: fails without lane-3 changes). Update the finder to '+5 Lăbuțe' (and expected coins accordingly). Also FYI for the orchestrator: Player has no wins/losses/draws fields, so ProfileScreen shows only real local stats (trophies, paws, owned cosmetics, current room); if win/loss tracking is wanted later, it needs a profile.dart field.
 Reason: test/shop_social_test.dart and lib/profile.dart are outside lane-3 ownership; the profile page is required to show only stats that actually exist.
-Status: open
+Status: answered — the +5 Lăbuțe expectation landed in 560113a (both test files already use it). Profile showing only real local stats is correct; win/loss tracking is a separate decision, not needed for v0.4.
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2-v04 (specials presentation + battle polish)
+Request: Orchestrator / lane-4 — `flutter test` currently fails in two shop tests unrelated to this PR: shell_test.dart and shop_social_test.dart ("shop ... honest LEI prices") still expect a "+200 Lăbuțe" daily reward, but the merged daily-gift change pays +5 paws every 6 hours. The expectation needs updating (or the daily-gift UI needs the old label); both files are outside lane-2 ownership.
+Reason: pre-existing on origin/main at 712adfc; reproducible without lane-2 changes.
+Status: answered — fixed in 560113a before this merge; both suites expect +5/505.
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2-v04 (specials presentation + battle polish)
+Request: Informational for lane 5 / deploy — kEngineVersion is now 3 (2x2 squares create bombs; deals avoid starting squares). Match documents written by engine v2 clients will fail the version check in newMatch/replay, so any in-flight friend matches void on upgrade. No code change needed — the version gate already rejects them cleanly.
+Reason: rule change is contract-visible per docs/contract.md; flagging so the version bump is not a surprise.
+Status: answered — orchestrator updated firestore.rules + rules.test.js to engineVersion 3 / 'v3|' fingerprint alongside this merge; owner must redeploy `firebase deploy --only firestore:rules`. In-flight v2 matches void on upgrade, as noted.
 ```

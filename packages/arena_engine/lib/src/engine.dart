@@ -670,15 +670,16 @@ void _resolveMatches(_Work work, PlayerSlot slot) {
     final groups = scanMatches(board);
     if (groups.isEmpty) break;
 
-    // Decide special creations: bent -> bomb, straight 5+ -> rainbow,
-    // straight 4 -> line (orientation perpendicular to the run).
+    // Decide special creations: bent or 2x2 square -> bomb, straight 5+
+    // -> rainbow, straight 4 -> line (orientation perpendicular to the
+    // run).
     final creations = <(int, int, LineOrientation?)>[]; // anchor, code, orient
     final anchors = <int>{};
     for (final g in groups) {
       int anchor;
       int code;
       LineOrientation? orient;
-      if (g.isBent) {
+      if (g.isBent || g.isSquare) {
         anchor = _bombAnchor(g, board);
         code = kBomb;
       } else if (g.cells.length >= 5) {

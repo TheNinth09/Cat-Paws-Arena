@@ -33,8 +33,6 @@ const _barGradient = LinearGradient(
   colors: [Color(0xff8a5a44), Color(0xff54342a)],
 );
 const _modeIcons = [Icons.group, Icons.bolt, Icons.shield, Icons.emoji_events];
-const _powerShort = ['ZOOMIES', 'SHADOW POUNCE', 'LASER CHASE'];
-
 /// Preset emotes offered in the duel. Only these wire values ever leave the
 /// device (contract: preset emotes only, never free text). Three sprites
 /// back six presets; the caption disambiguates at send time.
@@ -631,38 +629,54 @@ class _MatchScreenState extends State<MatchScreen>
       child: Row(
         children: [
           Expanded(
-            child: _PortraitPlate(
-              avatar: CatAvatar(p, size: 50),
-              name: p.name,
-              score: match.playerScore,
-              charge: match.playerCharge,
-              ringColor: const Color(0xff7ed957),
-              accentColor: gold,
-              meterColor: const Color(0xff7ed957),
-              iconSprite: 'tile_yarn',
-              active: match.playerTurn,
-              emote: emote,
-              pulse: fx,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _PortraitPlate(
+                  avatar: CatAvatar(p, size: 50),
+                  name: p.name,
+                  score: match.playerScore,
+                  charge: match.playerCharge,
+                  ringColor: const Color(0xff7ed957),
+                  accentColor: gold,
+                  meterColor: const Color(0xff7ed957),
+                  iconSprite: 'tile_yarn',
+                  active: match.playerTurn,
+                  emote: emote,
+                  pulse: fx,
+                ),
+                // Preset emotes sit next to the player's own portrait.
+                Positioned(
+                  left: 0,
+                  bottom: 14,
+                  child: _EmoteCatButton(onTap: emotes),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 6),
           const _VsBadge(size: 40),
           const SizedBox(width: 6),
           Expanded(
-            child: _PortraitPlate(
-              avatar: _opponentAvatar(50),
-              name: match.isOnline
-                  ? match.botName
-                  : '${match.botName} · BOT',
-              score: match.botScore,
-              charge: match.botCharge,
-              ringColor: const Color(0xff9d6bff),
-              accentColor: const Color(0xffc9a6ff),
-              meterColor: const Color(0xff9d6bff),
-              iconSprite: 'icon_paw_coin',
-              active: enginePlaying && !match.playerTurn && !match.isFlagged,
-              emote: opponentEmote,
-              pulse: fx,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _opponentDetails,
+              child: _PortraitPlate(
+                avatar: _opponentAvatar(50),
+                name: match.isOnline
+                    ? match.botName
+                    : '${match.botName} · BOT',
+                score: match.botScore,
+                charge: match.botCharge,
+                ringColor: const Color(0xff9d6bff),
+                accentColor: const Color(0xffc9a6ff),
+                meterColor: const Color(0xff9d6bff),
+                iconSprite: 'icon_paw_coin',
+                active:
+                    enginePlaying && !match.playerTurn && !match.isFlagged,
+                emote: opponentEmote,
+                pulse: fx,
+              ),
             ),
           ),
         ],
@@ -670,8 +684,66 @@ class _MatchScreenState extends State<MatchScreen>
     );
   }
 
-  /// Turn strip: whose turn it is, seconds left and queued obstacles;
-  /// the local player can end their turn early with GATA.
+  /// Small popup with the opponent's match-provided details — never
+  /// fabricated stats: house cats show BOT + level/difficulty + trophies;
+  /// online friends show the preset-safe fields the match carries.
+  void _opponentDetails() {
+    final online = match.online;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xff6b4636),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: gold, width: 1.4),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _opponentAvatar(64),
+            const SizedBox(height: 8),
+            label(match.botName, size: 18),
+            const SizedBox(height: 2),
+            label(
+              online != null ? 'PRIETEN' : 'BOT',
+              size: 12,
+              color: _muted,
+            ),
+            const SizedBox(height: 10),
+            _StatRow(
+              icon: 'icon_trophy',
+              text: '${match.botTrophies} trofee',
+            ),
+            if (online != null)
+              _StatRow(
+                icon: powers[online.opponent.power
+                    .clamp(0, powers.length - 1)],
+                text:
+                    powerNames[online.opponent.power
+                        .clamp(0, powerNames.length - 1)],
+              )
+            else if (match.opponent != null)
+              _StatRow(
+                icon: 'icon_paw_coin',
+                text:
+                    'Nivel ${match.opponent!.level} • '
+                    '${ArenaMatchController.botLevelNames[match.botLevel]}',
+              )
+            else
+              _StatRow(
+                icon: 'icon_paw_coin',
+                text:
+                    'Dificultate ${ArenaMatchController.botLevelNames[match.botLevel]}',
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Turn strip: whose turn it is, seconds left and queued obstacles.
+  /// The turn ends when the 30 s clock expires (the controller writes the
+  /// EndTurnMove) — there is no end-early button.
   Widget _turnStrip() {
     final incoming = match.incomingObstacles;
     final yourTurn = match.playerTurn;
@@ -715,32 +787,6 @@ class _MatchScreenState extends State<MatchScreen>
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (match.isEngine && yourTurn) ...[
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: match.endTurn,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xff3f7d33),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xffbfe6b4)),
-                ),
-                child: const Text(
-                  'GATA',
-                  style: TextStyle(
-                    color: cream,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -763,7 +809,7 @@ class _MatchScreenState extends State<MatchScreen>
   Widget _tutorialOverlay() {
     if (!match.tutorialActive) return const SizedBox.shrink();
     final texts = [
-      'Prima ta luptă! Ai 30 de secunde pe rând — poți termina devreme cu GATA.',
+      'Prima ta luptă! Ai 30 de secunde pe rând — tura se termină singură.',
       'Schimbă două piese alăturate de aceeași culoare. Urmează indicatorul auriu!',
       'Când bara de putere e plină, atinge-o ca s-o declanșezi!',
     ];
@@ -946,12 +992,6 @@ class _MatchScreenState extends State<MatchScreen>
                     top: 6,
                     child: IgnorePointer(child: _EmoteBubble(emote)),
                   ),
-                // Small white cat button, bottom-right: preset emotes.
-                Positioned(
-                  right: 6,
-                  bottom: 6,
-                  child: _EmoteCatButton(onTap: emotes),
-                ),
                 _tutorialOverlay(),
               ],
             ),
@@ -962,101 +1002,120 @@ class _MatchScreenState extends State<MatchScreen>
     );
   }
 
-  Widget _powerDeck() => Container(
-    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-    decoration: BoxDecoration(
-      gradient: _panelGradient,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: const Color(0x66ffc63c), width: 1.2),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x44000000),
-          offset: Offset(0, 3),
-          blurRadius: 8,
-        ),
-      ],
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            sprite(powers[PowerKind.values.indexOf(match.playerPower)], size: 24),
-            const SizedBox(width: 8),
-            Expanded(
-              child: GestureDetector(
-                key: const Key('power-meter'),
-                behavior: HitTestBehavior.opaque,
-                onTap: match.playerCharge >= 100 && match.acceptingInput
-                    ? () => match.firePower(match.playerPower)
-                    : null,
-                child: _ChargeBar(
-                  value: match.playerCharge / 100,
-                  full: match.playerCharge >= 100,
+  /// The single power control: a badge with the cat's chosen power ringed
+  /// by its charge arc, the power name, a fill bar and the percent read.
+  /// At 100% the whole card pulses gold and a tap fires the loadout power
+  /// (the controller logs it as a PowerMove).
+  Widget _powerDeck() {
+    final idx = PowerKind.values.indexOf(match.playerPower);
+    final charge = match.playerCharge;
+    final full = charge >= 100;
+    final canFire = full && match.playerTurn && match.acceptingInput;
+    return AnimatedBuilder(
+      animation: fx,
+      builder: (context, _) => GestureDetector(
+        key: const Key('power-meter'),
+        behavior: HitTestBehavior.opaque,
+        onTap: canFire ? () => match.firePower(match.playerPower) : null,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            gradient: _panelGradient,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: full ? gold : const Color(0x66ffc63c),
+              width: full ? 1.8 : 1.2,
+            ),
+            boxShadow: [
+              const BoxShadow(
+                color: Color(0x44000000),
+                offset: Offset(0, 3),
+                blurRadius: 8,
+              ),
+              if (full)
+                BoxShadow(
+                  color: const Color(
+                    0xffffc63c,
+                  ).withValues(alpha: 0.3 + 0.3 * fx.value),
+                  blurRadius: 10 + 10 * fx.value,
+                  spreadRadius: 1,
+                ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _PowerBadge(
+                charge: charge / 100,
+                full: full,
+                spriteName: powers[idx],
+                pulse: fx,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      powerNames[idx].toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: gold,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.6,
+                        shadows: [
+                          Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(5),
+                      child: LinearProgressIndicator(
+                        value: (charge / 100).clamp(0.0, 1.0),
+                        minHeight: 9,
+                        backgroundColor: const Color(0x55ffffff),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          full ? gold : const Color(0xff7ed957),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      full
+                          ? 'APASĂ PENTRU PUTERE!'
+                          : 'Se încarcă la fiecare meci',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: full ? const Color(0xffb9e07a) : _faint,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 54,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerRight,
-                child: Text(
-                  match.playerCharge >= 100
-                      ? 'GATA!'
-                      : '${match.playerCharge}%',
-                  style: TextStyle(
-                    color: match.playerCharge >= 100
-                        ? const Color(0xffb9e07a)
-                        : gold,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    shadows: const [
-                      Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-                    ],
-                  ),
+              const SizedBox(width: 10),
+              Text(
+                '$charge%',
+                style: TextStyle(
+                  color: full ? const Color(0xffb9e07a) : gold,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  shadows: const [
+                    Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 7),
-        Row(
-          children: [
-            Expanded(
-              child: Tooltip(
-                message: powerNames[PowerKind.values.indexOf(match.playerPower)],
-                child: ArenaButton(
-                  text: match.playerCharge >= 100
-                      ? 'APASĂ PENTRU PUTERE!'
-                      : '${_powerShort[PowerKind.values.indexOf(match.playerPower)]} • ${match.playerCharge}%',
-                  spriteName:
-                      powers[PowerKind.values.indexOf(match.playerPower)],
-                  singleLine: true,
-                  onPressed: match.playerCharge >= 100 && match.playerTurn
-                      ? () => match.firePower(match.playerPower)
-                      : null,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 5),
-        Text(
-          '4 / 5 piese → obstacol • Cascade → combo',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: _faint,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
+            ],
           ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   Widget result() {
     final aborted = match.abortReason != null;
@@ -1108,8 +1167,11 @@ class _MatchScreenState extends State<MatchScreen>
           ),
         ],
         const SizedBox(height: 14),
-        _scoreStrip(),
-        const SizedBox(height: 12),
+        // Defeat stays calm and minimal: no score strip, no chest.
+        if (!loss) ...[
+          _scoreStrip(),
+          const SizedBox(height: 12),
+        ],
         if (aborted)
           _abortRewards()
         else if (match.isOnline && match.rewardsPending)
@@ -1202,44 +1264,64 @@ class _MatchScreenState extends State<MatchScreen>
     ),
   );
 
-  Widget _resultRewards(bool win, bool loss) => panel(
-    Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
+  /// Rewards panel: win/draw show the full stakes plus the chest and the
+  /// player's cat; a defeat stays clean and calm — just the trophy change.
+  Widget _resultRewards(bool win, bool loss) {
+    if (loss) {
+      return panel(
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             sprite('icon_trophy', size: 30),
             const SizedBox(width: 9),
-            Flexible(
-              child: Text(
-                win
-                    ? '+30 Trofee • +150 Lăbuțe'
-                    : loss
-                    ? '-25 Trofee'
-                    : '0 Trofee',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: ink,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
+            const Text(
+              '-25 Trofee',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: ink,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            sprite('icon_chest', size: 62),
-            const SizedBox(width: 14),
-            CatAvatar(p, size: 82),
-          ],
-        ),
-      ],
-    ),
-  );
+      );
+    }
+    return panel(
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              sprite('icon_trophy', size: 30),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(
+                  win ? '+30 Trofee • +150 Lăbuțe' : '0 Trofee',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              sprite('icon_chest', size: 62),
+              const SizedBox(width: 14),
+              CatAvatar(p, size: 82),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ModeChip extends StatelessWidget {
@@ -1615,7 +1697,7 @@ class _TurnPill extends StatelessWidget {
           const Icon(Icons.schedule, size: 15, color: gold),
           const SizedBox(width: 6),
           Text(
-            'Tura $turn • ${seconds}s',
+            'Tura $turn/${turnsPerPlayer * 2} • ${seconds}s',
             style: TextStyle(
               color: color,
               fontSize: 16,
@@ -1981,51 +2063,91 @@ class _CircleButton extends StatelessWidget {
   }
 }
 
-class _ChargeBar extends StatelessWidget {
-  const _ChargeBar({required this.value, this.full = false});
-  final double value;
+/// The power badge inside the battle power control: the chosen power's
+/// sprite on a dark disc, ringed by a charge arc that turns gold at 100%
+/// and pulses while the meter is full.
+class _PowerBadge extends StatelessWidget {
+  const _PowerBadge({
+    required this.charge,
+    required this.full,
+    required this.spriteName,
+    required this.pulse,
+  });
 
-  /// Full meter: gold glow so the tap-to-fire affordance reads clearly.
+  final double charge;
   final bool full;
+  final String spriteName;
+  final Animation<double> pulse;
 
   @override
-  Widget build(BuildContext context) => Container(
-    height: 13,
-    decoration: BoxDecoration(
-      color: const Color(0xff33231d),
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(
-        color: full ? const Color(0xfffff3c4) : const Color(0x66ffc63c),
-        width: full ? 1.8 : 1.2,
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: pulse,
+    builder: (context, _) => Transform.scale(
+      scale: full ? 1 + 0.06 * pulse.value : 1,
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: CircularProgressIndicator(
+                value: charge.clamp(0.0, 1.0),
+                strokeWidth: 4.5,
+                backgroundColor: const Color(0x44ffffff),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  full ? gold : const Color(0xff7ed957),
+                ),
+              ),
+            ),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xff33231d),
+                border: Border.all(
+                  color: full ? gold : const Color(0x66ffc63c),
+                  width: 1.4,
+                ),
+              ),
+              child: Center(child: sprite(spriteName, size: 24)),
+            ),
+          ],
+        ),
       ),
-      boxShadow: full
-          ? const [
-              BoxShadow(
-                color: Color(0x88ffd166),
-                blurRadius: 8,
-                spreadRadius: 1,
-              ),
-            ]
-          : null,
     ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: FractionallySizedBox(
-          widthFactor: value.clamp(0.0, 1.0),
-          heightFactor: 1,
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Color(0xfffff3c4), gold, Color(0xffe8961f)],
-              ),
+  );
+}
+
+/// One icon + text row inside the opponent-details popup.
+class _StatRow extends StatelessWidget {
+  const _StatRow({required this.icon, required this.text});
+  final String icon, text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        sprite(icon, size: 20),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: cream,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
-      ),
+      ],
     ),
   );
 }
