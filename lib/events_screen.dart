@@ -97,7 +97,18 @@ class _EventsScreenState extends State<EventsScreen> {
       children: [
         Row(
           children: [
-            sprite('icon_trophy', size: 46),
+            arenaImage(
+              'cat_tzuki',
+              width: 56,
+              height: 56,
+              fallback: sprite('tile_star', size: 46),
+            ),
+            arenaImage(
+              'trophy_gold_fish',
+              width: 52,
+              height: 52,
+              fallback: sprite('icon_trophy', size: 46),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -126,6 +137,12 @@ class _EventsScreenState extends State<EventsScreen> {
                   ),
                 ],
               ),
+            ),
+            arenaImage(
+              'cat_bubble',
+              width: 56,
+              height: 56,
+              fallback: sprite('tile_fish', size: 46),
             ),
           ],
         ),

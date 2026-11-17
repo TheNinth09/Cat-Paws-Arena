@@ -21,17 +21,37 @@ class TeamScreen extends StatelessWidget {
       children: [
         SectionHeading('ECHIPĂ'),
         _TeamHeader(english: english),
-        SectionHeading(
-          english ? 'TEAM SOCIAL (PARKED)' : 'SOCIAL ECHIPĂ (PARKED)',
+        panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _bubble(
+                'cat_tzuki',
+                'Miorlău22',
+                english ? 'Hello everyone!' : 'Salutare tuturor!',
+              ),
+              _bubble(
+                'cat_bubble',
+                'ShadowCat',
+                english
+                    ? 'Anyone up for a match?'
+                    : 'Cine are chef de un meci?',
+              ),
+              _tradeCard(english),
+              _bubble(
+                'emote_love',
+                'Pisoi_Lover',
+                english ? 'Request sent!' : 'Am trimis cererea!',
+              ),
+            ],
+          ),
         ),
-        panel(_chatPanel(english)),
-        panel(_tradePanel(english)),
         _inputBar(english),
         const SizedBox(height: 8),
         Text(
           english
-              ? 'Teams, free-text chat and trading are parked. Nothing here is a live service.'
-              : 'Echipele, chatul liber și schimburile sunt parked. Nimic de aici nu este un serviciu live.',
+              ? 'Preview only — teams, free-text chat and trading are parked. Nothing here is a live service.'
+              : 'Doar previzualizare — echipele, chatul liber și schimburile sunt parked. Nimic de aici nu este un serviciu live.',
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Color(0xff6b4a32),
@@ -43,75 +63,169 @@ class TeamScreen extends StatelessWidget {
     );
   }
 
-  Widget _chatPanel(bool english) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Text(
-        english ? 'MESSAGES (PARKED)' : 'MESAJE (PARKED)',
-        style: const TextStyle(
-          color: ink,
-          fontSize: 15,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.6,
-        ),
-      ),
-      const SizedBox(height: 8),
-      Text(
-        english
-            ? 'No live chat. When teams are enabled, only preset emotes will be available.'
-            : 'Niciun chat live. Când echipele vor fi activate, vor exista doar emote presetate.',
-        style: const TextStyle(
-          color: Color(0xff6b4a32),
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      const SizedBox(height: 8),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (final name in ['emote_love', 'emote_laugh', 'emote_angry'])
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: Opacity(opacity: 0.65, child: sprite(name, size: 34)),
+  Widget _bubble(String catArt, String name, String message) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xfff3e0b8),
+            border: Border.all(color: ink, width: 1.8),
+          ),
+          child: ClipOval(
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: arenaImage(
+                catArt,
+                width: 34,
+                height: 34,
+                fallback: sprite(catArt, size: 34),
+              ),
             ),
-        ],
-      ),
-    ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xfffffbec),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+              border: Border.all(color: ink, width: 1.6),
+            ),
+            child: Text(
+              '$name: $message',
+              style: const TextStyle(
+                color: ink,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 
-  Widget _tradePanel(bool english) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const SizedBox(height: 10),
-      Text(
-        english ? 'TRADE REQUEST (PARKED)' : 'CERERE DE TRADE (PARKED)',
-        style: const TextStyle(
-          color: ink,
-          fontSize: 15,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.6,
+  Widget _tradeCard(bool english) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xffffe6a8), Color(0xfff6c46a)],
+      ),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: ink, width: 2),
+      boxShadow: const [
+        BoxShadow(color: Color(0x4451312d), offset: Offset(0, 3)),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          english ? 'TRADE REQUEST' : 'CERERE DE TRADE (SCHIMB)',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: ink,
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.6,
+          ),
         ),
-      ),
-      const SizedBox(height: 6),
-      Text(
-        english
-            ? 'Trading is parked; there is no shared live inventory or peer-to-peer exchange.'
-            : 'Schimburile sunt parked; nu există inventar partajat live sau schimb peer-to-peer.',
-        style: const TextStyle(
-          color: Color(0xff6b4a32),
-          fontWeight: FontWeight.w700,
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            sprite('acc_witch_hat', size: 44),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    english ? 'OFFERS: Gigel' : 'OFERĂ: Gigel',
+                    style: const TextStyle(
+                      color: ink,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    english ? 'Wizard Hat' : 'Pălărie Vrăjitoare',
+                    style: const TextStyle(
+                      color: Color(0xff6b4a32),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ),
-      const SizedBox(height: 10),
-      ArenaButton(
-        text: english ? 'TRADE' : 'SCHIMBĂ',
-        onPressed: () {
-          onUnavailable(english ? 'Team trading' : 'Schimburi de echipă');
-        },
-        secondary: true,
-        singleLine: true,
-      ),
-    ],
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    english
+                        ? 'ASKS: Pirate Bandana / Zoomies'
+                        : 'CERE: Bandană Pirat / Putere Zoomies',
+                    style: const TextStyle(
+                      color: ink,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      sprite('acc_pirate_bandana', size: 34),
+                      const SizedBox(width: 8),
+                      arenaImage(
+                        'power_zoomies',
+                        width: 34,
+                        height: 34,
+                        fallback: sprite('vfx_zoomies', size: 34),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 120,
+              child: ArenaButton(
+                text: english ? 'TRADE' : 'SCHIMBĂ',
+                singleLine: true,
+                onPressed: () {
+                  onUnavailable(
+                    english ? 'Team trading' : 'Schimburi de echipă',
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
   );
 
   Widget _inputBar(bool english) => Container(
@@ -147,7 +261,7 @@ class _TeamHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 6),
+    margin: const EdgeInsets.only(bottom: 10),
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
@@ -200,6 +314,23 @@ class _TeamHeader extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0x3351312d),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: ink, width: 1.4),
+          ),
+          child: Text(
+            english ? 'PREVIEW' : 'PREVIEW',
+            style: const TextStyle(
+              color: ink,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
           ),
         ),
       ],

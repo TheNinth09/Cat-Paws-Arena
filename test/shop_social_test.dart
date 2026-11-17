@@ -50,6 +50,13 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.descendant(
+          of: shop,
+          matching: find.text('Cadou gratuit (la 6 ore)'),
+        ),
+        findsOneWidget,
+      );
+      expect(
         find.descendant(of: shop, matching: find.text('DAILY DEAL')),
         findsOneWidget,
       );
@@ -58,9 +65,9 @@ void main() {
         findsWidgets,
       );
 
-      await tester.tap(find.text('+200 Lăbuțe'));
+      await tester.tap(find.text('+5 Lăbuțe'));
       await tester.pumpAndSettle();
-      expect(player.coins, 700);
+      expect(player.coins, 505);
 
       final scrollable = find
           .descendant(of: shop, matching: find.byType(Scrollable))
@@ -97,7 +104,7 @@ void main() {
         messages,
         contains('Pachete Lăbuțe: Achizițiile nu sunt disponibile încă.'),
       );
-      expect(player.coins, 700);
+      expect(player.coins, 505);
     },
   );
 
@@ -117,9 +124,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('TEAM: ROYAL CATS'), findsOneWidget);
-    expect(find.text('MESSAGES (PARKED)'), findsOneWidget);
-    expect(find.text('TRADE REQUEST (PARKED)'), findsOneWidget);
+    expect(find.text('TRADE REQUEST'), findsOneWidget);
+    expect(find.text('PREVIEW'), findsOneWidget);
     expect(find.textContaining('parked'), findsWidgets);
+    // No fabricated live members count or real chat content.
+    expect(find.textContaining(RegExp(r'\d+\s*/\s*30')), findsNothing);
     await tester.tap(find.text('TRADE'));
     await tester.pumpAndSettle();
     expect(unavailable, contains('Team trading'));
@@ -144,6 +153,8 @@ void main() {
     expect(find.text('PRIVATE'), findsOneWidget);
     expect(find.text('GLOBAL WEEKEND TOURNAMENT'), findsOneWidget);
     expect(find.textContaining('parked'), findsWidgets);
+    // No live countdown — tournaments are parked.
+    expect(find.textContaining(RegExp(r'\d+[Zz]\s*\d+[Hh]')), findsNothing);
 
     await tester.tap(find.text('PRIVATE'));
     await tester.pumpAndSettle();

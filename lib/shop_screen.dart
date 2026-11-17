@@ -187,7 +187,9 @@ class ShopScreen extends StatelessWidget {
           ],
         ),
         const SectionHeading('PACHETE LĂBUȚE'),
-        const _BillingNote(),
+        const _BillingNote(
+          'Prețuri în LEI. Lăbuțele se câștigă și în joc — cumpărăturile se activează la lansare.',
+        ),
         AdaptiveCardGrid(
           key: const ValueKey('coin-bundle-grid'),
           minWidth: 96,
@@ -209,7 +211,9 @@ class ShopScreen extends StatelessWidget {
           ],
         ),
         const SectionHeading('PACHETE COSMETICE'),
-        const _BillingNote(),
+        const _BillingNote(
+          'Doar cosmetice — nu schimbă jocul. Același preț onest, fără presiune.',
+        ),
         AdaptiveCardGrid(
           minWidth: 180,
           maxColumns: 2,
@@ -283,7 +287,8 @@ class _ShopBanner extends StatelessWidget {
 }
 
 class _BillingNote extends StatelessWidget {
-  const _BillingNote();
+  const _BillingNote(this.text);
+  final String text;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -300,7 +305,7 @@ class _BillingNote extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Plățile sunt opționale; prețurile sunt în LEI, fără cronometre sau oferte limitate. Lăbuțele se câștigă în joc.',
+            text,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: ink,

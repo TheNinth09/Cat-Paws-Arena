@@ -275,9 +275,9 @@ void main() {
         find.descendant(of: shop, matching: find.text('DAILY DEAL')),
         findsOneWidget,
       );
-      await tester.tap(find.text('+200 Lăbuțe'));
+      await tester.tap(find.text('+5 Lăbuțe'));
       await tester.pumpAndSettle();
-      expect(p.coins, 700);
+      expect(p.coins, 505);
       for (final removed in [
         'ACCESORII & PUTERI',
         'The Midnight Zoomies',
@@ -334,7 +334,7 @@ void main() {
         find.text('Achizițiile nu sunt disponibile încă.'),
         findsOneWidget,
       );
-      expect(p.coins, 700);
+      expect(p.coins, 505);
       await closeDialogContaining(
         tester,
         'Achizițiile nu sunt disponibile încă.',
@@ -351,7 +351,7 @@ void main() {
         find.text('Achizițiile nu sunt disponibile încă.'),
         findsOneWidget,
       );
-      expect(p.coins, 700);
+      expect(p.coins, 505);
       expect(p.owned, isEmpty);
       await closeDialogContaining(
         tester,
