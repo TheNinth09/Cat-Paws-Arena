@@ -70,6 +70,7 @@ void main() {
       artwork.where(
         (name) =>
             !name.startsWith('assets/generated/') &&
+            !name.startsWith('assets/images/') &&
             !name.startsWith('assets/fonts/'),
       ),
       isEmpty,

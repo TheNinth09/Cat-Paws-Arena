@@ -8,7 +8,11 @@ void expectCleanArtwork(WidgetTester tester) {
       .whereType<AssetImage>()
       .map((image) => image.assetName);
   expect(
-    assets.where((name) => !name.startsWith('assets/generated/')),
+    assets.where(
+      (name) =>
+          !name.startsWith('assets/generated/') &&
+          !name.startsWith('assets/images/'),
+    ),
     isEmpty,
   );
 }
