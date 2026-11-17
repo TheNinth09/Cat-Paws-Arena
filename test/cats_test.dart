@@ -184,7 +184,7 @@ void main() {
     final p = Player(prefs);
     expect(p.claimDaily(), true);
     expect(p.claimDaily(), false);
-    expect(p.coins, 700);
+    expect(p.coins, 505);
     expect(p.buy('hat', 300), true);
     expect(p.buy('hat', 300), false);
     expect(p.buy('expensive', 999), false);
@@ -194,14 +194,14 @@ void main() {
     p.result(1);
     expect(p.tier, 1);
     expect(p.trophies, 320);
-    expect(p.coins, 550);
+    expect(p.coins, 355);
     p.result(0);
     expect(p.trophies, 320);
     await p.save();
     final restored = Player(prefs);
     expect(restored.coins, p.coins);
     expect(restored.owned, contains('hat'));
-    expect(restored.daily, p.today);
+    expect(restored.daily, p.daily);
   });
 
   test('preset cat names cover at least 200 unique entries', () {

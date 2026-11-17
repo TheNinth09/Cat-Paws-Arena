@@ -90,10 +90,23 @@ class Player extends ChangeNotifier {
     return true;
   }
 
+  /// Daily gift cadence: +5 paws every 6 hours (owner decision; `daily`
+  /// stores the last-claim ISO timestamp — old `yyyy-MM-dd` values keep
+  /// working by parsing as that day's start).
+  DateTime? get _lastDaily {
+    final full = DateTime.tryParse(daily);
+    return full ?? DateTime.tryParse('$daily 00:00:00Z');
+  }
+
+  bool get dailyReady {
+    final last = _lastDaily;
+    return last == null || DateTime.now().difference(last).inHours >= 6;
+  }
+
   bool claimDaily() {
-    if (daily == today) return false;
-    daily = today;
-    coins += 200;
+    if (!dailyReady) return false;
+    daily = DateTime.now().toIso8601String();
+    coins += 5;
     save();
     return true;
   }

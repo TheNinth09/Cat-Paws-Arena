@@ -24,14 +24,14 @@ End state: a cat owner plays a short, fair duel as their own cat, against a frie
 
 Ranked matchmaking, server-side validation as a separate deliverable, teams, chat, trading, tournaments, Speed Rush, Survival, High-Stakes, paws packs sold for money, Facebook login, photo avatars, iOS, seasons, and passes. No lane builds or re-enables parked work. Do not advertise existing parked surfaces as live services.
 
-## Ownership and parallel work (v0.3 visual rework round)
+## Ownership and parallel work (v0.4 polish round)
 
-- Orchestrator: `AGENTS.md`, `README.md`, `docs/`, `lib/main.dart`, `lib/profile.dart`, `lib/catalog.dart`.
-- Lane 1 (asset pipeline): `assets/` (all new PNG conversion/placement), `tool_assets.dart`, `android/app/src/main/res/` launcher + adaptive-icon resources, `lib/boot_screen.dart` (splash only). EXCEPTION this round: lane 1 may edit the `assets:`/`fonts:` sections of `pubspec.yaml` only.
+- Orchestrator: `AGENTS.md`, `README.md`, `docs/`, `lib/main.dart`, `lib/profile.dart`, `lib/catalog.dart`, `lib/online/`, `backend/`, `test/online_test.dart`, `lib/boot_screen.dart`, `pubspec.yaml`.
+- Lane 1 (cat art + avatar): `assets/` (redrawn sprites), `tool_assets.dart`, `lib/cat_avatar.dart`, `lib/cats_screen.dart`, `test/cats_test.dart`.
 - Lane 2 (gameplay): `packages/arena_engine/`, `lib/match_screen.dart`, `lib/board_game.dart`, `lib/match_controller.dart`, `lib/arena.dart`, `lib/duel_audio.dart`, `lib/duel_events.dart`, `lib/engine_events.dart`, `lib/house_bot.dart`, `assets/audio/`, `test/duel_test.dart`.
-- Lane 3 (shell/lobby): `lib/home_screen.dart`, `lib/lobby_screen.dart`, `lib/house_tour_screen.dart`, `lib/vs_screen.dart`, `lib/ui_widgets.dart`, `lib/local_play.dart`, `lib/shell/`, `test/shell_test.dart`.
-- Lane 4 (shop/cats/social): `lib/shop_screen.dart`, `lib/cats_screen.dart`, `lib/cat_avatar.dart`, `lib/team_screen.dart`, `lib/events_screen.dart`, `lib/app_dialogs.dart`, `test/cats_test.dart`, `test/shop_social_test.dart`.
-- `lib/online/`, `backend/`, `test/online_test.dart`: NOT assigned this round — the Firebase backend is preserved; changes go through `docs/requests.md` and the orchestrator applies them.
+- Lane 3 (shell/lobby/profile): `lib/home_screen.dart`, `lib/lobby_screen.dart`, `lib/house_tour_screen.dart`, `lib/vs_screen.dart`, `lib/profile_screen.dart`, `lib/ui_widgets.dart`, `lib/local_play.dart`, `lib/shell/`, `test/shell_test.dart`.
+- Lane 4 (shop/team/events): `lib/shop_screen.dart` (banner text + card styling only — the daily-gift logic is already done on main), `lib/team_screen.dart`, `lib/events_screen.dart`, `lib/app_dialogs.dart`, `test/shop_social_test.dart`.
+- The Firebase backend (auth, cloud save, rules, 6-char rooms) is preserved. Any `lib/online` need goes through `docs/requests.md`.
 
 The existing splash/build metadata may still display Paws & Claws or the previous application ID. Lane 5 owns Android identity; the orchestrator coordinates the studio splash with lane 2 and records completion only after verified integration. Do not claim the identity migration is complete at setup.
 

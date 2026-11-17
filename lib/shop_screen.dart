@@ -162,16 +162,12 @@ class ShopScreen extends StatelessWidget {
               title: 'RECOMPENSĂ ZILNICĂ',
               art: 'icon_chest',
               asset: 'assets/images/daily_gift.png',
-              subtitle: player.daily == player.today
-                  ? 'Revendicat'
-                  : 'Cadoul de azi',
-              badge: player.daily == player.today ? '' : 'GRATIS',
-              buttonText: player.daily == player.today
-                  ? 'REVENDICAT'
-                  : '+200 Lăbuțe',
-              onPressed: player.daily == player.today
-                  ? null
-                  : player.claimDaily,
+              subtitle: player.dailyReady
+                  ? 'Cadou gratuit (la 6 ore)'
+                  : 'Revendicat — revino peste 6 ore',
+              badge: player.dailyReady ? 'GRATIS' : '',
+              buttonText: player.dailyReady ? '+5 Lăbuțe' : 'REVENDICAT',
+              onPressed: player.dailyReady ? player.claimDaily : null,
             ),
             ShopOfferCard(
               title: _dailyDeal.title,
