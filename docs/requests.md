@@ -203,3 +203,11 @@ Request: Lane 5 checked the online sync against timed turns (docs/contract.md §
 Reason: docs/contract.md now uses timed turns; lane 5 was asked not to change lib/online production code in this pass.
 Status: open
 ```
+
+```text
+Lane: 3
+Blocking PR: lane-3 shell/lobby rework
+Request: (1) Resolved on main already — bdd4779 moved the sprites to assets/images/ and pubspec now bundles them; bbbbc324 whitelisted assets/images/ in the shared artwork checker, so lane 3 dropped its local expectCleanShellArtwork workaround and uses expectCleanArtwork again. (2) FYI, no change requested: the VS mockup stakes differ from the contract — implemented +30 win / 0 draw / -25 loss exactly per docs/contract.md and AGENTS.md decision 1. (3) Optional follow-up for lane 2/orchestrator: match_screen.dart:346 still routes the in-match trophy badge to the old showTrophyRoad() dialog; consider pointing it at HouseTourScreen for consistency (lane-2 file, untouched by lane 3).
+Reason: lane-3 owns only the listed shell files; the in-match HUD lives in lane-2's match_screen.dart.
+Status: open
+```

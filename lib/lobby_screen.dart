@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import 'cat_avatar.dart';
@@ -5,22 +7,35 @@ import 'catalog.dart';
 import 'profile.dart';
 import 'shell/friend_room.dart';
 import 'shell/house_tour.dart';
-import 'shell/reward_calendar.dart';
 import 'ui_widgets.dart';
 
-const _cardGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xffffe0a0), Color(0xffffedbb), Color(0xffe9ab60)],
-);
-const _stageGradient = RadialGradient(
-  center: Alignment(0, -0.55),
-  radius: 1.05,
-  colors: [Color(0xfffff6d8), Color(0xfff4d9a0), Color(0xffe2a866)],
-);
+/// Room background art per house-tour room (lane-1 `assets/images/`). The
+/// procedural [RoomBackground] painter is the fallback until the bundle
+/// carries the PNGs.
+const _roomBackgrounds = [
+  'bg_living_room',
+  'bg_hallway',
+  'bg_kitchen',
+  'bg_bedroom',
+];
+
 const _goldGradient = LinearGradient(
   colors: [Color(0xfffff3c4), gold, Color(0xffe8a92e)],
 );
+
+/// Picks the house-cat opponent for a LUPTĂ press: a random cat from every
+/// room the player has unlocked (threshold <= trophies). Returns null only
+/// when no room is unlocked, which cannot happen because room one starts at
+/// 0 trophies.
+HouseCat? pickBattleCat(Player player, [int? seed]) {
+  final unlocked = <HouseCat>[
+    for (final room in houseRooms)
+      if (player.trophies >= room.threshold) ...room.cats,
+  ];
+  if (unlocked.isEmpty) return null;
+  final random = seed == null ? Random() : Random(seed);
+  return unlocked[random.nextInt(unlocked.length)];
+}
 
 class LobbyScreen extends StatelessWidget {
   const LobbyScreen({
@@ -33,148 +48,76 @@ class LobbyScreen extends StatelessWidget {
   final void Function(HouseCat? cat) onBattle;
   final VoidCallback onRoad;
 
-  Widget progress() => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: const ValueKey('trophy-progress'),
-        onTap: onRoad,
-        borderRadius: BorderRadius.circular(20),
-        child: _TrophyCard(player: player),
-      ),
-    ),
-  );
+  String get _bgAsset =>
+      _roomBackgrounds[player.tier.clamp(0, _roomBackgrounds.length - 1)];
 
-  Widget hero() => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      _HeroStage(player: player),
-      const SizedBox(height: 8),
-      label(player.cat, size: 24),
-      const SizedBox(height: 4),
-      _PowerPill(
-        powerNames[player.cat == 'Tzuki'
-            ? 0
-            : player.cat == 'Bubble'
-            ? 1
-            : player.power],
-      ),
-    ],
-  );
-
-  Widget controls(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _HouseCatsCard(player: player, onBattle: onBattle),
-        const SizedBox(height: 8),
-        ArenaButton(
-          text: player.english ? 'BATTLE' : 'LUPTĂ',
-          onPressed: () => onBattle(null),
-          green: true,
-          spriteName: 'btn_play_paw',
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _ReturnButton(
-                title: 'CADOU ZILNIC',
-                subtitle: '7 zile',
-                onTap: () => showRewardCalendar(context, player),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ReturnButton(
-                title: player.english ? 'FRIEND ROOM' : 'CAMERĂ ONLINE',
-                subtitle: player.english ? 'online code' : 'cod online',
-                onTap: () =>
-                    showFriendRoom(context, english: player.english, player: player),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          player.english
-              ? 'House cats are labelled BOT; friend rooms are ONLINE when the service is configured.'
-              : 'Pisicile casei sunt BOT; camerele de prieten sunt ONLINE când serviciul este configurat.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: cream,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    ),
-  );
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
-      if (constraints.maxHeight < 580 || textScale > 1.3) {
-        return ListView(
-          key: const PageStorageKey('lobby-scroll'),
-          padding: const EdgeInsets.only(bottom: 14),
-          children: [
-            progress(),
-            const SizedBox(height: 4),
-            Center(child: hero()),
-            const SizedBox(height: 8),
-            controls(context),
-          ],
-        );
-      }
-      return Column(
-        children: [
-          progress(),
-          Expanded(
-            child: Center(
-              child: FittedBox(fit: BoxFit.scaleDown, child: hero()),
-            ),
-          ),
-          controls(context),
-        ],
-      );
-    },
-  );
-}
-
-class _BadgeIcon extends StatelessWidget {
-  const _BadgeIcon(this.asset);
-  final String asset;
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 50,
-    height: 50,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: _goldGradient,
-      border: Border.all(color: ink, width: 2.5),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x5561312d),
-          offset: Offset(0, 3),
-          blurRadius: 3,
-        ),
-      ],
-    ),
-    child: Center(child: sprite(asset, size: 30)),
-  );
-}
-
-class _TrophyCard extends StatelessWidget {
-  const _TrophyCard({required this.player});
-  final Player player;
+  void _fight() => onBattle(pickBattleCat(player));
 
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Compact when the *page viewport* (not the full screen) is short or
+        // text is scaled up — the scene and controls then scroll instead of
+        // overflowing.
+        final compact =
+            constraints.maxHeight < 620 || textScale > 1.3;
+        final content = compact
+            ? ListView(
+                key: const PageStorageKey('lobby-scroll'),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                children: [
+                  _progressStrip(),
+                  const SizedBox(height: 4),
+                  _catScene(context, compact: true),
+                  const SizedBox(height: 8),
+                  _controls(context),
+                ],
+              )
+            : Column(
+                children: [
+                  _progressStrip(),
+                  Expanded(child: Center(child: _catScene(context))),
+                  _controls(context),
+                ],
+              );
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            arenaImage(
+              _bgAsset,
+              fit: BoxFit.cover,
+              fallback: RoomBackground(
+                tier: player.tier,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            // Legibility scrim so text and buttons stay readable over the art.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x5520130e),
+                    Color(0x0020130e),
+                    Color(0x6620130e),
+                  ],
+                  stops: [0, 0.45, 1],
+                ),
+              ),
+            ),
+            content,
+          ],
+        );
+      },
+    );
+  }
+
+  /// Slim trophy progress strip: current/next threshold, a thumbnail of the
+  /// room being unlocked and the milestone chest. Taps open the house tour.
+  Widget _progressStrip() {
     final current = houseRoomForTrophies(player.trophies);
     final index = houseRooms.indexOf(current);
     final next = index + 1 < houseRooms.length ? houseRooms[index + 1] : null;
@@ -183,374 +126,311 @@ class _TrophyCard extends StatelessWidget {
     final ratio = next == null
         ? 1.0
         : ((player.trophies - start) / (end - start)).clamp(0.0, 1.0);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: _cardGradient,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ink, width: 2.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x6651312d),
-            offset: Offset(0, 4),
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _BadgeIcon('icon_trophy'),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final thumb = next == null
+        ? _roomBackgrounds[index]
+        : _roomBackgrounds[index + 1];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const ValueKey('trophy-progress'),
+          onTap: onRoad,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xff8a6242), Color(0xff6b4634)],
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: gold, width: 1.6),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x55000000),
+                  offset: Offset(0, 3),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        'DRUMUL TROFEELOR',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xff8a5a3b),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        current.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          color: Color(0xff8a5a3b),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                SizedBox(
-                  height: 32,
-                  width: double.infinity,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '${player.trophies}${next == null ? '' : ' / ${next.threshold}'}',
-                      softWrap: false,
-                      style: const TextStyle(
-                        color: ink,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: const Color(0xff6c4244),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: ink, width: 1.5),
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: ratio,
-                      heightFactor: 1,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: _goldGradient,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: arenaImage(
+                      thumb,
+                      fit: BoxFit.cover,
+                      fallback: Container(
+                        color: const Color(0xff5d3a2c),
+                        child: const Icon(
+                          Icons.home_rounded,
+                          color: gold,
+                          size: 22,
                         ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  next == null
-                      ? 'Toate camerele sunt deschise'
-                      : 'Următoarea cameră: ${next.name} la ${next.threshold} trofee',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xff7a4a32),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '${player.trophies} / $end',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: cream,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                shadows: [
+                                  Shadow(
+                                    color: Color(0x66000000),
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              next == null
+                                  ? (player.english
+                                        ? 'ALL ROOMS'
+                                        : 'TOATE CAMERELE')
+                                  : (player.english
+                                        ? 'NEXT: ${houseRoomDisplayNamesEn[index + 1]} @ ${next.threshold}'
+                                        : 'URM.: ${houseRoomDisplayNames[index + 1]} LA ${next.threshold}'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xffe8c9a0),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Container(
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: const Color(0xff432c33),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: ink, width: 1.2),
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: ratio,
+                            heightFactor: 1,
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                gradient: _goldGradient,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                const SizedBox(width: 8),
+                arenaImage(
+                  'milestone_chest',
+                  width: 34,
+                  height: 34,
+                  fallback: sprite('icon_chest', size: 34),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          sprite('icon_chest', size: 44),
-        ],
+        ),
       ),
     );
   }
-}
 
-class _HeroStage extends StatelessWidget {
-  const _HeroStage({required this.player});
-  final Player player;
-
-  @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: 420),
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: _stageGradient,
-        border: Border.all(color: ink, width: 2.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x6651312d),
-            offset: Offset(0, 5),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: SizedBox(
-        height: 235,
-        width: double.infinity,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Positioned(
-              top: 6,
-              left: 14,
-              child: Opacity(
-                opacity: 0.25,
-                child: sprite('tile_paw', size: 30),
-              ),
-            ),
-            Positioned(
-              bottom: 4,
-              right: 14,
-              child: Opacity(
-                opacity: 0.25,
-                child: sprite('tile_paw', size: 30),
-              ),
-            ),
-            CatCharacter(player, height: 225),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _HouseCatsCard extends StatelessWidget {
-  const _HouseCatsCard({required this.player, required this.onBattle});
-
-  final Player player;
-  final void Function(HouseCat? cat) onBattle;
-
-  @override
-  Widget build(BuildContext context) {
-    final room = houseRoomForTrophies(player.trophies);
-    final roomIndex = houseRooms.indexOf(room);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        gradient: _cardGradient,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ink, width: 2.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x6651312d),
-            offset: Offset(0, 4),
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+  /// The player's cat sitting on a rug in the middle of the room.
+  Widget _catScene(BuildContext context, {bool compact = false}) {
+    final height = compact ? 170.0 : 205.0;
+    final catAsset = switch (player.cat) {
+      'Tzuki' => 'cat_tzuki',
+      'Bubble' => 'cat_bubble',
+      _ => null,
+    };
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: height + 46,
+          child: Stack(
+            alignment: Alignment.bottomCenter,
             children: [
-              Expanded(
-                child: Text(
-                  'DRUMUL TROFEELOR • ${room.name}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: ink,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
+              Positioned(
+                bottom: 0,
+                child: CustomPaint(
+                  size: Size(min(320, MediaQuery.sizeOf(context).width * .8), 64),
+                  painter: const _RugPainter(),
                 ),
               ),
-              Text(
-                'Camera ${roomIndex + 1}/${houseRooms.length}',
-                style: const TextStyle(
-                  color: Color(0xff8a5a3b),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
+              Positioned(
+                bottom: 30,
+                child: catAsset == null
+                    ? CatCharacter(player, height: height)
+                    : arenaImage(
+                        catAsset,
+                        height: height,
+                        fit: BoxFit.contain,
+                        fallback: CatCharacter(player, height: height),
+                      ),
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            player.english
-                ? 'Choose a labelled house-cat bot'
-                : 'Alege o pisică-bot din casă',
-            style: const TextStyle(
-              color: Color(0xff8a5a3b),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+        ),
+        const SizedBox(height: 2),
+        label(player.cat, size: 24),
+        _PowerPill(
+          powerNames[player.cat == 'Tzuki'
+              ? 0
+              : player.cat == 'Bubble'
+              ? 1
+              : player.power],
+        ),
+      ],
+    );
+  }
+
+  Widget _controls(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Center(
+          // Small decorative badge: clamp text scaling so the label can
+          // never overflow the pill at 1.5x on narrow screens.
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(
+                min(MediaQuery.textScalerOf(context).scale(16) / 16, 1.15),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              for (final cat in room.cats)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: _HouseCatButton(
-                      player: player,
-                      cat: cat,
-                      onBattle: onBattle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xcc1d3f7a),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: gold, width: 1.2),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.sports_esports, color: gold, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    player.english ? 'MODE: 1v1 ARENA' : 'MOD: 1v1 ARENA',
+                    style: const TextStyle(
+                      color: cream,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.1,
                     ),
                   ),
-                ),
-            ],
+                ],
+              ),
+            ),
           ),
-        ],
-      ),
-    );
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: ArenaButton(
+            key: const ValueKey('lobby-fight'),
+            text: player.english ? 'BATTLE' : 'LUPTĂ',
+            onPressed: _fight,
+            spriteName: 'btn_play_paw',
+          ),
+        ),
+        const SizedBox(height: 6),
+        ArenaButton(
+          text: player.english ? 'ONLINE ROOM' : 'CAMERĂ ONLINE',
+          onPressed: () =>
+              showFriendRoom(context, english: player.english, player: player),
+          secondary: true,
+          singleLine: true,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          player.english
+              ? 'House cats are labelled BOT; friend rooms are ONLINE when the service is configured.'
+              : 'Pisicile casei sunt BOT; camerele de prieten sunt ONLINE când serviciul este configurat.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: cream,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            shadows: [Shadow(color: Color(0x55000000), offset: Offset(0, 1))],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Oval rug the cat sits on: wooden rim, woven centre and a stitched edge.
+class _RugPainter extends CustomPainter {
+  const _RugPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint();
+    paint.color = const Color(0xff7c4a34);
+    canvas.drawOval(rect.deflate(3), paint);
+    paint.color = const Color(0xffb5654a);
+    canvas.drawOval(rect.deflate(9), paint);
+    paint.color = const Color(0xffd9a05f);
+    canvas.drawOval(rect.deflate(15), paint);
+    paint
+      ..color = const Color(0x88a86a3c)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawOval(rect.deflate(21), paint);
+    paint.style = PaintingStyle.fill;
+    // Woven diamond motif.
+    paint.color = const Color(0x66a86a3c);
+    for (var i = 0; i < 5; i++) {
+      final cx = size.width * (.2 + i * .15);
+      final cy = size.height * .5;
+      canvas.drawPath(
+        Path()
+          ..moveTo(cx, cy - 7)
+          ..lineTo(cx + 6, cy)
+          ..lineTo(cx, cy + 7)
+          ..lineTo(cx - 6, cy)
+          ..close(),
+        paint,
+      );
+    }
   }
-}
-
-class _HouseCatButton extends StatelessWidget {
-  const _HouseCatButton({
-    required this.player,
-    required this.cat,
-    required this.onBattle,
-  });
-
-  final Player player;
-  final HouseCat cat;
-  final void Function(HouseCat? cat) onBattle;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: const Color(0x66ffffff),
-    borderRadius: BorderRadius.circular(16),
-    child: InkWell(
-      onTap: () => onBattle(cat),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: ink, width: 1.5),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CatAvatar(houseCatPlayer(player.prefs, cat), size: 42),
-            const SizedBox(height: 4),
-            Text(
-              cat.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: ink,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            Text(
-              'Nv ${cat.level}',
-              style: const TextStyle(
-                color: Color(0xff8a5a3b),
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const Text(
-              'BOT',
-              style: TextStyle(
-                color: gold,
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _ReturnButton extends StatelessWidget {
-  const _ReturnButton({
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final String title, subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: const Color(0x553b2a24),
-    borderRadius: BorderRadius.circular(14),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0x55ffc63c), width: 1),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: cream,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.6,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xffe8c9a0),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+  bool shouldRepaint(_RugPainter oldDelegate) => false;
 }
 
 class _PowerPill extends StatelessWidget {

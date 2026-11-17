@@ -4,13 +4,16 @@ import 'app_dialogs.dart';
 import 'cat_avatar.dart';
 import 'cats_screen.dart';
 import 'events_screen.dart';
+import 'house_tour_screen.dart';
 import 'lobby_screen.dart';
 import 'match_screen.dart';
 import 'profile.dart';
 import 'shell/app_info.dart';
+import 'shell/house_tour.dart';
 import 'shop_screen.dart';
 import 'team_screen.dart';
 import 'ui_widgets.dart';
+import 'vs_screen.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key, required this.player});
@@ -40,6 +43,29 @@ class _HomeState extends State<Home> {
   }
 
   void unavailable(String feature) => showUnavailable(context, feature);
+
+  /// Trophy badge / lobby progress strip → the house-tour map.
+  void openHouseTour() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => HouseTourScreen(player: p, onBattle: startBattle),
+      ),
+    );
+  }
+
+  /// LUPTĂ (or a house cat picked on the tour) → VS screen → duel.
+  void startBattle(HouseCat? cat) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (vsContext) => VsScreen(
+          player: p,
+          opponent: VsOpponent.houseCat(p, cat),
+          matchScreen: MatchScreen(player: p, mode: 0, opponent: cat),
+        ),
+      ),
+    );
+  }
+
   void menu(String item) {
     Navigator.pop(context);
     switch (item) {
@@ -116,12 +142,15 @@ class _HomeState extends State<Home> {
             child: Column(
               children: [
                 PlayerHud(
-                  avatar: CatAvatar(p, size: 46),
+                  avatar: AvatarAvatar(
+                    AvatarSpec.fromJsonString(p.avatarSpec),
+                    size: 46,
+                  ),
                   name: p.name,
                   trophies: p.trophies,
                   coins: p.coins,
                   onProfile: () => showPlayerProfile(context, p),
-                  onRoad: () => showTrophyRoad(context, p),
+                  onRoad: openHouseTour,
                   onShop: () => select(0),
                   onMenu: () => scaffold.currentState!.openEndDrawer(),
                 ),
@@ -141,19 +170,8 @@ class _HomeState extends State<Home> {
                         CatsScreen(player: p, onShop: () => select(0)),
                         LobbyScreen(
                           player: p,
-                          onBattle: (cat) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => MatchScreen(
-                                  player: p,
-                                  mode: 0,
-                                  opponent: cat,
-                                ),
-                              ),
-                            );
-                          },
-                          onRoad: () => showTrophyRoad(context, p),
+                          onBattle: startBattle,
+                          onRoad: openHouseTour,
                         ),
                         TeamScreen(player: p, onUnavailable: unavailable),
                         EventsScreen(player: p, onUnavailable: unavailable),

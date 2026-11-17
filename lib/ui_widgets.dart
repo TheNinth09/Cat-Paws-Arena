@@ -13,6 +13,23 @@ Widget sprite(String name, {double size = 40}) => Image.asset(
   fit: BoxFit.contain,
 );
 
+/// Lane-1 game art placed under `assets/images/`. While the asset pipeline
+/// has not bundled a file yet, [fallback] (a procedural painter or sprite)
+/// is shown instead so screens never depend on merge order.
+Widget arenaImage(
+  String name, {
+  double? width,
+  double? height,
+  BoxFit fit = BoxFit.contain,
+  Widget? fallback,
+}) => Image.asset(
+  'assets/images/$name.png',
+  width: width,
+  height: height,
+  fit: fit,
+  errorBuilder: (_, _, _) => fallback ?? const SizedBox.shrink(),
+);
+
 Widget label(String text, {double size = 22, Color color = cream}) => Text(
   text,
   textAlign: TextAlign.center,
@@ -454,9 +471,9 @@ class PlayerHud extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xff5e3a2a),
+                color: const Color(0xff3e6fb0),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0x59ffe9bd), width: 1),
+                border: Border.all(color: const Color(0x59dbe9ff), width: 1),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x33000000),

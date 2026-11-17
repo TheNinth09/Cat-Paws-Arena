@@ -33,6 +33,21 @@ class HouseRoom {
 
 const houseRoomThresholds = [0, 300, 800, 1500];
 
+/// Player-facing room names for the house-tour map, indexed like
+/// [houseRooms]. Romanian is the default; English variants sit alongside.
+const houseRoomDisplayNames = [
+  'LIVING',
+  'HOLUL PRINCIPAL',
+  'BUCATARIA',
+  'DORMITORUL',
+];
+const houseRoomDisplayNamesEn = [
+  'LIVING ROOM',
+  'MAIN HALL',
+  'KITCHEN',
+  'BEDROOM',
+];
+
 const houseRooms = [
   HouseRoom(
     name: 'Living',

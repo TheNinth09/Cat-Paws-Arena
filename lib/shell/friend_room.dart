@@ -8,6 +8,7 @@ import '../match_screen.dart';
 import '../online/online_backend.dart';
 import '../profile.dart';
 import '../ui_widgets.dart';
+import '../vs_screen.dart';
 import 'online_play.dart';
 
 Future<void> showFriendRoom(
@@ -30,7 +31,11 @@ Future<void> showFriendRoom(
         Navigator.of(context).pop();
         Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => MatchScreen(player: player, mode: 0, online: duel),
+            builder: (_) => VsScreen(
+              player: player,
+              opponent: VsOpponent.online(player, duel.opponent),
+              matchScreen: MatchScreen(player: player, mode: 0, online: duel),
+            ),
           ),
         );
       },

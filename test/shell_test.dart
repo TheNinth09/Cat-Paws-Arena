@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:cat_paws_arena/events_screen.dart';
+import 'package:cat_paws_arena/house_tour_screen.dart';
+import 'package:cat_paws_arena/lobby_screen.dart';
 import 'package:cat_paws_arena/main.dart';
 import 'package:cat_paws_arena/online/cloud_profile.dart';
 import 'package:cat_paws_arena/online/fake_backend.dart';
@@ -17,6 +19,7 @@ import 'package:cat_paws_arena/shell/online_play.dart';
 import 'package:cat_paws_arena/shell/reward_calendar.dart';
 import 'package:cat_paws_arena/team_screen.dart';
 import 'package:cat_paws_arena/ui_widgets.dart';
+import 'package:cat_paws_arena/vs_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
@@ -188,7 +191,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('trophy road hides parked team event and mode surfaces', (
+  testWidgets('house tour hides parked team event and mode surfaces', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -201,20 +204,9 @@ void main() {
       find.descendant(of: find.byType(PlayerHud), matching: find.text('321')),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('DRUMUL TROFEELOR'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('Hall'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.byType(HouseTourScreen), findsOneWidget);
+    expect(find.text('HOUSE TOUR'), findsOneWidget);
+    expect(find.text('2. MAIN HALL'), findsOneWidget);
     for (final parked in [
       'Echipă',
       'Evenimente',
@@ -224,7 +216,7 @@ void main() {
     ]) {
       expect(find.text(parked), findsNothing);
     }
-    await tester.tap(find.text('ÎNCHIDE'));
+    await tester.pageBack();
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -369,7 +361,9 @@ void main() {
     },
   );
 
-  testWidgets('house tour opens room two at 300 trophies', (tester) async {
+  testWidgets('house tour map opens from the lobby progress strip', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -382,13 +376,108 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-2')));
     await tester.pumpAndSettle();
-    expect(find.text('DRUMUL TROFEELOR • Hall'), findsOneWidget);
-    for (final name in ['Nori', 'Kiko', 'Biscuit']) {
+    // New lobby: no bot list, no beige cards — progress strip + battle CTAs.
+    expect(find.text('MODE: 1v1 ARENA'), findsOneWidget);
+    expect(find.byKey(const ValueKey('lobby-fight')), findsOneWidget);
+    expect(find.text('ONLINE ROOM'), findsOneWidget);
+    expect(find.text('CADOU ZILNIC'), findsNothing);
+    expect(find.text('Alege o pisică-bot din casă'), findsNothing);
+    expect(find.text('Nori'), findsNothing);
+    expect(find.byKey(const ValueKey('trophy-progress')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('trophy-progress')));
+    await tester.pumpAndSettle();
+    expect(find.byType(HouseTourScreen), findsOneWidget);
+    expect(find.text('HOUSE TOUR'), findsOneWidget);
+    for (final name in [
+      '1. LIVING ROOM',
+      '2. MAIN HALL',
+      '3. KITCHEN',
+      '4. BEDROOM',
+    ]) {
       expect(find.text(name), findsOneWidget);
     }
+    for (final cat in ['Puf', 'Misu', 'Toto', 'Nori', 'Kiko', 'Biscuit']) {
+      expect(find.text(cat), findsOneWidget);
+    }
+    expect(find.text('Marmalade'), findsNothing);
+    expect(find.text('LOCKED AT 800 TROPHIES'), findsOneWidget);
+    expect(find.text('LOCKED AT 1500 TROPHIES'), findsOneWidget);
+    expect(find.text('CURRENT ROOM'), findsOneWidget);
     expect(houseRoomForTrophies(299).name, 'Living');
     expect(houseRoomForTrophies(300).name, 'Hall');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('lobby fight opens the VS screen then the duel', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-2')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('lobby-fight')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('lobby-fight')));
+    // VsScreen runs an infinite preparing animation — settle would never
+    // finish, so advance fixed frames instead.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(VsScreen), findsOneWidget);
+    expect(find.text('CAT PAWS ARENA'), findsOneWidget);
+    expect(find.text('MIZELE MECIULUI'), findsOneWidget);
+    expect(find.text('+30'), findsOneWidget);
+    expect(find.text('VICTORIE'), findsOneWidget);
+    expect(find.text('EGAL'), findsOneWidget);
+    expect(find.text('-25'), findsOneWidget);
+    expect(find.text('INFRANGERE'), findsOneWidget);
+    expect(find.text('Se pregătește arena...'), findsOneWidget);
+    expect(find.text('BOT'), findsWidgets);
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(MatchScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('VS screen cancel returns to the lobby', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-2')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('lobby-fight')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('lobby-fight')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(VsScreen), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('vs-cancel')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(VsScreen), findsNothing);
+    expect(find.text('MOD: 1v1 ARENA'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('pickBattleCat only offers unlocked house cats', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final p = Player(prefs)..trophies = 0;
+    const living = {'Puf', 'Misu', 'Toto'};
+    for (var i = 0; i < 12; i++) {
+      expect(living, contains(pickBattleCat(p, i)!.name));
+    }
+    expect(pickBattleCat(p, 7), pickBattleCat(p, 7));
+    p.trophies = 350;
+    final names = {
+      for (var i = 0; i < 40; i++) pickBattleCat(p, i)!.name,
+    };
+    expect(names, containsAll(['Puf', 'Nori', 'Kiko']));
+    expect(names, isNot(contains('Marmalade')));
   });
 
   testWidgets(
@@ -628,7 +717,7 @@ void main() {
     expect(find.text('CREEAZĂ CAMERĂ'), findsOneWidget);
     expect(find.text('ALĂTURĂ-TE'), findsOneWidget);
     expect(find.textContaining('ONLINE'), findsWidgets);
-    expect(find.text('BOT'), findsWidgets);
+    expect(find.textContaining('BOT'), findsWidgets);
     await tester.tap(find.text('CREEAZĂ CAMERĂ'));
     await tester.pumpAndSettle();
     expect(account.user, isNotNull);
