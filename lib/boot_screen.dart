@@ -43,6 +43,12 @@ class _BootState extends State<Boot> {
         audio.play(AssetSource('generated/purr.wav')).catchError((Object _) {}),
       );
     }
+    unawaited(
+      precacheImage(
+        const AssetImage('assets/images/splash_screen.png'),
+        context,
+      ).catchError((Object _) {}),
+    );
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     setState(() => splash = false);
@@ -87,91 +93,88 @@ class _BootState extends State<Boot> {
   Widget build(BuildContext context) => Scaffold(
     body: splash
         ? const StudioSplash()
-        : RoomBackground(
-            tier: widget.player.tier,
-            dim: true,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                const Positioned.fill(
-                  child: CustomPaint(painter: _BootCharm()),
+        : Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(
+                child: Image.asset(
+                  'assets/images/splash_screen.png',
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
                 ),
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: Center(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  label('CAT PAWS', size: 40),
-                                  label('ARENA', size: 52, color: gold),
-                                  label(
-                                    studioName,
-                                    size: 16,
-                                    color: const Color(0xffe8c9a0),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  CatCharacter(widget.player, height: 200),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        panel(
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                statusFor(progress),
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: ink,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.3,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              _YarnProgress(progress),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  const Text(
-                                    'ÎNCĂRCARE',
-                                    style: TextStyle(
-                                      color: Color(0xff8a5a3b),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 1.8,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    '${(progress * 100).round()}%',
-                                    style: const TextStyle(
-                                      color: ink,
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
+              ),
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x00000000),
+                        Color(0x00000000),
+                        Color(0xCC1c0f08),
                       ],
+                      stops: [0.0, 0.5, 1.0],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              const Positioned.fill(child: CustomPaint(painter: _BootCharm())),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      panel(
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              statusFor(progress),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: ink,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                height: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _YarnProgress(progress),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                const Text(
+                                  'ÎNCĂRCARE',
+                                  style: TextStyle(
+                                    color: Color(0xff8a5a3b),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.8,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  '${(progress * 100).round()}%',
+                                  style: const TextStyle(
+                                    color: ink,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
   );
 }
