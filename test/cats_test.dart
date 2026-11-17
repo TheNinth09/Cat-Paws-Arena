@@ -398,7 +398,6 @@ void main() {
 
   test('avatar spec serializes and validates safely', () {
     const spec = AvatarSpec(
-      species: 2,
       fur: 4,
       pattern: 3,
       eyes: 1,
@@ -409,7 +408,8 @@ void main() {
     final restored = AvatarSpec.fromJsonString(spec.toJsonString());
     expect(restored, spec);
 
-    // Out-of-range values and unknown accessories fall back safely.
+    // Out-of-range values and unknown accessories fall back safely; a
+    // legacy 's' species field is ignored — the avatar is always a cat.
     final bad = AvatarSpec.fromJson(const {
       's': 99,
       'f': -2,
@@ -424,24 +424,31 @@ void main() {
     expect(AvatarSpec.fromJsonString(null), const AvatarSpec());
   });
 
-  testWidgets('avatar species zero matches the cat renderer exactly', (
+  test('legacy avatar JSON with a species field keeps the other fields', () {
+    // Saves written before the species system was removed carried a
+    // species index in 's'. It must parse without crashing and without
+    // losing any other field; new serializations no longer write 's'.
+    final spec = AvatarSpec.fromJsonString(
+      '{"s":2,"f":4,"p":3,"e":1,"r":4,"a":"","w":"power_laser_chase"}',
+    );
+    expect(spec.fur, 4);
+    expect(spec.pattern, 3);
+    expect(spec.eyes, 1);
+    expect(spec.ears, 4);
+    expect(spec.power, 'power_laser_chase');
+    expect(spec.toJson().containsKey('s'), isFalse);
+  });
+
+  testWidgets('avatar renders as a cat bust anchored to its shoulders', (
     tester,
   ) async {
     const spec = AvatarSpec(fur: 1, pattern: 2, eyes: 3, ears: 0);
-    final avatar = await _renderCat(tester, AvatarAvatar(spec, size: 96));
-    final cat = await _renderCat(
-      tester,
-      CatSpecAvatar(
-        CatSpec(
-          fur: catFurColours[1],
-          pattern: 2,
-          eyes: catEyeColours[3],
-          ears: 0,
-        ),
-        size: 96,
-      ),
-    );
-    expect(avatar.rgba, cat.rgba);
+    final render = await _renderCat(tester, AvatarAvatar(spec, size: 96));
+    // Transparent corner, painted head centre and a painted bottom band —
+    // the torso proves the head is anchored to a body, not pasted-on.
+    expect(_alphaAt(render, 0, 0), 0);
+    expect(_alphaAt(render, render.width ~/ 2, render.height * 3 ~/ 5), 255);
+    expect(_alphaAt(render, render.width ~/ 2, render.height - 4), 255);
   });
 
   testWidgets('every avatar combination renders without exceptions', (
@@ -453,21 +460,19 @@ void main() {
           body: SingleChildScrollView(
             child: Wrap(
               children: [
-                for (var species = 0; species < avatarSpeciesCount; species++)
-                  for (var fur = 0; fur < catFurColours.length; fur++)
-                    for (var pattern = 0; pattern < catPatternCount; pattern++)
-                      for (var eyes = 0; eyes < catEyeColours.length; eyes++)
-                        for (var ears = 0; ears < catEarCount; ears++)
-                          AvatarAvatar(
-                            AvatarSpec(
-                              species: species,
-                              fur: fur,
-                              pattern: pattern,
-                              eyes: eyes,
-                              ears: ears,
-                            ),
-                            size: 24,
+                for (var fur = 0; fur < catFurColours.length; fur++)
+                  for (var pattern = 0; pattern < catPatternCount; pattern++)
+                    for (var eyes = 0; eyes < catEyeColours.length; eyes++)
+                      for (var ears = 0; ears < avatarEarCount; ears++)
+                        AvatarAvatar(
+                          AvatarSpec(
+                            fur: fur,
+                            pattern: pattern,
+                            eyes: eyes,
+                            ears: ears,
                           ),
+                          size: 24,
+                        ),
               ],
             ),
           ),
@@ -478,11 +483,10 @@ void main() {
     expect(
       find.byType(AvatarAvatar),
       findsNWidgets(
-        avatarSpeciesCount *
-            catFurColours.length *
+        catFurColours.length *
             catPatternCount *
             catEyeColours.length *
-            catEarCount,
+            avatarEarCount,
       ),
     );
   });
@@ -492,11 +496,10 @@ void main() {
   ) async {
     for (var i = 0; i < 24; i++) {
       final spec = AvatarSpec(
-        species: i % avatarSpeciesCount,
         fur: (i * 5) % catFurColours.length,
         pattern: (i * 3) % catPatternCount,
         eyes: (i * 7) % catEyeColours.length,
-        ears: (i * 2) % catEarCount,
+        ears: (i * 2) % avatarEarCount,
       );
       final render = await _renderCat(tester, AvatarAvatar(spec, size: 64));
       expect(render.png.length, greaterThan(200), reason: 'avatar $i');
@@ -540,7 +543,7 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.text('Câine'));
+    await tester.tap(find.text('Bandaj roz'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Shadow Pounce'));
     await tester.pumpAndSettle();
@@ -548,7 +551,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final saved = AvatarSpec.fromJsonString(prefs.getString(avatarSpecKey));
-    expect(saved.species, 1);
+    expect(saved.ears, 4);
     expect(saved.power, 'power_shadow_pounce');
 
     await tester.pumpWidget(
@@ -558,7 +561,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final avatar = tester.widget<AvatarAvatar>(find.byType(AvatarAvatar).first);
-    expect(avatar.spec.species, 1);
+    expect(avatar.spec.ears, 4);
     expect(find.text('AVATARUL TĂU'), findsOneWidget);
   });
 }

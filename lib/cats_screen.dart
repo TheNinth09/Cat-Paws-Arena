@@ -1615,8 +1615,7 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
   void _randomise() => setState(() {
     final ownedAcc = _ownedAccessories;
     _spec = AvatarSpec(
-      species: _random.nextInt(avatarSpeciesCount),
-      fur: _random.nextInt(catFurColours.length),
+      fur: _furIndices[_random.nextInt(_furIndices.length)],
       pattern: _random.nextInt(catPatternCount),
       eyes: _random.nextInt(catEyeColours.length),
       ears: _random.nextInt(catEarCount),
@@ -1626,6 +1625,12 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
       power: avatarPowerIds[_random.nextInt(avatarPowerIds.length)],
     );
   });
+
+  /// Fur choices offered to the avatar — natural cat coats only. Indices
+  /// point into [catFurColours]; a saved index outside the list still
+  /// renders, it just is not reselectable here.
+  static const _furIndices = [0, 1, 2, 4, 5];
+  static const _furNames = ['Gri', 'Portocaliu', 'Crem', 'Negru', 'Alb'];
 
   static const _earLabels = [
     'Două urechi',
@@ -1743,21 +1748,15 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [
-                  _choicesRow(
-                    'Specie',
-                    avatarSpeciesNames,
-                    _spec.species,
-                    (i) => _update(_spec.copyWith(species: i)),
-                  ),
                   _swatchesRow(
-                    'Culoare blană',
-                    catFurColours,
-                    const ['Gri', 'Portocaliu', 'Crem', 'Mov', 'Negru', 'Alb'],
-                    _spec.fur,
-                    (i) => _update(_spec.copyWith(fur: i)),
+                    'BLANA',
+                    [for (final i in _furIndices) catFurColours[i]],
+                    _furNames,
+                    _furIndices.indexOf(_spec.fur),
+                    (i) => _update(_spec.copyWith(fur: _furIndices[i])),
                   ),
                   _choicesRow(
-                    'Model',
+                    'MODEL',
                     const [
                       'Uniform',
                       'Tigrat',
@@ -1769,21 +1768,21 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
                     (i) => _update(_spec.copyWith(pattern: i)),
                   ),
                   _swatchesRow(
-                    'Culoare ochi',
+                    'OCHI',
                     catEyeColours,
                     const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
                     _spec.eyes,
                     (i) => _update(_spec.copyWith(eyes: i)),
                   ),
                   _choicesRow(
-                    'Urechi',
+                    'URECHI',
                     _earLabels,
                     _spec.ears.clamp(0, _earLabels.length - 1).toInt(),
                     (i) => _update(_spec.copyWith(ears: i)),
                   ),
                   _powerRow(),
                   _choicesRow(
-                    'Accesorii',
+                    'ACCESORII',
                     accessoryNames,
                     accessoryIndex.clamp(0, accessoryNames.length - 1),
                     (i) => _update(
