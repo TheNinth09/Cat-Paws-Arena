@@ -60,19 +60,20 @@ Validate impossible configurations (for example more colours than distinct piece
 
 ### State and moves
 
-`MatchState` must represent, at minimum: engine/config version; match seed; current round; active player; remaining moves; both players' scores; both boards; pending obstacles and their delivery round/player; special pieces; power charge/effect state; round/match outcome; and enough RNG state to continue deterministically. Exact private representation is lane 1's choice.
+`MatchState` must represent, at minimum: engine/config version; match seed; current turn; active player; turns remaining per player; both players' scores; both boards; pending obstacles and their delivery turn/player; special pieces; power charge/effect state; turn/match outcome; and enough RNG state to continue deterministically. Exact private representation is the engine lane's choice.
 
 Use stable player identifiers such as `PlayerSlot.first` and `PlayerSlot.second`, not display names or device IDs. A `Move` identifies the active player implicitly through state and contains an action kind plus coordinates/power selection as applicable. Define coordinates as zero-based row/column pairs and document bounds. Moves must be serializable without timestamps or local object references.
 
 Legal actions include a valid swap and an explicitly supported power action. A power must consume the agreed resource according to engine rules, not bypass move limits unless the config explicitly says so. The engine owns when a power may be used; UI owns button availability and animation.
 
-### Round and obstacle semantics
+### Turn and obstacle semantics (revised: timed turns replace 3-moves/5-rounds)
 
 - Both players play the same seed/config, but each has an independent board state.
-- There are five rounds of three moves. A round ends after the third accepted move, or earlier only for an explicitly defined terminal condition such as match completion. A terminal early finish must be deterministic and must not invent extra moves.
-- Scores reset or accumulate exactly as documented by lane 1; the contract must state which. Flat points per piece are used, with no cascade multiplier. Colour count and rainbow behavior are config-visible.
-- Obstacles earned in a round are queued for the opponent and appear at the start of that opponent's next round. Define maximum queue size, placement selection, collision behavior, and effects on move legality. Do not drop or duplicate obstacles during replay.
-- After round five, produce a win/loss/draw result and final hashes. Scores alone are not proof of fairness; the event log and hashes must agree.
+- A match alternates turns. Each turn gives the active player up to `turnSeconds` (default 30) of free swaps; the player may end the turn early with an explicit end-turn action. A match lasts `turnsPerPlayer` turns each (default 5). All swaps and power activations inside a turn are individual log entries, replayed and hash-verified exactly as before.
+- Scores accumulate across the whole match. Flat points per piece, no cascade multiplier. Colour count and rainbow behavior are config-visible.
+- Obstacles (boxes) break on adjacent matches. Obstacles earned during a turn are queued for the opponent and appear at the start of that opponent's next turn. Define maximum queue size, placement selection, collision behavior, and effects on move legality. Do not drop or duplicate obstacles during replay.
+- Each cat brings exactly one equal-strength power chosen in the cat editor (zoomies / shadow pounce / laser chase). The meter charges from matches to a 100% cap; firing is a logged power action triggered by the player tapping the full meter. Powers may send obstacles to the opponent's board and/or clear own cells; strengths stay equal.
+- After both players finish their turns, produce a win/loss/draw result and final hashes. Stakes: +30 trophies win, 0 draw, -25 loss. Scores alone are not proof of fairness; the event log and hashes must agree.
 
 ### Event contract
 
