@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'catalog.dart';
 import 'profile.dart';
@@ -19,6 +20,93 @@ const _bannerGradient = LinearGradient(
 const _badgeGradient = LinearGradient(
   colors: [Color(0xffe2725b), Color(0xffa83a2e)],
 );
+
+const _dailyDeal = CosmeticOffer(
+  id: 'daily_deal_special',
+  title: 'DAILY DEAL',
+  subtitle: 'PACHET SPECIAL',
+  art: 'acc_pirate_bandana',
+  extraArt: 'tile_yarn',
+  leiPrice: '8.99 LEI',
+  items: ['acc_pirate_bandana'],
+);
+
+const _pawPackAssets = [
+  'paws_pack_coins',
+  'paws_pack_bag',
+  'paws_pack_bag',
+  'paws_pack_bag',
+  'paws_pack_chest',
+  'paws_pack_chest',
+];
+const _pawPackFallbacks = [
+  'icon_paw_coin',
+  'icon_paw_coin',
+  'icon_paw_coin',
+  'icon_paw_coin',
+  'icon_chest',
+  'icon_chest',
+];
+
+Set<String>? _assetNames;
+
+Future<Set<String>> _bundledAssets() async {
+  final cached = _assetNames;
+  if (cached != null) return cached;
+  final names = (await AssetManifest.loadFromAssetBundle(rootBundle))
+      .listAssets()
+      .toSet();
+  return _assetNames = names;
+}
+
+Widget _offerImage(String asset, String fallback, double size) => _BundledAsset(
+  asset: asset,
+  width: size,
+  height: size,
+  fallback: sprite(fallback, size: size),
+);
+
+class _BundledAsset extends StatefulWidget {
+  const _BundledAsset({
+    required this.asset,
+    required this.fallback,
+    this.width,
+    this.height,
+  });
+
+  final String asset;
+  final Widget fallback;
+  final double? width, height;
+
+  @override
+  State<_BundledAsset> createState() => _BundledAssetState();
+}
+
+class _BundledAssetState extends State<_BundledAsset> {
+  bool useAsset = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final names = await _bundledAssets();
+    if (mounted) setState(() => useAsset = names.contains(widget.asset));
+  }
+
+  @override
+  Widget build(BuildContext context) => useAsset
+      ? Image.asset(
+          widget.asset,
+          width: widget.width,
+          height: widget.height,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => widget.fallback,
+        )
+      : widget.fallback;
+}
 
 class ShopScreen extends StatelessWidget {
   const ShopScreen({
@@ -60,7 +148,6 @@ class ShopScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dailyDeal = cosmeticOffers.first;
     return ListView(
       key: const PageStorageKey('shop-scroll'),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
@@ -74,8 +161,11 @@ class ShopScreen extends StatelessWidget {
             ShopOfferCard(
               title: 'RECOMPENSĂ ZILNICĂ',
               art: 'icon_chest',
-              subtitle: 'Cadoul de azi',
-              badge: player.daily == player.today ? '' : 'GRATUIT',
+              asset: 'assets/images/daily_gift.png',
+              subtitle: player.daily == player.today
+                  ? 'Revendicat'
+                  : 'Cadoul de azi',
+              badge: player.daily == player.today ? '' : 'GRATIS',
               buttonText: player.daily == player.today
                   ? 'REVENDICAT'
                   : '+200 Lăbuțe',
@@ -84,15 +174,18 @@ class ShopScreen extends StatelessWidget {
                   : player.claimDaily,
             ),
             ShopOfferCard(
-              title: 'DAILY DEAL',
-              art: dailyDeal.art,
-              extraArt: dailyDeal.extraArt,
-              subtitle: dailyDeal.subtitle,
-              buttonText: ownsOffer(dailyDeal) ? 'DEȚINUT' : dailyDeal.leiPrice,
-              onPressed: ownsOffer(dailyDeal)
+              title: _dailyDeal.title,
+              art: _dailyDeal.art,
+              extraArt: _dailyDeal.extraArt,
+              subtitle: 'Oferă zilnică',
+              badge: 'PACHET SPECIAL',
+              buttonText: ownsOffer(_dailyDeal)
+                  ? 'DEȚINUT'
+                  : 'PACHET • 8.99 LEI',
+              onPressed: ownsOffer(_dailyDeal)
                   ? null
                   : () {
-                      buyOffer(dailyDeal);
+                      buyOffer(_dailyDeal);
                     },
             ),
           ],
@@ -107,10 +200,12 @@ class ShopScreen extends StatelessWidget {
             for (var i = 0; i < coinBundles.length; i++)
               ShopOfferCard(
                 key: ValueKey('coin-bundle-$i'),
-                title: coinBundles[i].$1,
-                subtitle: 'LĂBUȚE',
-                art: i >= 4 ? 'icon_chest' : 'icon_paw_coin',
+                title: '${coinBundles[i].$1} LĂBUȚE',
+                subtitle: 'PACHET',
+                art: _pawPackFallbacks[i],
+                asset: 'assets/images/${_pawPackAssets[i]}.png',
                 badge: coinBundles[i].$3,
+                badgeArt: i == 5 ? 'icon_trophy' : null,
                 buttonText: '${coinBundles[i].$2} LEI',
                 onPressed: () => buyCoinBundle(i),
                 compact: true,
@@ -209,7 +304,7 @@ class _BillingNote extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Plățile sunt opționale; prețurile sunt în LEI și nu există cronometre sau oferte limitate.',
+            'Plățile sunt opționale; prețurile sunt în LEI, fără cronometre sau oferte limitate. Lăbuțele se câștigă în joc.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: ink,
@@ -261,11 +356,13 @@ class ShopOfferCard extends StatelessWidget {
     required this.onPressed,
     this.subtitle,
     this.extraArt,
+    this.asset,
     this.badge = '',
+    this.badgeArt,
     this.compact = false,
   });
   final String title, art, buttonText, badge;
-  final String? subtitle, extraArt;
+  final String? subtitle, extraArt, asset, badgeArt;
   final VoidCallback? onPressed;
   final bool compact;
   @override
@@ -301,14 +398,24 @@ class ShopOfferCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (badge.isNotEmpty) _OfferBadge(badge),
+          if (badge.isNotEmpty)
+            badgeArt == null
+                ? _OfferBadge(badge)
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      sprite(badgeArt!, size: 16),
+                      const SizedBox(width: 5),
+                      Flexible(child: _OfferBadge(badge)),
+                    ],
+                  ),
           if (badge.isNotEmpty) SizedBox(height: compact ? 4 : 6),
           Text(
             title,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: ink,
-              fontSize: compact ? 20 : 15,
+              fontSize: compact ? 18 : 15,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -330,7 +437,9 @@ class ShopOfferCard extends StatelessWidget {
             ),
           SizedBox(height: compact ? 6 : 10),
           if (extraArt == null)
-            sprite(art, size: compact ? 58 : 80)
+            asset == null
+                ? sprite(art, size: compact ? 58 : 80)
+                : _offerImage(asset!, art, compact ? 58 : 80)
           else
             Row(
               mainAxisAlignment: MainAxisAlignment.center,

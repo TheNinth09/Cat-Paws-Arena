@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -378,8 +379,8 @@ class _CatsScreenState extends State<CatsScreen> {
                           crossAxisCount: 3,
                           mainAxisSpacing: 6,
                           crossAxisSpacing: 6,
-                      childAspectRatio: 2.6,
-                    ),
+                          childAspectRatio: 2.6,
+                        ),
                     itemCount: catPresetNames.length,
                     itemBuilder: (context, index) {
                       final name = catPresetNames[index];
@@ -430,11 +431,7 @@ class _CatsScreenState extends State<CatsScreen> {
         top: -4000,
         child: RepaintBoundary(
           key: boundaryKey,
-          child: CatShareCard(
-            spec: spec,
-            catName: catName,
-            room: player.room,
-          ),
+          child: CatShareCard(spec: spec, catName: catName, room: player.room),
         ),
       ),
     );
@@ -452,10 +449,7 @@ class _CatsScreenState extends State<CatsScreen> {
       await SharePlus.instance.share(
         ShareParams(
           files: [
-            XFile.fromData(
-              data.buffer.asUint8List(),
-              mimeType: 'image/png',
-            ),
+            XFile.fromData(data.buffer.asUint8List(), mimeType: 'image/png'),
           ],
           fileNameOverrides: const ['pisica_mea.png'],
         ),
@@ -493,9 +487,7 @@ class _CatsScreenState extends State<CatsScreen> {
                   ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _catName == null
-                        ? const Color(0x6651312d)
-                        : ink,
+                    color: _catName == null ? const Color(0x6651312d) : ink,
                     width: _catName == null ? 1.5 : 2.2,
                   ),
                 ),
@@ -1444,6 +1436,157 @@ Widget _swatchesRow(
   ),
 );
 
+Set<String>? _assetNames;
+
+Future<Set<String>> _bundledAssets() async {
+  final cached = _assetNames;
+  if (cached != null) return cached;
+  final names = (await AssetManifest.loadFromAssetBundle(rootBundle))
+      .listAssets()
+      .toSet();
+  return _assetNames = names;
+}
+
+class _BundledAsset extends StatefulWidget {
+  const _BundledAsset({
+    required this.asset,
+    required this.fallback,
+    this.width,
+    this.height,
+    this.fit = BoxFit.contain,
+  });
+
+  final String asset;
+  final Widget fallback;
+  final double? width, height;
+  final BoxFit fit;
+
+  @override
+  State<_BundledAsset> createState() => _BundledAssetState();
+}
+
+class _BundledAssetState extends State<_BundledAsset> {
+  bool useAsset = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final names = await _bundledAssets();
+    if (mounted) setState(() => useAsset = names.contains(widget.asset));
+  }
+
+  @override
+  Widget build(BuildContext context) => useAsset
+      ? Image.asset(
+          widget.asset,
+          width: widget.width,
+          height: widget.height,
+          fit: widget.fit,
+          errorBuilder: (context, error, stackTrace) => widget.fallback,
+        )
+      : widget.fallback;
+}
+
+class _AvatarCushionPreview extends StatelessWidget {
+  const _AvatarCushionPreview({required this.spec});
+  final AvatarSpec spec;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 230,
+    width: double.infinity,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(26),
+      gradient: _stageGradient,
+      border: Border.all(color: ink, width: 2.5),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x6651312d),
+          offset: Offset(0, 5),
+          blurRadius: 8,
+        ),
+      ],
+    ),
+    child: Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        Positioned.fill(
+          child: _BundledAsset(
+            asset: 'assets/images/cat_cushion.png',
+            fit: BoxFit.cover,
+            fallback: const SizedBox.expand(),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: AvatarAvatar(spec, size: 150),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AvatarPowerCard extends StatelessWidget {
+  const _AvatarPowerCard({
+    required this.asset,
+    required this.fallback,
+    required this.title,
+    required this.selected,
+    required this.onTap,
+  });
+  final String asset, fallback, title;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: selected ? _selectedGradient : _cardGradient,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected ? gold : ink,
+          width: selected ? 2.6 : 1.8,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _BundledAsset(
+            asset: asset,
+            width: 52,
+            height: 52,
+            fallback: sprite(fallback, size: 52),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: ink,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (selected) ...const [
+            SizedBox(height: 3),
+            Icon(Icons.check_circle, color: Color(0xff3f6d22), size: 18),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
 /// Bottom-sheet editor for the player's avatar. Edits a local draft and only
 /// persists through [onSave]; owned accessories are the only ones offered.
 class _AvatarEditorSheet extends StatefulWidget {
@@ -1480,8 +1623,59 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
       accessory: ownedAcc.isEmpty
           ? ''
           : ownedAcc[_random.nextInt(ownedAcc.length)],
+      power: avatarPowerIds[_random.nextInt(avatarPowerIds.length)],
     );
   });
+
+  static const _earLabels = [
+    'Două urechi',
+    'Ureche stângă',
+    'Plisate',
+    'Smocuri',
+    'Bandaj roz',
+  ];
+
+  Widget _powerRow() {
+    final selected = avatarPowerIds.indexOf(_spec.power);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'PUTEREA AVATARULUI',
+            style: TextStyle(
+              color: Color(0xff6b4a32),
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              for (var i = 0; i < avatarPowerIds.length; i++)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: i == 0 ? 0 : 6,
+                      right: i == avatarPowerIds.length - 1 ? 0 : 6,
+                    ),
+                    child: _AvatarPowerCard(
+                      asset: 'assets/images/${avatarPowerIds[i]}.png',
+                      fallback: 'vfx_${avatarPowerIds[i].substring(6)}',
+                      title: avatarPowerNames[i],
+                      selected: selected == i,
+                      onTap: () =>
+                          _update(_spec.copyWith(power: avatarPowerIds[i])),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   void _save() {
     widget.onSave(_spec);
@@ -1525,7 +1719,7 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
                 children: [
                   const Expanded(
                     child: Text(
-                      'EDITEAZĂ AVATARUL',
+                      'CREEAZĂ-ȚI PISICA',
                       style: TextStyle(
                         color: ink,
                         fontSize: 18,
@@ -1542,7 +1736,7 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
                 ],
               ),
             ),
-            AvatarAvatar(_spec, size: 140),
+            _AvatarCushionPreview(spec: _spec),
             const SizedBox(height: 4),
             Flexible(
               child: ListView(
@@ -1564,7 +1758,13 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
                   ),
                   _choicesRow(
                     'Model',
-                    const ['Uniform', 'Tigrat', 'Bicolor', 'Calico', 'Colorpoint'],
+                    const [
+                      'Uniform',
+                      'Tigrat',
+                      'Bicolor',
+                      'Calico',
+                      'Colorpoint',
+                    ],
                     _spec.pattern,
                     (i) => _update(_spec.copyWith(pattern: i)),
                   ),
@@ -1577,18 +1777,17 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
                   ),
                   _choicesRow(
                     'Urechi',
-                    avatarEarNames[_spec.species],
-                    _spec.ears,
+                    _earLabels,
+                    _spec.ears.clamp(0, _earLabels.length - 1).toInt(),
                     (i) => _update(_spec.copyWith(ears: i)),
                   ),
+                  _powerRow(),
                   _choicesRow(
                     'Accesorii',
                     accessoryNames,
                     accessoryIndex.clamp(0, accessoryNames.length - 1),
                     (i) => _update(
-                      _spec.copyWith(
-                        accessory: i == 0 ? '' : ownedAcc[i - 1],
-                      ),
+                      _spec.copyWith(accessory: i == 0 ? '' : ownedAcc[i - 1]),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -1604,7 +1803,7 @@ class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: ArenaButton(
-                          text: 'SALVEAZĂ',
+                          text: 'SALVEAZĂ AVATAR',
                           onPressed: _save,
                         ),
                       ),

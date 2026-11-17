@@ -32,20 +32,18 @@ Future<_CatRender> _renderCat(
     MaterialApp(
       home: Scaffold(
         backgroundColor: Colors.transparent,
-        body: Center(child: RepaintBoundary(key: key, child: child)),
+        body: Center(
+          child: RepaintBoundary(key: key, child: child),
+        ),
       ),
     ),
   );
   await tester.pumpAndSettle();
-  final boundary = tester.renderObject<RenderRepaintBoundary>(
-    find.byKey(key),
-  );
+  final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(key));
   final render = await tester.runAsync(() async {
     final image = await boundary.toImage(pixelRatio: pixelRatio);
     final png = await image.toByteData(format: ui.ImageByteFormat.png);
-    final rgba = await image.toByteData(
-      format: ui.ImageByteFormat.rawRgba,
-    );
+    final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
     final result = _CatRender(
       image.width,
       image.height,
@@ -241,10 +239,12 @@ void main() {
     await tester.pump();
     expect(
       find.byType(CatSpecAvatar),
-      findsNWidgets(catFurColours.length *
-          catPatternCount *
-          catEyeColours.length *
-          catEarCount),
+      findsNWidgets(
+        catFurColours.length *
+            catPatternCount *
+            catEyeColours.length *
+            catEarCount,
+      ),
     );
   });
 
@@ -285,7 +285,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(home: CatsScreen(player: player, onShop: () {})),
+      MaterialApp(
+        home: CatsScreen(player: player, onShop: () {}),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -327,7 +329,9 @@ void main() {
     expect(restored.power, 1);
 
     await tester.pumpWidget(
-      MaterialApp(home: CatsScreen(player: restored, onShop: () {})),
+      MaterialApp(
+        home: CatsScreen(player: restored, onShop: () {}),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text('CREATOR'), findsOneWidget);
@@ -343,11 +347,7 @@ void main() {
     );
     final render = await _renderCat(
       tester,
-      const CatShareCard(
-        spec: spec,
-        catName: 'Luna',
-        room: 'Living',
-      ),
+      const CatShareCard(spec: spec, catName: 'Luna', room: 'Living'),
       pixelRatio: 3,
     );
     expect(render.width, 1080);
@@ -368,11 +368,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: Center(
-            child: CatShareCard(
-              spec: spec,
-              catName: 'Luna',
-              room: player.room,
-            ),
+            child: CatShareCard(spec: spec, catName: 'Luna', room: player.room),
           ),
         ),
       ),
@@ -407,6 +403,7 @@ void main() {
       eyes: 1,
       ears: 3,
       accessory: 'acc_pirate_bandana',
+      power: 'power_shadow_pounce',
     );
     final restored = AvatarSpec.fromJsonString(spec.toJsonString());
     expect(restored, spec);
@@ -419,6 +416,7 @@ void main() {
       'e': 7,
       'r': 8,
       'a': 'not_a_sprite',
+      'w': 'not_a_power',
     });
     expect(bad, const AvatarSpec());
     expect(AvatarSpec.fromJsonString('not json'), const AvatarSpec());
@@ -519,14 +517,16 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(home: CatsScreen(player: player, onShop: () {})),
+      MaterialApp(
+        home: CatsScreen(player: player, onShop: () {}),
+      ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('AVATARUL TĂU'), findsOneWidget);
     await tester.tap(find.text('EDITEAZĂ'));
     await tester.pumpAndSettle();
-    expect(find.text('EDITEAZĂ AVATARUL'), findsOneWidget);
+    expect(find.text('CREEAZĂ-ȚI PISICA'), findsOneWidget);
 
     // Owned accessories are offered inside the sheet, unowned ones are not.
     final sheet = find.byType(BottomSheet);
@@ -541,19 +541,22 @@ void main() {
 
     await tester.tap(find.text('Câine'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SALVEAZĂ'));
+    await tester.tap(find.text('Shadow Pounce'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SALVEAZĂ AVATAR'));
     await tester.pumpAndSettle();
 
     final saved = AvatarSpec.fromJsonString(prefs.getString(avatarSpecKey));
     expect(saved.species, 1);
+    expect(saved.power, 'power_shadow_pounce');
 
     await tester.pumpWidget(
-      MaterialApp(home: CatsScreen(player: player, onShop: () {})),
+      MaterialApp(
+        home: CatsScreen(player: player, onShop: () {}),
+      ),
     );
     await tester.pumpAndSettle();
-    final avatar = tester.widget<AvatarAvatar>(
-      find.byType(AvatarAvatar).first,
-    );
+    final avatar = tester.widget<AvatarAvatar>(find.byType(AvatarAvatar).first);
     expect(avatar.spec.species, 1);
     expect(find.text('AVATARUL TĂU'), findsOneWidget);
   });
