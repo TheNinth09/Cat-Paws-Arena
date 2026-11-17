@@ -100,6 +100,17 @@ timer for the duel screen.
 Expiry is always `createdAt + 24 h` in server time; rules enforce it with
 `request.time`.
 
+#### Timed turns (v0.3)
+
+The sync layer is move-entry based and needs no change for 30 s turns of
+free swaps: every accepted swap, power and end-turn is one log entry with
+`hashAfter`; `next` stays the mover until the turn ends; finals fire on
+`state.outcome`; forfeit is 24 h after the last entry. Open items: the rules
+`config` literal and end-turn move schema (see `SECURITY_RULES.md`), a push
+on every swap from `onMoveCreated` (it should only push when `next` turns
+to the recipient), `liveMoveLimit` now meaning the 30 s turn budget, and
+more entries per match (§ cost in `PROPOSAL.md`).
+
 ### `FcmPushRegistration`
 
 - `firebase_messaging_auto_init_enabled=false` in the manifest: no token or

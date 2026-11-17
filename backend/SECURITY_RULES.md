@@ -98,13 +98,23 @@ preset IDs only.
 
 ## `matches/{matchId}/emotes/{id}` — preset emotes
 
-- [ ] Create only, by a participant, in their own slot.
-- [ ] `emote` in the `Emote.wire` list from `lib/online/emotes.dart`
+- [x] Create only, by a participant (`from == auth.uid`); never updated.
+- [x] `emote` in the `Emote.wire` list from `lib/online/emotes.dart`
       (`hello`, `good_game`, `wow`, `oops`, `thanks`, `purr`); any other
       string is rejected.
-- [ ] Only `emote`, `slot`, `round`, `createdAt == request.time`.
-- [ ] Rate limit by rules: at most one emote per slot per round index, or a
-      server-side throttle; decide in the implementation PR.
+- [x] Only `emote`, `from`, `at == request.time` (no round or turn field).
+- [ ] Rate limit: none in rules yet; the UI throttles. Revisit if abused.
+
+## Timed turns (v0.3) — rules gaps to close with the engine change
+
+- [ ] `config` literal in `matchCreate` is the old fingerprint
+      (`...|r5|m3|...`). Update it, and `engineVersion`, in the same merge
+      as the new `MatchConfig.duel()`; otherwise every room claim is denied.
+- [ ] `validMove` accepts only `swap` and `power`; add the engine's
+      end-turn `Move.toJson()` shape once lane 1 defines it.
+- [ ] No 30 s check in rules: the turn timer is client-side and ends with a
+      logged end-turn entry; an idle player is only covered by the 24 h
+      forfeit (`next` semantics already fit: mid-turn `next` is the mover).
 
 ## `events/{id}` — product events (slice 4)
 

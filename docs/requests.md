@@ -189,3 +189,17 @@ Request: Root `flutter analyze` reports ~455 errors, all inside `packages/arena_
 Reason: pre-existing on main since the lane-1 engine merges; lane 2 cannot edit analysis_options.yaml or pubspec.yaml.
 Status: answered — orchestrator excluded `packages/**` from the root analyzer (analysis_options.yaml); the engine package keeps its own analysis and `dart test` (57/57).
 ```
+
+```text
+Lane: orchestrator (with lane 1 and lane 2)
+Blocking PR: v0.3 timed-turn engine change
+Request: Lane 5 checked the online sync against timed turns (docs/contract.md §3). MatchStore/MatchSession, the move log, finals and forfeit are move-entry based and stay valid. Items that still assume 5 rounds x 3 moves and must land with the engine change:
+  1. backend/firestore.rules:126 hard-codes the old `MatchConfig.duel().fingerprint` ('v1|7x7|c5|r5|m3|...') and `engineVersion == 1`; MatchSession rejects any other config as `unknown_version`. When lane 1 changes the duel config, lane 5 must update the rules literal (and engine/contract version) in the same merge or every room claim is denied.
+  2. Rules `validMove` accepts only `swap` and `power`. The explicit end-turn action needs its exact `Move.toJson()` shape from lane 1 so lane 5 can allow it; until then an end-turn entry is denied.
+  3. The 30 s turn timer is not in the engine (no clock). Contract should say: the active player's client writes the end-turn entry when its timer expires; the opponent cannot enforce 30 s, only the 24 h forfeit (`roundLimit`). Decide whether a shorter live forfeit is wanted.
+  4. `onMoveCreated` (backend/functions) pushes "your turn" on every log entry; with free swaps that is one push per swap. Needs authorizing lane 5 to push only when the entry's `next` becomes the recipient.
+  5. Naming only, lib/online (not changed now): `roundLimit` = 24 h since the last entry; `liveMoveLimit` (30 s) is now the per-turn budget, so lane 2 should show it per turn, not per move.
+  6. Lane 1's `summarizeLog` returns `RoundMoveLog`s and lane 2's `match_controller` exposes `round`/`totalRounds`; both need the turn model. test/online_test.dart no longer reads `state.round`.
+Reason: docs/contract.md now uses timed turns; lane 5 was asked not to change lib/online production code in this pass.
+Status: open
+```

@@ -61,6 +61,7 @@ const profile = (over = {}) => ({
   music: true,
   english: false,
   notifications: true,
+  avatar: '',
   ...over,
 });
 

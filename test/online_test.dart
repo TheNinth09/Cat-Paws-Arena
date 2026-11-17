@@ -536,7 +536,7 @@ void main() {
       expect(host.flag, MatchFlag.wrongTurn);
     });
 
-    test('a restart in the middle of a round restores the match', () async {
+    test('a restart in the middle of a match restores it', () async {
       final (cloud, host, guest) = await start(5);
       final a = botForLevel(HouseCatLevel.hard),
           b = botForLevel(HouseCatLevel.medium);
@@ -547,7 +547,7 @@ void main() {
         );
         await (identical(mover, host) ? guest : host).refresh();
       }
-      expect(host.state.round, 1);
+      expect(host.isOver, isFalse);
       final restored = await MatchSession.open(cloud, host.matchId, 'host');
       expect(restored.movesApplied, 4);
       expect(stateHash(restored.state), stateHash(host.state));

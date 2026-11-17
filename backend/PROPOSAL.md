@@ -156,6 +156,7 @@ free; then about 0.03 USD per 100k reads, 0.09 USD per 100k writes,
 | Item per day | Count |
 | --- | --- |
 | Match writes: room, join, 30 moves, round/end updates, emotes | ~40 per match → 40,000 |
+| v0.3 timed turns: ~10–15 free swaps per 30 s turn × 10 turns (estimate) | ~100–150 per match → 100,000–150,000 writes and as many reads; ≈ +3–5 USD/month |
 | Match reads: listener reads of the opponent's writes, resume | ~40 per match → 40,000 |
 | Profile reads/writes (2 opens, ~3 saves per player) | 2,000 reads, 3,000 writes |
 | Product events | 10,000 writes |
