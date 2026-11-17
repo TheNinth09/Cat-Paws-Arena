@@ -1224,6 +1224,33 @@ void _paintAnimalMuzzle(Canvas canvas, int species) {
   }
 }
 
+void _paintBandage(Canvas canvas, int species) {
+  final stamps = species == 0
+      ? const <List<double>>[]
+      : _avatarEarStamps(species, 0);
+  final center = stamps.isEmpty
+      ? const Offset(30, 34)
+      : Offset(stamps.first[0], stamps.first[1]);
+  final bandage = Paint()..color = const Color(0xffffb3c7);
+  final line = Paint()
+    ..color = ink
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  final rect = RRect.fromRectAndRadius(
+    Rect.fromCenter(center: center, width: 20, height: 13),
+    const Radius.circular(6),
+  );
+  canvas.drawRRect(rect, bandage);
+  canvas.drawRRect(rect, line);
+  for (final dx in [-11.0, 8.0]) {
+    canvas.drawRect(
+      Rect.fromLTWH(center.dx + dx, center.dy - 6, 5, 12),
+      bandage,
+    );
+    canvas.drawRect(Rect.fromLTWH(center.dx + dx, center.dy - 6, 5, 12), line);
+  }
+}
+
 /// Paints an [AvatarSpec] in the canonical 120x120 space. Species 0 is a
 /// cat and delegates to the cat layer stack so it looks identical to the
 /// duel cats; species 1-3 draw their own ears, head, muzzle and eyes.
@@ -1243,11 +1270,17 @@ class AvatarPainter extends CustomPainter {
           ears: spec.ears == 4 ? 0 : _clampIndex(spec.ears, catEarCount),
         ),
       ).paint(canvas, size);
+      if (spec.ears == 4) {
+        _scaleTo(canvas, size, 120, 120);
+        _paintBandage(canvas, 0);
+        canvas.restore();
+      }
       return;
     }
     _scaleTo(canvas, size, 120, 120);
     final fur = spec.furColor;
-    _paintAnimalEars(canvas, species, spec.ears, fur);
+    final ears = spec.ears == 4 ? 0 : spec.ears;
+    _paintAnimalEars(canvas, species, ears, fur);
     final head = _avatarHeadPath(species);
     canvas.drawPath(head, Paint()..color = fur);
     canvas.drawPath(
@@ -1260,17 +1293,18 @@ class AvatarPainter extends CustomPainter {
     final pattern = _clampIndex(spec.pattern, catPatternCount);
     if (pattern != 0) {
       canvas.save();
-      canvas.clipPath(_avatarClipPath(species, spec.ears));
+      canvas.clipPath(_avatarClipPath(species, ears));
       _paintHeadPattern(
         canvas,
         fur: fur,
         pattern: pattern,
-        earPaths: _avatarEarPaths(species, spec.ears),
+        earPaths: _avatarEarPaths(species, ears),
       );
       canvas.restore();
     }
     _paintAnimalMuzzle(canvas, species);
     _paintEyes(canvas, spec.eyeColor);
+    if (spec.ears == 4) _paintBandage(canvas, species);
     canvas.restore();
   }
 
