@@ -243,3 +243,19 @@ Request: Whitelist `assets/images/` in the runtime bundle (pubspec assets sectio
 Reason: docs/contract.md battle-screen spec references assets/images/tile_*.png and cat_* sprites; only the orchestrator (or lane 1 by exception) may edit the pubspec assets section.
 Status: answered — assets/images/ is bundled (bdd4779) and whitelisted (bbbc324); cat_run.png is absent so the procedural fallback runs — add the sprite later if desired.
 ```
+
+```text
+Lane: 2
+Blocking PR: lane-2-v04 (specials presentation + battle polish)
+Request: Orchestrator / lane-4 — `flutter test` currently fails in two shop tests unrelated to this PR: shell_test.dart and shop_social_test.dart ("shop ... honest LEI prices") still expect a "+200 Lăbuțe" daily reward, but the merged daily-gift change pays +5 paws every 6 hours. The expectation needs updating (or the daily-gift UI needs the old label); both files are outside lane-2 ownership.
+Reason: pre-existing on origin/main at 712adfc; reproducible without lane-2 changes.
+Status: open
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2-v04 (specials presentation + battle polish)
+Request: Informational for lane 5 / deploy — kEngineVersion is now 3 (2x2 squares create bombs; deals avoid starting squares). Match documents written by engine v2 clients will fail the version check in newMatch/replay, so any in-flight friend matches void on upgrade. No code change needed — the version gate already rejects them cleanly.
+Reason: rule change is contract-visible per docs/contract.md; flagging so the version bump is not a surprise.
+Status: open
+```

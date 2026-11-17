@@ -67,6 +67,17 @@ void main() {
     await tester.tap(find.text('RENUNȚĂ'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('ÎNFRÂNGERE'), findsOneWidget);
+    // Simplified defeat: only the trophy change — no chest, no score strip.
+    expect(find.text('-25 Trofee'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is Image &&
+            w.image is AssetImage &&
+            (w.image as AssetImage).assetName.contains('icon_chest'),
+      ),
+      findsNothing,
+    );
     expectCleanArtwork(tester);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -812,7 +823,8 @@ void main() {
   });
 
   /// Plays a local engine duel to the result: up to [swapsPerTurn] swaps
-  /// per turn, then GATA; the house bot paces itself on a zero delay.
+  /// per turn, then ends the turn programmatically; the house bot paces
+  /// itself on a zero delay.
   Future<void> driveLocalMatch(
     WidgetTester tester,
     ArenaMatchController m, {
@@ -867,6 +879,57 @@ void main() {
     expect(m.result, isNotNull);
     // Five turns each = ten turn boundaries minimum.
     expect(m.turn, greaterThanOrEqualTo(9));
+  });
+
+  testWidgets('battle UI shows the turn clock and has no GATA button', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(
+      MaterialApp(home: MatchScreen(player: p, mode: 0, botLevel: 0)),
+    );
+    final st = tester.state(find.byType(MatchScreen)) as dynamic;
+    final m = st.match as ArenaMatchController;
+    m.eventSink = (_) => m.onBoardIdle();
+    m.botMoveDelay = const Duration(seconds: 10);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+    expect(m.phase, MatchPhase.playing);
+    // No end-early control: the 30 s timer owns turn boundaries.
+    expect(find.text('GATA'), findsNothing);
+    // Turn indicator + seconds are visible in the HUD.
+    expect(find.textContaining('Tura 1/'), findsWidgets);
+    expect(find.textContaining('s'), findsWidgets);
+    expect(find.textContaining('RÂNDUL TĂU'), findsOneWidget);
+    m.dispose();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('tapping the opponent portrait shows their details', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(
+      MaterialApp(home: MatchScreen(player: p, mode: 0, botLevel: 0)),
+    );
+    final st = tester.state(find.byType(MatchScreen)) as dynamic;
+    final m = st.match as ArenaMatchController;
+    m.eventSink = (_) => m.onBoardIdle();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+    expect(m.phase, MatchPhase.playing);
+    await tester.tap(find.textContaining('BOT').first);
+    await tester.pump(const Duration(milliseconds: 300));
+    // The popup shows match-provided details only: BOT label + trophies.
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.textContaining('trofee'), findsWidgets);
+    expect(find.text('BOT'), findsWidgets);
+    m.dispose();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets('turn clock auto-ends an idle turn', (tester) async {

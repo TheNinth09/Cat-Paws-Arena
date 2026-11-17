@@ -300,12 +300,16 @@ class MatchConfig {
 /// Supported rules/serialization version. Bump only via an announced
 /// contract change; [MatchConfig.engineVersion] must match it.
 ///
+/// Version 3: a 2x2 same-colour square is a match shape — it creates a
+/// [SpecialKind.bomb] like an L/T bend, completes a productive swap, and
+/// dealt boards avoid starting squares.
+///
 /// Version 2: timed turns replace the 3-moves/5-rounds model —
 /// [MatchState.turn]/[MatchState.turnsRemaining]/[MatchState.turnMoves]
 /// replace round/move counters, [EndTurnMove] and [TurnEnded] replace
 /// per-move turn consumption and [RoundEnded], powers fire from a shared
 /// 0..100 meter and always queue cardboard boxes.
-const int kEngineVersion = 2;
+const int kEngineVersion = 3;
 
 /// Maximum pending obstacles queued for one player. Obstacles earned beyond
 /// this cap are discarded (the oldest queued obstacles are kept).

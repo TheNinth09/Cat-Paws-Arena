@@ -331,8 +331,63 @@ class BoardViewState extends State<BoardView>
             dur: 0.3,
           ),
         ];
-      case SpecialFired(:final cells):
-        return _popCells(event, cells, start, 0.24);
+      case SpecialFired(:final cells, :final kind):
+        final fx = <_Fx>[..._popCells(event, cells, start, 0.24)];
+        // Activation effect per special kind: a light beam along the
+        // cleared row/column, a blast ring for the bomb, a board flash
+        // for the rainbow.
+        if (cells.isNotEmpty) {
+          switch (kind) {
+            case SpecialKind.lineHorizontal:
+              fx.add(
+                _staticFx(
+                  event,
+                  _FxKind.beamH,
+                  cells.first,
+                  start: start,
+                  dur: 0.34,
+                ),
+              );
+            case SpecialKind.lineVertical:
+              fx.add(
+                _staticFx(
+                  event,
+                  _FxKind.beamV,
+                  cells.first,
+                  start: start,
+                  dur: 0.34,
+                ),
+              );
+            case SpecialKind.bomb:
+              var rr = 0, cc = 0;
+              for (final i in cells) {
+                rr += i ~/ width;
+                cc += i % width;
+              }
+              fx.add(
+                _staticFx(
+                  event,
+                  _FxKind.blast,
+                  (rr ~/ cells.length) * width + (cc ~/ cells.length),
+                  start: start,
+                  dur: 0.4,
+                ),
+              );
+            case SpecialKind.rainbow:
+              fx.add(
+                _staticFx(
+                  event,
+                  _FxKind.boardFlash,
+                  0,
+                  start: start,
+                  dur: 0.4,
+                ),
+              );
+            case SpecialKind.none:
+              break;
+          }
+        }
+        return fx;
       case PowerFired(:final cells):
         return _popCells(event, cells, start, 0.26);
       case Fell(:final from, :final to):
@@ -897,6 +952,10 @@ enum _FxKind {
   obstacleBreak,
   shuffle,
   poof,
+  beamH,
+  beamV,
+  blast,
+  boardFlash,
 }
 
 class _Fx {
@@ -1133,6 +1192,23 @@ class _BoardPainter extends CustomPainter {
         canvas.rotate(now * 1.4);
       }
       canvas.translate(-cx, -cy);
+      if (piece.special != SpecialKind.none) {
+        // Pulsing glow behind the special tile.
+        final glow = switch (piece.special) {
+          SpecialKind.lineHorizontal || SpecialKind.lineVertical =>
+            const Color(0xffffe28a),
+          SpecialKind.bomb => const Color(0xffff8d5a),
+          SpecialKind.rainbow => const Color(0xff9fd7ff),
+          SpecialKind.none => const Color(0xfffff3c4),
+        };
+        canvas.drawCircle(
+          rect.center,
+          s * 0.6 * (1 + 0.07 * math.sin(now * 5)),
+          Paint()
+            ..color = glow.withValues(alpha: 0.55 * alpha)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+        );
+      }
       final img = piece.kind < _tileNames.length
           ? art[_tileNames[piece.kind]]
           : null;
@@ -1154,6 +1230,7 @@ class _BoardPainter extends CustomPainter {
       }
       if (piece.special != SpecialKind.none) {
         _drawSpecialBadge(canvas, rect, piece.special, alpha);
+        _drawSpecialMark(canvas, rect, piece.special, alpha, now);
       }
       canvas.restore();
     }
@@ -1232,6 +1309,60 @@ class _BoardPainter extends CustomPainter {
     final cx = ox + col * cell;
     final cy = oy + row * cell;
 
+    // Board-wide activation overlays carry no piece/obstacle.
+    switch (f.kind) {
+      case _FxKind.beamH:
+        final h = cell * 0.34 * (1 - t * 0.5);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(ox, cy - h / 2, f.width * cell, h),
+            Radius.circular(h / 2),
+          ),
+          Paint()
+            ..color = const Color(0xfffff3c4).withValues(alpha: (1 - t) * 0.9)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+        );
+        return;
+      case _FxKind.beamV:
+        final w = cell * 0.34 * (1 - t * 0.5);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(cx - w / 2, oy, w, f.width * cell),
+            Radius.circular(w / 2),
+          ),
+          Paint()
+            ..color = const Color(0xfffff3c4).withValues(alpha: (1 - t) * 0.9)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+        );
+        return;
+      case _FxKind.blast:
+        canvas.drawCircle(
+          Offset(cx, cy),
+          cell * (0.4 + 1.7 * t),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1 + 4 * (1 - t)
+            ..color = const Color(0xffffb64d).withValues(alpha: (1 - t) * 0.9)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        );
+        canvas.drawCircle(
+          Offset(cx, cy),
+          cell * 0.4 * (1 - t),
+          Paint()
+            ..color = const Color(0xfffff3c4).withValues(alpha: (1 - t) * 0.75),
+        );
+        return;
+      case _FxKind.boardFlash:
+        canvas.drawRect(
+          Rect.fromLTWH(ox, oy, f.width * cell, f.width * cell),
+          Paint()
+            ..color = const Color(0xfffff3c4).withValues(alpha: (1 - t) * 0.35),
+        );
+        return;
+      case _:
+        break;
+    }
+
     var scale = 1.0, alpha = 1.0, dx = 0.0;
     switch (f.kind) {
       case _FxKind.pop:
@@ -1263,7 +1394,13 @@ class _BoardPainter extends CustomPainter {
         scale = _backOut(t);
       case _FxKind.refill:
         alpha = t < 0.15 ? t / 0.15 : 1;
-      case _FxKind.fall || _FxKind.swap || _FxKind.shuffle:
+      case _FxKind.fall ||
+          _FxKind.swap ||
+          _FxKind.shuffle ||
+          _FxKind.beamH ||
+          _FxKind.beamV ||
+          _FxKind.blast ||
+          _FxKind.boardFlash:
         break;
     }
 
@@ -1331,6 +1468,83 @@ class _BoardPainter extends CustomPainter {
         ..strokeWidth = 2.2
         ..color = base.withValues(alpha: base.a * alpha),
     );
+  }
+
+  /// Distinct mark painted over a special tile: stripe pair for line
+  /// pieces, a spark badge for the bomb, a rotating tri-colour arc for the
+  /// rainbow. Complements [_drawSpecialBadge]'s ring.
+  void _drawSpecialMark(
+    Canvas canvas,
+    Rect rect,
+    SpecialKind kind,
+    double alpha,
+    double now,
+  ) {
+    final c = rect.center;
+    final s = rect.width;
+    switch (kind) {
+      case SpecialKind.lineHorizontal || SpecialKind.lineVertical:
+        final paint = Paint()
+          ..color = const Color(0xfffff8dc).withValues(alpha: 0.92 * alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = s * 0.09
+          ..strokeCap = StrokeCap.round;
+        for (final off in [-s * 0.15, s * 0.15]) {
+          canvas.drawLine(
+            kind == SpecialKind.lineHorizontal
+                ? Offset(rect.left + s * 0.14, c.dy + off)
+                : Offset(c.dx + off, rect.top + s * 0.14),
+            kind == SpecialKind.lineHorizontal
+                ? Offset(rect.right - s * 0.14, c.dy + off)
+                : Offset(c.dx + off, rect.bottom - s * 0.14),
+            paint,
+          );
+        }
+      case SpecialKind.bomb:
+        canvas.drawCircle(
+          c,
+          s * 0.3,
+          Paint()
+            ..color = const Color(0xff4a2c2c).withValues(alpha: 0.85 * alpha),
+        );
+        canvas.drawCircle(
+          c,
+          s * 0.3,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = s * 0.05
+            ..color = const Color(0xffffb64d).withValues(alpha: alpha),
+        );
+        // Fuse spark, top-right, flickering.
+        final spark = Offset(c.dx + s * 0.2, c.dy - s * 0.2);
+        canvas.drawCircle(
+          spark,
+          s * 0.07 * (1 + 0.3 * math.sin(now * 9)),
+          Paint()
+            ..color = const Color(0xffffe28a).withValues(alpha: alpha),
+        );
+      case SpecialKind.rainbow:
+        // The tile itself rotates; paint a static shimmer ring of three
+        // colour segments around it.
+        for (var i = 0; i < 3; i++) {
+          canvas.drawArc(
+            Rect.fromCircle(center: c, radius: s * 0.42),
+            i * (2 * math.pi / 3) + now * 1.4,
+            math.pi / 2.6,
+            false,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = s * 0.06
+              ..color = [
+                const Color(0xffff9d8f),
+                const Color(0xffffe28a),
+                const Color(0xff9fd7ff),
+              ][i].withValues(alpha: 0.9 * alpha),
+          );
+        }
+      case SpecialKind.none:
+        break;
+    }
   }
 
   @override
