@@ -37,8 +37,11 @@ const catPatternCount = 5;
 /// 3 tufted. Indices 0-1 keep the meaning older saves used.
 const catEarCount = 4;
 
-int _clampIndex(int value, int length) =>
-    value < 0 ? 0 : value >= length ? length - 1 : value;
+int _clampIndex(int value, int length) => value < 0
+    ? 0
+    : value >= length
+    ? length - 1
+    : value;
 
 /// Visual description of a cat, independent of [Player]. Every field is a
 /// plain value so a spec can be serialized, compared, and rendered by any
@@ -220,8 +223,12 @@ Path _tailPath() => Path()
 List<Path> _earOuterPaths(int ears) {
   if (ears == 2) {
     return [
-      Path()..addOval(Rect.fromCenter(center: const Offset(27, 31), width: 36, height: 18)),
-      Path()..addOval(Rect.fromCenter(center: const Offset(97, 31), width: 36, height: 18)),
+      Path()..addOval(
+        Rect.fromCenter(center: const Offset(27, 31), width: 36, height: 18),
+      ),
+      Path()..addOval(
+        Rect.fromCenter(center: const Offset(97, 31), width: 36, height: 18),
+      ),
     ];
   }
   final left = Path()
@@ -265,8 +272,12 @@ List<Path> _earOuterPaths(int ears) {
 List<Path> _earInnerPaths(int ears) {
   if (ears == 2) {
     return [
-      Path()..addOval(Rect.fromCenter(center: const Offset(26, 30), width: 20, height: 10)),
-      Path()..addOval(Rect.fromCenter(center: const Offset(98, 30), width: 20, height: 10)),
+      Path()..addOval(
+        Rect.fromCenter(center: const Offset(26, 30), width: 20, height: 10),
+      ),
+      Path()..addOval(
+        Rect.fromCenter(center: const Offset(98, 30), width: 20, height: 10),
+      ),
     ];
   }
   final left = Path()
@@ -437,8 +448,7 @@ void _calicoMarks(Canvas canvas) {
 }
 
 void _colourpointMarks(Canvas canvas, List<Path> earPaths) {
-  final point = Paint()
-    ..color = const Color(0xff54402f).withValues(alpha: 0.7);
+  final point = Paint()..color = const Color(0xff54402f).withValues(alpha: 0.7);
   for (final ear in earPaths) {
     canvas.drawPath(ear, point);
   }
@@ -492,13 +502,7 @@ void _paintCatMuzzle(Canvas canvas) {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
   for (final x in [42.0, 60.0]) {
-    canvas.drawArc(
-      Rect.fromLTWH(x, 86, 18, 13),
-      0,
-      pi,
-      false,
-      mouth,
-    );
+    canvas.drawArc(Rect.fromLTWH(x, 86, 18, 13), 0, pi, false, mouth);
   }
 }
 
@@ -528,11 +532,7 @@ void _paintEyes(Canvas canvas, Color colour) {
       Rect.fromCenter(center: Offset(x + 2, 66), width: 12, height: 24),
       Paint()..color = const Color(0xff171b25),
     );
-    canvas.drawCircle(
-      Offset(x + 5, 58),
-      4,
-      Paint()..color = Colors.white,
-    );
+    canvas.drawCircle(Offset(x + 5, 58), 4, Paint()..color = Colors.white);
   }
 }
 
@@ -720,9 +720,7 @@ class CatSpecAvatar extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        CustomPaint(
-          painter: CatLayersPainter(spec, onlyLayers: onlyLayers),
-        ),
+        CustomPaint(painter: CatLayersPainter(spec, onlyLayers: onlyLayers)),
         if (showAccessory && spec.accessory.isNotEmpty)
           Align(
             alignment: Alignment.topCenter,
@@ -843,6 +841,18 @@ const avatarEarNames = [
   ['Mari', 'O ureche', 'Mici', 'Înalte'],
 ];
 
+/// Avatar-only power asset ids shown by the cat creator. These are profile
+/// flair, separate from the three equal-strength duel powers in `catalog`.
+const avatarPowerIds = [
+  'power_zoomies',
+  'power_shadow_pounce',
+  'power_laser_chase',
+];
+const avatarPowerNames = ['Zoomies', 'Shadow Pounce', 'Laser Chase'];
+
+/// Avatar ear variants: the four cat styles plus a bandaged-ear flair option.
+const avatarEarCount = 5;
+
 /// Shared-preferences key for the locally stored avatar spec JSON.
 const avatarSpecKey = 'avatar_spec_v1';
 
@@ -857,6 +867,7 @@ class AvatarSpec {
     this.eyes = 0,
     this.ears = 0,
     this.accessory = '',
+    this.power = 'power_zoomies',
   });
 
   /// Species index in `0..[avatarSpeciesCount)`.
@@ -871,13 +882,17 @@ class AvatarSpec {
   /// Iris palette index into [catEyeColours].
   final int eyes;
 
-  /// Ear style index in `0..[catEarCount)`; meaning depends on [species].
+  /// Ear style index in `0..[avatarEarCount)`; cat indices 0-3 match
+  /// [catEarCount], index 4 is the bandaged-ear flair option.
   final int ears;
 
   /// Accessory sprite id from `assets/generated/` ('' = none). Only ids from
   /// [accessories] are accepted so a bad save can never request a missing
   /// asset.
   final String accessory;
+
+  /// Avatar power asset id from [avatarPowerIds].
+  final String power;
 
   Color get furColor => catFurColours[_clampIndex(fur, catFurColours.length)];
   Color get eyeColor => catEyeColours[_clampIndex(eyes, catEyeColours.length)];
@@ -889,6 +904,7 @@ class AvatarSpec {
     int? eyes,
     int? ears,
     String? accessory,
+    String? power,
   }) => AvatarSpec(
     species: species ?? this.species,
     fur: fur ?? this.fur,
@@ -896,6 +912,7 @@ class AvatarSpec {
     eyes: eyes ?? this.eyes,
     ears: ears ?? this.ears,
     accessory: accessory ?? this.accessory,
+    power: power ?? this.power,
   );
 
   /// Compact JSON form proposed for `Player.avatar`/`CloudProfile.avatar`.
@@ -904,8 +921,9 @@ class AvatarSpec {
     'f': _clampIndex(fur, catFurColours.length),
     'p': _clampIndex(pattern, catPatternCount),
     'e': _clampIndex(eyes, catEyeColours.length),
-    'r': _clampIndex(ears, catEarCount),
+    'r': _clampIndex(ears, avatarEarCount),
     'a': accessories.contains(accessory) ? accessory : '',
+    'w': avatarPowerIds.contains(power) ? power : avatarPowerIds.first,
   };
 
   String toJsonString() => jsonEncode(toJson());
@@ -920,13 +938,17 @@ class AvatarSpec {
     }
 
     final a = json['a'];
+    final w = json['w'];
     return AvatarSpec(
       species: pick('s', 0, avatarSpeciesCount),
       fur: pick('f', 0, catFurColours.length),
       pattern: pick('p', 0, catPatternCount),
       eyes: pick('e', 0, catEyeColours.length),
-      ears: pick('r', 0, catEarCount),
+      ears: pick('r', 0, avatarEarCount),
       accessory: a is String && accessories.contains(a) ? a : '',
+      power: w is String && avatarPowerIds.contains(w)
+          ? w
+          : avatarPowerIds.first,
     );
   }
 
@@ -950,10 +972,12 @@ class AvatarSpec {
       other.pattern == pattern &&
       other.eyes == eyes &&
       other.ears == ears &&
-      other.accessory == accessory;
+      other.accessory == accessory &&
+      other.power == power;
 
   @override
-  int get hashCode => Object.hash(species, fur, pattern, eyes, ears, accessory);
+  int get hashCode =>
+      Object.hash(species, fur, pattern, eyes, ears, accessory, power);
 }
 
 /// Loads the locally stored avatar spec; a missing or corrupt value yields
@@ -984,29 +1008,32 @@ Future<void> saveAvatarSpecFor(Player p, AvatarSpec spec) async {
 
 Path _avatarHeadPath(int species) => switch (species) {
   // Dog: wider cheeks and jowls.
-  1 => Path()
-    ..moveTo(62, 18)
-    ..cubicTo(30, 18, 9, 45, 8, 75)
-    ..cubicTo(7, 107, 32, 125, 62, 125)
-    ..cubicTo(93, 125, 117, 105, 116, 73)
-    ..cubicTo(115, 43, 93, 18, 62, 18)
-    ..close(),
+  1 =>
+    Path()
+      ..moveTo(62, 18)
+      ..cubicTo(30, 18, 9, 45, 8, 75)
+      ..cubicTo(7, 107, 32, 125, 62, 125)
+      ..cubicTo(93, 125, 117, 105, 116, 73)
+      ..cubicTo(115, 43, 93, 18, 62, 18)
+      ..close(),
   // Bunny: narrower, taller head.
-  2 => Path()
-    ..moveTo(62, 13)
-    ..cubicTo(37, 13, 17, 41, 16, 71)
-    ..cubicTo(15, 101, 36, 119, 62, 119)
-    ..cubicTo(89, 119, 107, 99, 106, 69)
-    ..cubicTo(105, 39, 86, 13, 62, 13)
-    ..close(),
+  2 =>
+    Path()
+      ..moveTo(62, 13)
+      ..cubicTo(37, 13, 17, 41, 16, 71)
+      ..cubicTo(15, 101, 36, 119, 62, 119)
+      ..cubicTo(89, 119, 107, 99, 106, 69)
+      ..cubicTo(105, 39, 86, 13, 62, 13)
+      ..close(),
   // Bear: the roundest, widest head.
-  3 => Path()
-    ..moveTo(62, 21)
-    ..cubicTo(27, 21, 7, 47, 7, 77)
-    ..cubicTo(7, 109, 32, 127, 62, 127)
-    ..cubicTo(95, 127, 119, 107, 119, 75)
-    ..cubicTo(119, 45, 95, 21, 62, 21)
-    ..close(),
+  3 =>
+    Path()
+      ..moveTo(62, 21)
+      ..cubicTo(27, 21, 7, 47, 7, 77)
+      ..cubicTo(7, 109, 32, 127, 62, 127)
+      ..cubicTo(95, 127, 119, 107, 119, 75)
+      ..cubicTo(119, 45, 95, 21, 62, 21)
+      ..close(),
   // Cat and anything unexpected: the classic cat head.
   _ => _headPath(),
 };
@@ -1077,7 +1104,9 @@ List<List<double>> _avatarEarStamps(int species, int ears) {
 /// colourpoint tinting.
 List<Path> _avatarEarPaths(int species, int ears) => [
   for (final s in _avatarEarStamps(species, ears))
-    Path()..addOval(Rect.fromCenter(center: Offset(s[0], s[1]), width: s[2], height: s[3])),
+    Path()..addOval(
+      Rect.fromCenter(center: Offset(s[0], s[1]), width: s[2], height: s[3]),
+    ),
 ];
 
 Path _avatarClipPath(int species, int ears) {
@@ -1211,7 +1240,7 @@ class AvatarPainter extends CustomPainter {
           fur: spec.furColor,
           pattern: _clampIndex(spec.pattern, catPatternCount),
           eyes: spec.eyeColor,
-          ears: _clampIndex(spec.ears, catEarCount),
+          ears: spec.ears == 4 ? 0 : _clampIndex(spec.ears, catEarCount),
         ),
       ).paint(canvas, size);
       return;
