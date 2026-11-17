@@ -189,3 +189,35 @@ Request: Root `flutter analyze` reports ~455 errors, all inside `packages/arena_
 Reason: pre-existing on main since the lane-1 engine merges; lane 2 cannot edit analysis_options.yaml or pubspec.yaml.
 Status: answered — orchestrator excluded `packages/**` from the root analyzer (analysis_options.yaml); the engine package keeps its own analysis and `dart test` (57/57).
 ```
+
+```text
+Lane: 2
+Blocking PR: lane-2 timed-turn duel (this PR)
+Request: Whitelist `assets/images/` in the runtime bundle (pubspec assets section) and let lane 1 place `tile_*.png` piece sprites + `tile_box.png` + `cat_run.png` there. BoardView already tries assets/images/ first and falls back to assets/generated/; MatchScreen's power-runner tries `assets/images/cat_run.png` then falls back to a procedural cat. Nothing breaks without it — the fallbacks keep working — but the mockup art path stays dark until the folder is whitelisted.
+Reason: docs/contract.md battle-screen spec references assets/images/tile_*.png and cat_* sprites; only the orchestrator (or lane 1 by exception) may edit the pubspec assets section.
+Status: open
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2 timed-turn duel (this PR)
+Request: In lib/profile.dart `Player.result`, change the loss stake from -10 to -25 trophies (win +30, draw 0, loss -25), keeping the existing house-tour floor.
+Reason: The timed-turn contract decision fixes stakes at +30/0/-25; the older -10 value predates the decision. lib/profile.dart is orchestrator-owned.
+Status: open
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2 timed-turn duel (this PR)
+Request: Lane 5 — `MatchSession` creates online matches with `MatchConfig.duel()`, which now means firstPower/secondPower = zoomies/zoomies, so the cat's chosen power is ignored online. To carry the loadout, the match record needs each player's chosen power index (0-2, preset-safe) at open time, and `MatchConfig` built from them before `newMatch` — or the session accepts an optional `power` argument. lib/online is off-limits for lane 2; until this lands, friend duels fire zoomies for both cats (still equal-strength, no advantage).
+Reason: contract decision: each cat brings one power chosen in the cat editor; the power must be identical on both clients for hash agreement.
+Status: open
+```
+
+```text
+Lane: 2
+Blocking PR: lane-2 timed-turn duel (this PR)
+Request: Lane 5 — update test/online_test.dart for the timed-turn move model: a player's turn is now a 30-second window of unlimited swaps that ends ONLY via `EndTurnMove`, so two lane-5 tests encode the old per-move alternation and fail: (a) "watch and play together count each move once" — `guest.play` right after `host.play` now throws MatchException(notYourTurn), which is correct new behavior; insert `engine.EndTurnMove()` before the guest's move. (b) "forfeit only after the 24-hour limit" — after `host.play` the host still holds the turn, so `host.claimForfeit()` throws notYourTurn at match_sync.dart:150; under timed turns it is the GUEST who claims after the host's deadline passes (forfeitWinner flips accordingly). lib/online itself needed no changes: `isMyTurn`/`deadline`/`claimForfeit`/`flag` semantics already map to the new model unchanged.
+Reason: test/online_test.dart and lib/online are not in lane-2 ownership; the engine move model changed per the approved contract while the session surface stayed identical.
+Status: open
+```

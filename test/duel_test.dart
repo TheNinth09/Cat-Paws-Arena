@@ -248,7 +248,7 @@ void main() {
       ),
       const ObstacleQueued(
         player: PlayerSlot.first,
-        sourceRound: 0,
+        sourceTurn: 0,
         count: 2,
       ),
       const ObstacleLanded(
@@ -270,9 +270,8 @@ void main() {
         reason: 'test',
         pieces: {0: BoardPiece(id: 1, kind: 0)},
       ),
-      const ExtraMove(player: PlayerSlot.first, round: 1, movesRemaining: 3),
-      const RoundEnded(
-        round: 1,
+      const TurnEnded(
+        turn: 1,
         scores: (first: 5, second: 3),
       ),
       const MatchEnded(
@@ -385,10 +384,9 @@ void main() {
     await tester.pump();
     unawaited(
       key.currentState!.play([
-        const ObstacleQueued(player: PlayerSlot.first, sourceRound: 0, count: 2),
+        const ObstacleQueued(player: PlayerSlot.first, sourceTurn: 0, count: 2),
         const PowerCharged(player: PlayerSlot.first, amount: 100),
-        const ExtraMove(player: PlayerSlot.first, round: 0, movesRemaining: 3),
-        const RoundEnded(round: 1, scores: (first: 5, second: 3)),
+        const TurnEnded(turn: 1, scores: (first: 5, second: 3)),
         const MatchEnded(
           outcome: MatchOutcome.firstWin,
           scores: (first: 9, second: 4),
@@ -400,10 +398,9 @@ void main() {
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
-    expect(find.text('2 obstacole următoare!'), findsOneWidget);
-    expect(find.text('ENERGIE MAXIMĂ!'), findsOneWidget);
-    expect(find.text('MUTARE EXTRA!'), findsOneWidget);
-    expect(find.text('Runda 1  •  5 – 3'), findsOneWidget);
+    expect(find.text('2 cutii următoare!'), findsOneWidget);
+    expect(find.text('PUTERE MAXIMĂ!'), findsOneWidget);
+    expect(find.text('Tura 1  •  5 – 3'), findsOneWidget);
     expect(find.text('VICTORIE!'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -607,7 +604,7 @@ void main() {
         ),
         engine.ObstacleQueued(
           player: engine.PlayerSlot.first,
-          sourceRound: 1,
+          sourceTurn: 1,
           count: 2,
         ),
         engine.ObstacleLanded(
@@ -642,13 +639,8 @@ void main() {
           cells: [c(0, 0)],
           reason: 'no-moves',
         ),
-        engine.ExtraMove(
-          player: engine.PlayerSlot.first,
-          round: 1,
-          movesRemaining: 4,
-        ),
-        engine.RoundEnded(
-          round: 1,
+        engine.TurnEnded(
+          turn: 1,
           scores: (first: 10, second: 5),
           outcome: null,
         ),
@@ -684,11 +676,10 @@ void main() {
     expect(view.whereType<PowerCharged>(), hasLength(1));
     expect(view.whereType<PowerFired>(), hasLength(3));
     expect(view.whereType<Shuffled>(), hasLength(1));
-    expect(view.whereType<ExtraMove>(), hasLength(1));
-    expect(view.whereType<RoundEnded>(), hasLength(1));
+    expect(view.whereType<TurnEnded>(), hasLength(1));
     expect(view.whereType<MatchEnded>(), hasLength(1));
-    // A non-final RoundEnded is followed by a BoardReset for the new deal.
-    expect(view.whereType<BoardReset>(), hasLength(1));
+    // Timed turns keep persistent boards: no reset event is emitted.
+    expect(view.whereType<BoardReset>(), isEmpty);
     expect(
       view.whereType<SpecialCreated>().map((e) => e.kind),
       containsAll([
@@ -712,12 +703,15 @@ void main() {
   test('real engine matches produce every special, power and obstacle', () {
     final specials = <engine.SpecialKind>{};
     final powers = <engine.PowerKind>{};
-    var obstaclesQueued = false, obstaclesLanded = false;
+    var obstaclesQueued = false,
+        obstaclesLanded = false,
+        obstaclesBroken = false;
     var matches = 0;
+    // Rotate the loadout per seed so every configured power fires.
     final dedicated = <engine.ArenaBot>[
-      engine.PowerBot(engine.PowerKind.zoomies),
-      engine.PowerBot(engine.PowerKind.shadowPounce),
-      engine.PowerBot(engine.PowerKind.laserChase),
+      const engine.PowerBot(),
+      engine.RandomBot(99),
+      const engine.GreedyBot(),
     ];
     for (
       var seed = 0;
@@ -725,10 +719,15 @@ void main() {
           (specials.length < 3 ||
               powers.length < engine.PowerKind.values.length ||
               !obstaclesQueued ||
-              !obstaclesLanded);
+              !obstaclesLanded ||
+              !obstaclesBroken);
       seed++
     ) {
-      final start = engine.newMatch(seed, const engine.MatchConfig.duel());
+      final config = engine.MatchConfig(
+        firstPower: engine.PowerKind.values[seed % 3],
+        secondPower: engine.PowerKind.values[(seed * 7 + 1) % 3],
+      );
+      final start = engine.newMatch(seed, config);
       if (start is! engine.EngineOk<engine.MatchState>) continue;
       var state = start.value;
       final botA = dedicated[seed % dedicated.length];
@@ -749,6 +748,8 @@ void main() {
               obstaclesQueued = true;
             case engine.ObstacleLanded():
               obstaclesLanded = true;
+            case engine.ObstacleBroken():
+              obstaclesBroken = true;
             case _:
               break;
           }
@@ -769,6 +770,7 @@ void main() {
     expect(powers, containsAll(engine.PowerKind.values));
     expect(obstaclesQueued, isTrue);
     expect(obstaclesLanded, isTrue);
+    expect(obstaclesBroken, isTrue);
   });
 
   test('move log replays to the same state hash', () {
@@ -776,14 +778,21 @@ void main() {
     final start = engine.newMatch(99, config);
     var state = (start as engine.EngineOk<engine.MatchState>).value;
     final log = <engine.Move>[];
-    var guard = 0;
+    var guard = 0, swapsInTurn = 0;
     while (!state.isFinished && guard++ < 300) {
       final legal = engine.legalMoves(state);
       if (legal is! engine.EngineOk<List<engine.Move>>) break;
-      final moves = legal.value;
-      if (moves.isEmpty) break;
-      final mv = moves.first;
+      final swaps = [
+        for (final m in legal.value)
+          if (m is engine.SwapMove) m,
+      ];
+      // A few swaps per turn, then an explicit EndTurnMove — the timed-
+      // turn model only hands the turn over through the move log.
+      final mv = (swaps.isNotEmpty && swapsInTurn < 4)
+          ? swaps.first as engine.Move
+          : const engine.EndTurnMove();
       log.add(mv);
+      swapsInTurn = mv is engine.EndTurnMove ? 0 : swapsInTurn + 1;
       state =
           ((engine.applyMove(
                     state,
@@ -801,7 +810,34 @@ void main() {
     expect(state.isFinished, isTrue);
   });
 
-  testWidgets('engine duel plays five rounds of three moves to a result', (
+  /// Plays a local engine duel to the result: up to [swapsPerTurn] swaps
+  /// per turn, then GATA; the house bot paces itself on a zero delay.
+  Future<void> driveLocalMatch(
+    WidgetTester tester,
+    ArenaMatchController m, {
+    int swapsPerTurn = 4,
+  }) async {
+    m.botMoveDelay = Duration.zero;
+    var guard = 0, swaps = 0;
+    while (m.phase == MatchPhase.playing && guard++ < 900) {
+      if (m.playerTurn) {
+        final legal = m.legalSwaps;
+        if (swaps < swapsPerTurn && legal.isNotEmpty && m.acceptingInput) {
+          m.tryMove(legal.first.$1, legal.first.$2);
+          swaps++;
+        } else {
+          m.endTurn();
+          swaps = 0;
+        }
+      } else {
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      await tester.pump(const Duration(milliseconds: 5));
+    }
+    expect(m.phase, MatchPhase.finished, reason: 'match did not finish');
+  }
+
+  testWidgets('engine duel plays five timed turns per player to a result', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -814,18 +850,100 @@ void main() {
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
     expect(m.isEngine, isTrue);
-    expect(m.round, 1);
-    expect(m.movesLeft, 3);
-    var guard = 0;
-    while (m.phase == MatchPhase.playing && guard++ < 80) {
-      final swaps = m.legalSwaps;
-      expect(swaps, isNotEmpty, reason: 'player turn with no legal swap');
-      m.tryMove(swaps.first.$1, swaps.first.$2);
-    }
-    expect(m.phase, MatchPhase.finished);
+    expect(m.turn, 1);
+    expect(m.playerTurn, isTrue);
+    expect(m.turnSecondsLeft, greaterThan(0));
+    expect(m.turnSecondsLeft, lessThanOrEqualTo(30));
+    expect(m.playerTurnsLeft, 5);
+    expect(m.botTurnsLeft, 5);
+    // End the first turn early: the turn flips to the bot.
+    m.endTurn();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(m.turn, 2);
+    expect(m.playerTurn, isFalse);
+    // Drive the rest of the match to a scored result.
+    await driveLocalMatch(tester, m);
     expect(m.result, isNotNull);
-    // Five rounds of three accepted player moves minimum.
-    expect(guard, greaterThanOrEqualTo(15));
+    // Five turns each = ten turn boundaries minimum.
+    expect(m.turn, greaterThanOrEqualTo(9));
+  });
+
+  testWidgets('turn clock auto-ends an idle turn', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    final m = ArenaMatchController(p, 0, botLevel: 0, seed: 7);
+    addTearDown(m.dispose);
+    m.eventSink = (_) => m.onBoardIdle();
+    // Slow bot pacing keeps the turn on the bot after the auto-end.
+    m.botMoveDelay = const Duration(seconds: 10);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+    expect(m.phase, MatchPhase.playing);
+    expect(m.turn, 1);
+    // Let the 30-second clock run out without input.
+    await tester.pump(const Duration(seconds: 31));
+    await tester.pump(const Duration(milliseconds: 50));
+    // The turn ended by itself and play moved to the bot.
+    expect(m.turn, 2);
+    expect(m.playerTurn, isFalse);
+    // Dispose inline: the pending-timer invariant runs before teardown.
+    m.dispose();
+  });
+
+  testWidgets('power meter caps at 100 and tapping it fires the power', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    // Drive real matches until the player's meter fills; the first seed
+    // that reaches 100% proves cap + tap-to-fire end to end.
+    var fired = false;
+    for (var seed = 0; seed < 30 && !fired; seed++) {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final p = Player(prefs)..power = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MatchScreen(player: p, mode: 0, botLevel: 0, seed: seed),
+        ),
+      );
+      final st = tester.state(find.byType(MatchScreen)) as dynamic;
+      final m = st.match as ArenaMatchController;
+      m.eventSink = (_) => m.onBoardIdle();
+      m.botMoveDelay = Duration.zero;
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      var guard = 0, swaps = 0, tapped = false;
+      while (m.phase == MatchPhase.playing && guard++ < 900 && !fired) {
+        if (m.playerTurn) {
+          expect(
+            m.playerCharge,
+            lessThanOrEqualTo(100),
+            reason: 'meter exceeded the 100% cap',
+          );
+          if (!tapped && m.playerCharge >= 100) {
+            tapped = true;
+            await tester.tap(find.byKey(const Key('power-meter')));
+            await tester.pump(const Duration(milliseconds: 80));
+            // A successful fire drains the meter back below full.
+            if (m.playerCharge < 100) fired = true;
+          }
+          final legal = m.legalSwaps;
+          if (swaps < 4 && legal.isNotEmpty && m.acceptingInput) {
+            m.tryMove(legal.first.$1, legal.first.$2);
+            swaps++;
+          } else {
+            m.endTurn();
+            swaps = 0;
+          }
+        } else {
+          await tester.pump(const Duration(milliseconds: 10));
+        }
+        await tester.pump(const Duration(milliseconds: 5));
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
+    expect(fired, isTrue, reason: 'no seed filled the meter to 100%');
   });
 
   testWidgets('full match against each house-cat level reaches result', (
@@ -844,12 +962,7 @@ void main() {
       m.eventSink = (_) => m.onBoardIdle();
       await tester.pump(const Duration(seconds: 3));
       await tester.pump();
-      var guard = 0;
-      while (m.phase == MatchPhase.playing && guard++ < 80) {
-        final swaps = m.legalSwaps;
-        expect(swaps, isNotEmpty);
-        m.tryMove(swaps.first.$1, swaps.first.$2);
-      }
+      await driveLocalMatch(tester, m);
       expect(m.phase, MatchPhase.finished, reason: 'level $level');
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('REVANȘĂ'), findsOneWidget);
@@ -873,9 +986,9 @@ void main() {
     expect(find.text('Greu'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(milliseconds: 100));
-    // Match screen: score strip carries the bot label.
+    // Match screen: portrait header carries the bot label.
     expect(find.textContaining('BOT'), findsWidgets);
-    expect(find.text('Runda 1/5'), findsOneWidget);
+    expect(find.textContaining('Tura 1'), findsWidgets);
     // Surrender to the result screen.
     await tester.tap(find.text('Renunță'));
     await tester.pump(const Duration(milliseconds: 300));
@@ -883,7 +996,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('BOT'), findsWidgets);
     expect(find.textContaining('Vulpița'), findsWidgets);
-    expect(find.textContaining('5 runde'), findsOneWidget);
+    expect(find.textContaining('5 turnuri'), findsOneWidget);
   });
 
   testWidgets('first-match tutorial guides three moves then persists', (
@@ -978,8 +1091,8 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
-    expect(m.round, 1);
-    expect(m.movesLeft, 3);
+    expect(m.turn, 1);
+    expect(m.playerTurn, isTrue);
   });
 
   // --- online friend duel (lane-5 MatchSession over FakeCloud) -----------
@@ -1017,30 +1130,47 @@ void main() {
     ),
   );
 
-  /// Drives both clients until finished: whoever can move plays their
-  /// first legal swap; stream deliveries are flushed with pumps.
+  /// Drives both clients until finished: whoever can move plays up to four
+  /// swaps then ends the turn; stream deliveries are flushed with pumps.
   Future<void> playOnlineMatch(
     WidgetTester tester,
     ArenaMatchController a,
     ArenaMatchController b,
   ) async {
     var guard = 0, stalls = 0;
+    var aSwaps = 0, bSwaps = 0, aTurn = -1, bTurn = -1;
     while ((a.phase == MatchPhase.playing ||
             b.phase == MatchPhase.playing) &&
-        guard++ < 500) {
-      if (a.acceptingInput) {
+        guard++ < 900) {
+      if (a.turn != aTurn) {
+        aTurn = a.turn;
+        aSwaps = 0;
+      }
+      if (b.turn != bTurn) {
+        bTurn = b.turn;
+        bSwaps = 0;
+      }
+      if (a.playerTurn && aSwaps < 4) {
         stalls = 0;
         final s = a.legalSwaps.first;
         a.tryMove(s.$1, s.$2);
-      } else if (b.acceptingInput) {
+        aSwaps++;
+      } else if (b.playerTurn && bSwaps < 4) {
         stalls = 0;
         final s = b.legalSwaps.first;
         b.tryMove(s.$1, s.$2);
+        bSwaps++;
+      } else if (a.playerTurn) {
+        stalls = 0;
+        a.endTurn();
+      } else if (b.playerTurn) {
+        stalls = 0;
+        b.endTurn();
       } else {
         stalls++;
         expect(
           stalls,
-          lessThan(80),
+          lessThan(120),
           reason: 'deadlock: neither client can move',
         );
         await tester.pump(const Duration(milliseconds: 20));

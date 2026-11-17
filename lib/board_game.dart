@@ -24,6 +24,21 @@ const _obstacleNames = {
   ObstacleKind.tangledYarn: 'obs_tangled_yarn',
 };
 
+/// Candidate sprite file names per canonical art key, tried in order
+/// under `assets/images/` first and `assets/generated/` second. Lane 1's
+/// converted sprites land in `assets/images/`; the generated fallbacks
+/// keep working until then.
+const _spriteCandidates = <String, List<String>>{
+  'tile_star': ['tile_star'],
+  'tile_fish': ['tile_fish'],
+  'tile_mouse': ['tile_mouse'],
+  'tile_yarn': ['tile_yarn'],
+  'tile_paw': ['tile_paw'],
+  'obs_cardboard_box': ['tile_box', 'obs_cardboard_box'],
+  'obs_slipper': ['obs_slipper'],
+  'obs_tangled_yarn': ['obs_tangled_yarn'],
+};
+
 const _gemColors = [
   Color(0xffff8fb3),
   Color(0xff7ec8ff),
@@ -170,22 +185,33 @@ class BoardViewState extends State<BoardView>
   Future<void> _loadArt() async {
     if (_artRequested) return;
     _artRequested = true;
-    final names = {..._tileNames, ..._obstacleNames.values};
-    await Future.wait(names.map(_loadSprite));
+    await Future.wait(
+      _spriteCandidates.entries.map(
+        (e) => _loadSprite(e.key, e.value),
+      ),
+    );
     if (mounted) setState(() {});
   }
 
-  Future<void> _loadSprite(String name) async {
-    try {
-      final data = await rootBundle.load('assets/generated/$name.png');
-      final codec = await ui.instantiateImageCodec(
-        data.buffer.asUint8List(),
-      );
-      final frame = await codec.getNextFrame();
-      _art[name] = frame.image;
-    } on Object {
-      // Missing art renders as a colored gem; never block the board.
+  /// Tries each candidate under `assets/images/` then
+  /// `assets/generated/`, storing the first hit under [canonical].
+  Future<void> _loadSprite(String canonical, List<String> candidates) async {
+    for (final dir in const ['assets/images/', 'assets/generated/']) {
+      for (final name in candidates) {
+        try {
+          final data = await rootBundle.load('$dir$name.png');
+          final codec = await ui.instantiateImageCodec(
+            data.buffer.asUint8List(),
+          );
+          final frame = await codec.getNextFrame();
+          _art[canonical] = frame.image;
+          return;
+        } on Object {
+          // Try the next candidate/directory.
+        }
+      }
     }
+    // Missing art renders as a colored gem; never block the board.
   }
 
   /// Folds [events] into the logical grid immediately and schedules their
@@ -398,8 +424,7 @@ class BoardViewState extends State<BoardView>
         return _reset(event, snapshot, start);
       case ObstacleQueued() ||
           PowerCharged() ||
-          ExtraMove() ||
-          RoundEnded() ||
+          TurnEnded() ||
           MatchEnded():
         return const [];
     }
@@ -743,7 +768,7 @@ class BoardViewState extends State<BoardView>
   // --- meta-event banners ----------------------------------------------
 
   /// Floating label for events that have no board-cell animation
-  /// (ObstacleQueued, PowerCharged, ExtraMove, RoundEnded, MatchEnded).
+  /// (ObstacleQueued, PowerCharged, TurnEnded, MatchEnded).
   Widget _bannerLayer(double cell) {
     if (_banners.isEmpty) return const SizedBox.shrink();
     return Stack(
@@ -766,17 +791,16 @@ class BoardViewState extends State<BoardView>
     final (text, color, size) = switch (b.event) {
       ObstacleQueued(:final count) => (
         count == 1
-            ? '1 obstacol următor!'
-            : '$count obstacole următoare!',
+            ? '1 cutie următoare!'
+            : '$count cutii următoare!',
         const Color(0xffffb066),
         15.0,
       ),
       PowerCharged(:final amount) => amount >= 100
-          ? ('ENERGIE MAXIMĂ!', _bannerGold, 17.0)
-          : ('Energie $amount%', _bannerGold, 13.0),
-      ExtraMove() => ('MUTARE EXTRA!', const Color(0xffb9e07a), 18.0),
-      RoundEnded(:final round, :final scores) => (
-        'Runda $round  •  ${scores.first} – ${scores.second}',
+          ? ('PUTERE MAXIMĂ!', _bannerGold, 17.0)
+          : ('Putere $amount%', _bannerGold, 13.0),
+      TurnEnded(:final turn, :final scores) => (
+        'Tura $turn  •  ${scores.first} – ${scores.second}',
         _mutedBanner,
         15.0,
       ),
@@ -1109,7 +1133,9 @@ class _BoardPainter extends CustomPainter {
         canvas.rotate(now * 1.4);
       }
       canvas.translate(-cx, -cy);
-      final img = art[_tileNames[piece.kind % _tileNames.length]];
+      final img = piece.kind < _tileNames.length
+          ? art[_tileNames[piece.kind]]
+          : null;
       final imagePaint = Paint()
         ..filterQuality = FilterQuality.medium
         ..colorFilter = ColorFilter.mode(

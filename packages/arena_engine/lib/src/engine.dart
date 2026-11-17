@@ -34,9 +34,13 @@ EngineResult<MatchState> newMatch(int seed, MatchConfig config) {
     MatchState.create(
       seed: seed,
       config: config,
-      round: 1,
+      turn: 1,
       activePlayer: PlayerSlot.first,
-      movesRemaining: [config.movesPerRound, config.movesPerRound],
+      turnsRemaining: [
+        config.turnsPerPlayer,
+        config.turnsPerPlayer,
+      ],
+      turnMoves: 0,
       scores: [0, 0],
       boards: [deal.freeze(), copyOf(deal).freeze()],
       pendingObstacles: const [
@@ -54,13 +58,13 @@ EngineResult<MatchState> newMatch(int seed, MatchConfig config) {
 
 /// All currently legal moves for [MatchState.activePlayer].
 ///
-/// Does not mutate state or consume randomness. An empty list is valid only
-/// when the state cannot accept a move (a finished match or a player with
-/// no moves left).
+/// Does not mutate state or consume randomness. Always includes
+/// [EndTurnMove] — turns end only through it. Swaps are the productive
+/// adjacent pairs; a [PowerMove] appears only when the meter is full and
+/// names the power the active player's cat brought into the match.
 EngineResult<List<Move>> legalMoves(MatchState state) {
   if (state.isFinished) return const EngineOk([]);
   final slot = state.activePlayer;
-  if (state.movesLeft(slot) <= 0) return const EngineOk([]);
   final board = MutableBoard.fromState(state.boardOf(slot));
   final pairs = legalSwapPairs(board);
   final w = board.width;
@@ -69,18 +73,10 @@ EngineResult<List<Move>> legalMoves(MatchState state) {
     for (final (a, b) in pairs)
       SwapMove(firstCell: pos(a), secondCell: pos(b)),
   ];
-  final charge = state.chargeOf(slot);
-  if (charge >= powerChargeCost(PowerKind.zoomies)) {
-    for (var row = 0; row < board.height; row++) {
-      moves.add(PowerMove(power: PowerKind.zoomies, targetRow: row));
-    }
+  if (state.canFirePower(slot)) {
+    moves.add(PowerMove(power: state.config.powerFor(slot)));
   }
-  if (charge >= powerChargeCost(PowerKind.shadowPounce)) {
-    moves.add(const PowerMove(power: PowerKind.shadowPounce));
-  }
-  if (charge >= powerChargeCost(PowerKind.laserChase)) {
-    moves.add(const PowerMove(power: PowerKind.laserChase));
-  }
+  moves.add(const EndTurnMove());
   return EngineOk(List<Move>.unmodifiable(moves));
 }
 
@@ -106,6 +102,8 @@ EngineResult<MoveResult> applyMove(MatchState state, Move move) {
       return _applySwap(state, move, slot, hashBefore);
     case PowerMove():
       return _applyPower(state, move, slot, hashBefore);
+    case EndTurnMove():
+      return _applyEndTurn(state, slot, hashBefore);
   }
 }
 
@@ -173,11 +171,11 @@ EngineResult<MoveResult> _applySwap(
       secondCell: _posOf(w, second),
     ),
   );
-  work.movesRemaining[slot.index]--;
+  work.turnMoves++;
 
   _fireSwapSpecials(work, slot, first, second);
   _resolveMatches(work, slot);
-  _finishTurn(work, state);
+  _ensureLegalMove(work, slot);
 
   return _result(work, hashBefore);
 }
@@ -188,40 +186,29 @@ EngineResult<MoveResult> _applyPower(
   PlayerSlot slot,
   String hashBefore,
 ) {
-  final cost = powerChargeCost(move.power);
-  if (state.chargeOf(slot) < cost) {
-    return EngineFailure(
+  if (move.power != state.config.powerFor(slot)) {
+    return _invalidMove('power is not the one this cat brought');
+  }
+  if (!state.canFirePower(slot)) {
+    return const EngineFailure(
       EngineError(
         EngineErrorCode.insufficientCharge,
-        'power charge below cost',
+        'power meter is not full',
       ),
     );
-  }
-  if (state.movesLeft(slot) <= 0) {
-    return _invalidMove('no moves remaining this round');
-  }
-  final h = state.boardOf(slot).height;
-  if (move.power == PowerKind.zoomies) {
-    final row = move.targetRow;
-    if (row == null || row < 0 || row >= h) {
-      return _invalidMove('zoomies requires a target row in bounds');
-    }
-  } else if (move.targetRow != null) {
-    return _invalidMove('this power takes no target row');
   }
 
   final work = _Work.fromState(state);
   final board = work.boards[slot.index];
-  work.movesRemaining[slot.index]--;
-  work.powerCharge[slot.index] -= cost;
-  work.events.add(
-    PowerCharged(player: slot, amount: -cost),
-  );
+  work.turnMoves++;
+  final spent = work.powerCharge[slot.index];
+  work.powerCharge[slot.index] = 0;
+  work.events.add(PowerCharged(player: slot, amount: -spent));
 
   final rng = work.rngFor(slot);
   switch (move.power) {
     case PowerKind.zoomies:
-      _powerZoomies(work, slot, move.targetRow!, rng);
+      _powerZoomies(work, slot);
     case PowerKind.shadowPounce:
       _powerShadowPounce(work, slot);
     case PowerKind.laserChase:
@@ -236,7 +223,61 @@ EngineResult<MoveResult> _applyPower(
     events: work.events,
   );
   _resolveMatches(work, slot);
-  _finishTurn(work, state);
+  _ensureLegalMove(work, slot);
+
+  return _result(work, hashBefore);
+}
+
+/// Ends the active player's turn early: emits [TurnEnded], consumes one
+/// turn, hands the turn to the opponent and lands their queued cardboard
+/// boxes on their persistent board at the start of their next turn.
+/// The match ends when both players have used all their turns — the
+/// higher score wins, equal scores draw.
+EngineResult<MoveResult> _applyEndTurn(
+  MatchState state,
+  PlayerSlot slot,
+  String hashBefore,
+) {
+  final work = _Work.fromState(state);
+  work.turnMoves = 0;
+  work.turnsRemaining[slot.index]--;
+
+  final finished =
+      work.turnsRemaining[PlayerSlot.first.index] <= 0 &&
+      work.turnsRemaining[PlayerSlot.second.index] <= 0;
+  if (finished) {
+    work.outcome =
+        work.scores[0] > work.scores[1]
+            ? MatchOutcome.firstWins
+            : work.scores[1] > work.scores[0]
+            ? MatchOutcome.secondWins
+            : MatchOutcome.draw;
+  }
+
+  work.events.add(
+    TurnEnded(
+      turn: work.turn,
+      scores: work.scorePairSnapshot(),
+      outcome: work.outcome,
+    ),
+  );
+
+  if (finished) {
+    // Obstacles still queued have no next turn and are discarded.
+    return _result(work, hashBefore);
+  }
+
+  work.turn++;
+  final next = slot.other;
+  work.activePlayer = next;
+
+  // Obstacles earned during the turn that just ended land on the
+  // opponent's board now, at the start of their next turn.
+  if (work.pending[next.index].isNotEmpty) {
+    _landObstacles(work, next);
+    work.pending[next.index].clear();
+  }
+  _ensureLegalMove(work, next);
 
   return _result(work, hashBefore);
 }
@@ -270,9 +311,10 @@ EngineResult<MoveResult> _result(_Work work, String hashBefore) {
 class _Work {
   final int seed;
   final MatchConfig config;
-  int round;
+  int turn;
   PlayerSlot activePlayer;
-  final List<int> movesRemaining;
+  final List<int> turnsRemaining;
+  int turnMoves;
   final List<int> scores;
   final List<MutableBoard> boards;
   final List<List<ObstacleKind>> pending;
@@ -284,9 +326,10 @@ class _Work {
   _Work._({
     required this.seed,
     required this.config,
-    required this.round,
+    required this.turn,
     required this.activePlayer,
-    required this.movesRemaining,
+    required this.turnsRemaining,
+    required this.turnMoves,
     required this.scores,
     required this.boards,
     required this.pending,
@@ -298,9 +341,10 @@ class _Work {
   factory _Work.fromState(MatchState s) => _Work._(
     seed: s.seed,
     config: s.config,
-    round: s.round,
+    turn: s.turn,
     activePlayer: s.activePlayer,
-    movesRemaining: List<int>.of(s.movesRemaining),
+    turnsRemaining: List<int>.of(s.turnsRemaining),
+    turnMoves: s.turnMoves,
     scores: List<int>.of(s.scores),
     boards: [for (final b in s.boards) MutableBoard.fromState(b)],
     pending: [for (final q in s.pendingObstacles) List<ObstacleKind>.of(q)],
@@ -323,9 +367,10 @@ class _Work {
   MatchState freeze() => MatchState.create(
     seed: seed,
     config: config,
-    round: round,
+    turn: turn,
     activePlayer: activePlayer,
-    movesRemaining: movesRemaining,
+    turnsRemaining: turnsRemaining,
+    turnMoves: turnMoves,
     scores: scores,
     boards: [for (final b in boards) b.freeze()],
     pendingObstacles: pending,
@@ -357,8 +402,8 @@ EngineError? _validateConfig(MatchConfig config) {
       config.boardHeight < 3 ||
       config.colourCount < 5 ||
       config.colourCount > 6 ||
-      config.rounds < 1 ||
-      config.movesPerRound < 1) {
+      config.turnsPerPlayer < 1 ||
+      config.turnSeconds < 1) {
     return const EngineError(
       EngineErrorCode.invalidConfig,
       'config violates engine constraints',
@@ -412,13 +457,15 @@ Set<int> _removePieceCells(
   return broken;
 }
 
-/// Adds [pieces] worth of charge to [slot], capped at [kPowerCost], and
-/// emits [PowerCharged] with the actual positive delta.
+/// Adds charge for [pieces] cleared by [slot], capped at
+/// [kPowerMeterMax] (100%). Emits [PowerCharged] with the actual positive
+/// delta; no event fires when the meter is already full.
 void _addCharge(_Work work, PlayerSlot slot, int pieces) {
   if (pieces <= 0) return;
   final gain = pieces * kChargePerPiece;
   final before = work.powerCharge[slot.index];
-  final after = before + gain > kPowerCost ? kPowerCost : before + gain;
+  final after =
+      before + gain > kPowerMeterMax ? kPowerMeterMax : before + gain;
   final delta = after - before;
   if (delta <= 0) return;
   work.powerCharge[slot.index] = after;
@@ -613,8 +660,8 @@ void _fireSwapSpecials(_Work work, PlayerSlot slot, int first, int second) {
 
 /// Resolves colour matches on [slot]'s board until stable. Each wave:
 /// detect groups, create specials on qualifying anchors, clear the rest,
-/// break adjacent obstacles, award extra moves for matches of 4+, then
-/// gravity and refill. Repeats while matches exist.
+/// break adjacent obstacles, charge the power meter, then gravity and
+/// refill. Repeats while matches exist. Flat scoring: no extra moves.
 void _resolveMatches(_Work work, PlayerSlot slot) {
   final board = work.boards[slot.index];
   final w = board.width;
@@ -681,25 +728,6 @@ void _resolveMatches(_Work work, PlayerSlot slot) {
       );
     }
 
-    // A match of four or more cells in a group awards one extra move,
-    // capped at twice movesPerRound so a round cannot become endless.
-    final extras = groups.where((g) => g.cells.length >= 4).length;
-    if (extras > 0) {
-      final cap = work.config.movesPerRound * 2;
-      final before = work.movesRemaining[slot.index];
-      final after = before + extras > cap ? cap : before + extras;
-      if (after > before) {
-        work.movesRemaining[slot.index] = after;
-        work.events.add(
-          ExtraMove(
-            player: slot,
-            round: work.round,
-            movesRemaining: after,
-          ),
-        );
-      }
-    }
-
     _addCharge(work, slot, sorted.length);
     _removePieceCells(work, slot, matched.toSet());
     applyGravityAndRefill(
@@ -711,103 +739,26 @@ void _resolveMatches(_Work work, PlayerSlot slot) {
   }
 }
 
-/// After a move resolves: guarantee a legal move (reshuffle if needed),
-/// then advance the turn or close the round/match.
-void _finishTurn(_Work work, MatchState prev) {
-  final slot = prev.activePlayer;
+/// Guarantees [slot]'s board still has a legal move, reshuffling
+/// deterministically when it does not. Called after every accepted move
+/// and at the start of each turn for the incoming player.
+void _ensureLegalMove(_Work work, PlayerSlot slot) {
   final board = work.boards[slot.index];
-  if (!hasLegalMove(board)) {
-    final rng = work.rngFor(slot);
-    reshuffleBoard(
-      board: board,
-      rng: rng,
-      player: slot,
-      events: work.events,
-    );
-    work.storeRng(slot, rng);
-  }
-
-  final firstDone = work.movesRemaining[PlayerSlot.first.index] <= 0;
-  final secondDone = work.movesRemaining[PlayerSlot.second.index] <= 0;
-
-  if (firstDone && secondDone) {
-    _endRound(work);
-    return;
-  }
-
-  final other = slot.other;
-  if (work.movesRemaining[other.index] > 0) {
-    work.activePlayer = other;
-  }
-  // Otherwise the same player continues (the opponent already finished).
+  if (hasLegalMove(board)) return;
+  final rng = work.rngFor(slot);
+  reshuffleBoard(
+    board: board,
+    rng: rng,
+    player: slot,
+    events: work.events,
+  );
+  work.storeRng(slot, rng);
 }
 
-/// Closes the current round: emits [RoundEnded], lands queued obstacles on
-/// the next round's fresh boards and deals them (or marks the match
-/// finished after the last round, discarding unplayed obstacles).
-void _endRound(_Work work) {
-  final config = work.config;
-  final scores = work.scorePairSnapshot();
-
-  if (work.round >= config.rounds) {
-    work.outcome =
-        work.scores[0] > work.scores[1]
-            ? MatchOutcome.firstWins
-            : work.scores[1] > work.scores[0]
-            ? MatchOutcome.secondWins
-            : MatchOutcome.draw;
-    work.events.add(
-      RoundEnded(round: work.round, scores: scores, outcome: work.outcome),
-    );
-    // Obstacles earned in the final round have no next round and are
-    // discarded with the pending queues.
-    return;
-  }
-
-  work.events.add(RoundEnded(round: work.round, scores: scores, outcome: null));
-
-  // Next round: fresh identical deals for both players.
-  final nextRound = work.round + 1;
-  work.round = nextRound;
-  for (var p = 0; p < 2; p++) {
-    final deal = dealBoard(work.seed, nextRound, config);
-    work.boards[p] = MutableBoard(
-      deal.width,
-      deal.height,
-      List<int>.of(deal.cells),
-      List<int>.of(deal.refillState),
-    );
-    work.movesRemaining[p] = config.movesPerRound;
-  }
-  work.activePlayer = PlayerSlot.first;
-
-  // Land each player's queued obstacles on their fresh board, then make
-  // sure the board still has a legal move.
-  for (var p = 0; p < 2; p++) {
-    final slot = PlayerSlot.values[p];
-    if (work.pending[p].isNotEmpty) {
-      _landObstacles(work, slot);
-    }
-    work.pending[p].clear();
-    final b = work.boards[p];
-    if (!hasLegalMove(b)) {
-      final rng = work.rngFor(slot);
-      reshuffleBoard(
-        board: b,
-        rng: rng,
-        player: slot,
-        events: work.events,
-        reason: 'round-start-no-move',
-      );
-      work.storeRng(slot, rng);
-    }
-  }
-}
-
-/// Places [slot]'s pending obstacles on their fresh round board, in queue
-/// order, using [slot]'s RNG stream. Boxes replace a random piece cell;
-/// yarn locks a random regular-colour piece. Obstacles that find no
-/// eligible cell are discarded.
+/// Places [slot]'s pending obstacles on their persistent board at the
+/// start of their turn, in queue order, using [slot]'s RNG stream. Boxes
+/// replace a random piece cell; yarn locks a random regular-colour piece.
+/// Obstacles that find no eligible cell are discarded.
 void _landObstacles(_Work work, PlayerSlot slot) {
   final board = work.boards[slot.index];
   final w = board.width;
@@ -848,41 +799,51 @@ void _landObstacles(_Work work, PlayerSlot slot) {
 // Powers
 // ---------------------------------------------------------------------------
 
-/// Queues [count] obstacles of random kind for [receiver], drawn from
-/// [sender]'s RNG. Emits [ObstacleQueued] with the number actually queued
-/// (the pending queue is capped at [kMaxPendingObstacles]).
-void _earnObstacles(
-  _Work work,
-  PlayerSlot sender,
-  PlayerSlot receiver,
-  int count,
-  GameRandom rng,
-) {
+/// Queues [count] cardboard boxes for [receiver] — they land on the
+/// receiver's board at the start of their next turn. Emits [ObstacleQueued]
+/// with the number actually queued (the pending queue is capped at
+/// [kMaxPendingObstacles]).
+void _earnObstacles(_Work work, PlayerSlot receiver, int count) {
   final queue = work.pending[receiver.index];
   var added = 0;
   for (var k = 0; k < count && queue.length < kMaxPendingObstacles; k++) {
-    queue.add(ObstacleKind.values[rng.nextInt(ObstacleKind.values.length)]);
+    queue.add(ObstacleKind.box);
     added++;
   }
   if (added > 0) {
     work.events.add(
       ObstacleQueued(
         player: receiver,
-        sourceRound: work.round,
+        sourceTurn: work.turn,
         count: added,
       ),
     );
   }
 }
 
-/// Clears every piece in [row] of [slot]'s board, then sends
-/// [kZoomiesObstacleCount] obstacles to the opponent.
-void _powerZoomies(_Work work, PlayerSlot slot, int row, GameRandom rng) {
+/// Clears every piece in the fullest row of [slot]'s board (ties: lowest
+/// row), then sends [kPowerObstacleCount] boxes to the opponent.
+void _powerZoomies(_Work work, PlayerSlot slot) {
   final board = work.boards[slot.index];
   final w = board.width;
+  final h = board.height;
+
+  var bestRow = 0;
+  var bestCount = -1;
+  for (var r = 0; r < h; r++) {
+    var count = 0;
+    for (var c = 0; c < w; c++) {
+      if (isPieceCode(board.cells[r * w + c])) count++;
+    }
+    if (count > bestCount) {
+      bestCount = count;
+      bestRow = r;
+    }
+  }
+
   final cells = <int>{};
   for (var c = 0; c < w; c++) {
-    final i = row * w + c;
+    final i = bestRow * w + c;
     if (isPieceCode(board.cells[i])) cells.add(i);
   }
   final sorted = cells.toList()..sort();
@@ -897,17 +858,12 @@ void _powerZoomies(_Work work, PlayerSlot slot, int row, GameRandom rng) {
   _addScore(work, slot, sorted.length);
   _addCharge(work, slot, sorted.length);
   _removePieceCells(work, slot, cells);
-  _earnObstacles(
-    work,
-    slot,
-    slot.other,
-    kZoomiesObstacleCount,
-    rng,
-  );
+  _earnObstacles(work, slot.other, kPowerObstacleCount);
 }
 
 /// Clears every piece of the most common colour on [slot]'s board.
-/// Ties resolve to the lowest colour code.
+/// Ties resolve to the lowest colour code. Then sends
+/// [kPowerObstacleCount] boxes to the opponent.
 void _powerShadowPounce(_Work work, PlayerSlot slot) {
   final board = work.boards[slot.index];
   final w = board.width;
@@ -936,10 +892,11 @@ void _powerShadowPounce(_Work work, PlayerSlot slot) {
   _addScore(work, slot, sorted.length);
   _addCharge(work, slot, sorted.length);
   _removePieceCells(work, slot, cells);
+  _earnObstacles(work, slot.other, kPowerObstacleCount);
 }
 
-/// Breaks [kLaserBreakCount] random pieces on [slot]'s board, then clears
-/// all of [slot]'s own obstacles (boxes and yarn locks).
+/// Breaks [kLaserBreakCount] random pieces on [slot]'s board, then sends
+/// [kPowerObstacleCount] boxes to the opponent.
 void _powerLaserChase(_Work work, PlayerSlot slot, GameRandom rng) {
   final board = work.boards[slot.index];
   final w = board.width;
@@ -968,26 +925,8 @@ void _powerLaserChase(_Work work, PlayerSlot slot, GameRandom rng) {
   );
   _addScore(work, slot, sorted.length);
   _addCharge(work, slot, sorted.length);
-  // No adjacency box-break here: every own obstacle is cleared next, so a
-  // single ObstacleBroken reports the full set.
-  _removePieceCells(work, slot, broken, breakBoxes: false);
-
-  final obstacleCells = <int>{};
-  for (var i = 0; i < board.cells.length; i++) {
-    final code = board.cells[i];
-    if (code == kCellBox) {
-      board.cells[i] = kCellEmpty;
-      obstacleCells.add(i);
-    } else if (isYarnedCode(code)) {
-      board.cells[i] = code - kYarnOffset;
-      obstacleCells.add(i);
-    }
-  }
-  if (obstacleCells.isNotEmpty) {
-    work.events.add(
-      ObstacleBroken(player: slot, cells: _posList(w, obstacleCells.toList())),
-    );
-  }
+  _removePieceCells(work, slot, broken);
+  _earnObstacles(work, slot.other, kPowerObstacleCount);
 }
 
 /// Replays [moves] from `newMatch(seed, config)` in order.
@@ -1064,7 +1003,7 @@ String _hashPass(String input, int offset) {
 /// independent polynomial passes over the canonical state string produce a
 /// 64-bit hex digest. Changing the algorithm or canonical layout is a
 /// contract change.
-const int kHashVersion = 1;
+const int kHashVersion = 2;
 
 String _dualHash(String canonical) =>
     _hashPass(canonical, 2166136261) + _hashPass(canonical, 2654435761);
@@ -1077,9 +1016,10 @@ String _stateCanonical(MatchState s) => [
   'engine=${s.engineVersion}',
   'seed=${s.seed}',
   'config=${s.config.fingerprint}',
-  'round=${s.round}',
+  'turn=${s.turn}',
   'active=${s.activePlayer.name}',
-  'moves=${s.movesRemaining.join(',')}',
+  'turnsLeft=${s.turnsRemaining.join(',')}',
+  'turnMoves=${s.turnMoves}',
   'scores=${s.scores.join(',')}',
   'charge=${s.powerCharge.join(',')}',
   'rng=${s.rngState.join(',')}',
@@ -1094,7 +1034,7 @@ String stateHash(MatchState state) => _dualHash(_stateCanonical(state));
 
 /// Deterministic per-player hash covering everything needed to verify one
 /// side of the duel: seed, config, slot, that player's board, score,
-/// charge, RNG state, pending obstacles and remaining moves.
+/// charge, RNG state, pending obstacles and turns remaining.
 String playerHash(MatchState state, PlayerSlot player) {
   final i = player.index;
   final canonical = [
@@ -1103,8 +1043,8 @@ String playerHash(MatchState state, PlayerSlot player) {
     'seed=${state.seed}',
     'config=${state.config.fingerprint}',
     'player=${player.name}',
-    'round=${state.round}',
-    'moves=${state.movesRemaining[i]}',
+    'turn=${state.turn}',
+    'turnsLeft=${state.turnsRemaining[i]}',
     'score=${state.scores[i]}',
     'charge=${state.powerCharge[i]}',
     'rng=${state.rngState[i]}',

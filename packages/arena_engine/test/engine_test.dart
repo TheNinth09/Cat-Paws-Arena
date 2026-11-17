@@ -127,9 +127,9 @@ void main() {
         applyMove(s, const SwapMove(firstCell: (row: 0, col: 0), secondCell: (row: 0, col: 2))),
         isA<EngineFailure<MoveResult>>(),
       );
-      // Powers need charge; a fresh match has none.
+      // Powers need a full meter; a fresh match has none.
       expect(
-        applyMove(s, const PowerMove(power: PowerKind.zoomies, targetRow: 3)),
+        applyMove(s, const PowerMove(power: PowerKind.zoomies)),
         isA<EngineFailure<MoveResult>>(),
       );
       expect(stateHash(s), h);
@@ -159,7 +159,7 @@ void main() {
       expect(res.value.hashBefore, res.value.hashAfter);
       expect(res.value.events, hasLength(1));
       expect(res.value.events.single, isA<SwapRejected>());
-      expect(s.movesLeft(PlayerSlot.first), config.movesPerRound);
+      expect(s.turnsLeft(PlayerSlot.first), config.turnsPerPlayer);
       expect(s.activePlayer, PlayerSlot.first);
     });
 
@@ -181,23 +181,25 @@ void main() {
       final s = (newMatch(3, config) as EngineOk<MatchState>).value;
       var cur = s;
       final log = <Move>[];
-      // Play until the first RoundEnded appears.
-      var sawRoundEnd = false;
-      for (var i = 0; i < 20 && !sawRoundEnd; i++) {
-        final moves = (legalMoves(cur) as EngineOk<List<Move>>).value;
-        final move = moves.first;
-        final res = applyMove(cur, move) as EngineOk<MoveResult>;
-        cur = res.value.state;
-        log.add(move);
-        sawRoundEnd = res.value.events.any((e) => e is RoundEnded);
-      }
-      expect(sawRoundEnd, isTrue);
-      // A full round is 3 moves per player = 6 accepted moves.
-      expect(log.length, 6);
-      expect(cur.round, 2);
-      expect(cur.activePlayer, PlayerSlot.first);
-      expect(cur.movesLeft(PlayerSlot.first), config.movesPerRound);
-      expect(cur.movesLeft(PlayerSlot.second), config.movesPerRound);
+      // One productive swap, then an explicit EndTurnMove — timed turns
+      // never advance on their own.
+      final firstMoves = (legalMoves(cur) as EngineOk<List<Move>>).value;
+      final swap = firstMoves.firstWhere((m) => m is SwapMove);
+      var res = applyMove(cur, swap) as EngineOk<MoveResult>;
+      cur = res.value.state;
+      log.add(swap);
+      res = applyMove(cur, const EndTurnMove()) as EngineOk<MoveResult>;
+      cur = res.value.state;
+      log.add(const EndTurnMove());
+      final sawTurnEnd = res.value.events.any((e) => e is TurnEnded);
+      expect(sawTurnEnd, isTrue);
+      // The first turn belongs to first; after EndTurnMove the second
+      // player's turn begins and first has one turn less remaining.
+      expect(cur.turn, 2);
+      expect(cur.activePlayer, PlayerSlot.second);
+      expect(cur.turnsLeft(PlayerSlot.first), config.turnsPerPlayer - 1);
+      expect(cur.turnsLeft(PlayerSlot.second), config.turnsPerPlayer);
+      expect(cur.isFinished, isFalse);
       // Verify the replayed log produces the identical final state/hash.
       final replayed = replay(3, config, log);
       expect(replayed, isA<EngineOk<ReplayResult>>());
@@ -335,8 +337,11 @@ void main() {
       const m1 = SwapMove(firstCell: (row: 2, col: 3), secondCell: (row: 2, col: 4));
       final j = m1.toJson();
       expect(Move.fromJson(j), m1);
-      const m2 = PowerMove(power: PowerKind.zoomies, targetRow: 4);
+      const m2 = PowerMove(power: PowerKind.zoomies);
       expect(Move.fromJson(m2.toJson()), m2);
+      const m3 = EndTurnMove();
+      expect(Move.fromJson(m3.toJson()), m3);
+      expect(Move.fromJson({'kind': 'endTurn'}), m3);
       expect(Move.fromJson({'kind': 'bogus'}), isNull);
       expect(Move.fromJson('nope'), isNull);
     });

@@ -53,10 +53,9 @@ class DuelAudio {
         e is SwapRejected ||
         e is PowerFired ||
         e is Shuffled ||
-        e is RoundEnded ||
+        e is TurnEnded ||
         e is MatchEnded ||
         e is ObstacleQueued ||
-        e is ExtraMove ||
         e is BoardReset;
     if (moveStart) _cascade = 0;
     if (!clearStep) return 1;
@@ -131,12 +130,7 @@ class DuelAudio {
           volume: 0.6,
           haptic: HapticKind.medium,
         ),
-        ExtraMove() => (
-          asset: 'generated/audio/sfx_bonus.wav',
-          volume: 0.6,
-          haptic: HapticKind.medium,
-        ),
-        RoundEnded() => (
+        TurnEnded() => (
           asset: 'generated/audio/sfx_round.wav',
           volume: 0.7,
           haptic: HapticKind.heavy,

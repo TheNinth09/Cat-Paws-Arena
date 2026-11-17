@@ -51,16 +51,18 @@ MatchState stateWith({
   int width = 7,
   int height = 7,
   int colourCount = 5,
-  int rounds = 5,
-  int round = 1,
-  int movesPerRound = 3,
+  int turnsPerPlayer = 5,
+  int turn = 1,
+  int turnMoves = 0,
   PlayerSlot active = PlayerSlot.first,
-  List<int>? movesRemaining,
+  List<int>? turnsRemaining,
   List<int>? scores,
   List<int>? charge,
   List<int>? rngState,
   List<List<ObstacleKind>>? pending,
   RainbowRule rainbowRule = RainbowRule.clearOneColour,
+  PowerKind firstPower = PowerKind.zoomies,
+  PowerKind secondPower = PowerKind.zoomies,
 }) {
   BoardState board(List<int> cells) =>
       BoardState(width, height, cells, refillStates(width));
@@ -70,13 +72,16 @@ MatchState stateWith({
       boardWidth: width,
       boardHeight: height,
       colourCount: colourCount,
-      rounds: rounds,
-      movesPerRound: movesPerRound,
+      turnsPerPlayer: turnsPerPlayer,
       rainbowRule: rainbowRule,
+      firstPower: firstPower,
+      secondPower: secondPower,
     ),
-    round: round,
+    turn: turn,
     activePlayer: active,
-    movesRemaining: movesRemaining ?? [movesPerRound, movesPerRound],
+    turnsRemaining:
+        turnsRemaining ?? [turnsPerPlayer, turnsPerPlayer],
+    turnMoves: turnMoves,
     scores: scores ?? [0, 0],
     boards: [board(firstCells), board(secondCells ?? List<int>.of(firstCells))],
     pendingObstacles: pending ?? [<ObstacleKind>[], <ObstacleKind>[]],
@@ -195,8 +200,6 @@ void main() {
         greaterThanOrEqualTo(3),
       );
       expect(waveCleared.points, waveCleared.cells.length * kPointsPerPiece);
-      // A match of four or more awards an extra move.
-      expect(events.whereType<ExtraMove>(), isNotEmpty);
       // The special piece exists somewhere on the creator's board.
       expect(findSpecial(state, PlayerSlot.first, kLineColumn), isNonNegative);
     });
@@ -266,10 +269,15 @@ void main() {
     final rep = replay(seed, config, log);
     expect(rep, isA<EngineOk<ReplayResult>>());
     var state = (rep as EngineOk<ReplayResult>).value.state;
-    // Pass one turn so the creator is active again.
-    if (state.activePlayer != PlayerSlot.first) {
-      state = mustApply(state, firstSwap(state)).value.state;
+    // Pass turns until the creator is active again (timed turns only
+    // advance via EndTurnMove).
+    var turnGuard = 0;
+    while (state.activePlayer != PlayerSlot.first &&
+        !state.isFinished &&
+        turnGuard++ < 4) {
+      state = mustApply(state, const EndTurnMove()).value.state;
     }
+    expect(state.activePlayer, PlayerSlot.first);
     final specialAt = findSpecial(state, PlayerSlot.first, specialCode);
     expect(specialAt, isNonNegative, reason: 'special must exist pre-fire');
     final board = state.boardOf(PlayerSlot.first);
@@ -403,7 +411,7 @@ void main() {
   // Extra moves and charge
   // -------------------------------------------------------------------------
 
-  test('a match of four or more grants one extra move', () {
+  test('a match of four or more grants no extra move', () {
     // Bent five from seed 9: one swap, one group of five cells.
     final rep = replay(
       9,
@@ -412,15 +420,12 @@ void main() {
     );
     expect(rep, isA<EngineOk<ReplayResult>>());
     final state = (rep as EngineOk<ReplayResult>).value.state;
-    final events = stateEventsOf(state, const [
-      SwapMove(firstCell: (row: 1, col: 3), secondCell: (row: 1, col: 4)),
-    ]);
-    final extra = events.whereType<ExtraMove>().toList();
-    expect(extra, isNotEmpty);
-    // movesRemaining went 3 -> 2 (move) then back up via cascade awards.
-    expect(state.movesLeft(PlayerSlot.first), greaterThan(2));
-    expect(extra.last.movesRemaining, state.movesLeft(PlayerSlot.first));
-    expect(extra.last.round, 1);
+    // Timed turns: the move count is informational only; the turn does
+    // not advance until EndTurnMove.
+    expect(state.turnMoves, 1);
+    expect(state.activePlayer, PlayerSlot.first);
+    expect(state.turn, 1);
+    expect(state.turnsLeft(PlayerSlot.first), 5);
   });
 
   test('cleared pieces add power charge', () {
@@ -434,15 +439,15 @@ void main() {
       const SwapMove(firstCell: (row: 2, col: 3), secondCell: (row: 2, col: 4)),
     );
     // Charge equals cleared pieces * kChargePerPiece (cascades included),
-    // capped at kPowerCost.
+    // capped at kPowerMeterMax.
     final clearedPieces = res.value.events
         .whereType<Cleared>()
         .where((e) => e.player == PlayerSlot.first)
         .fold<int>(0, (a, e) => a + e.cells.length);
     expect(
       res.value.state.chargeOf(PlayerSlot.first),
-      clearedPieces * kChargePerPiece > kPowerCost
-          ? kPowerCost
+      clearedPieces * kChargePerPiece > kPowerMeterMax
+          ? kPowerMeterMax
           : clearedPieces * kChargePerPiece,
     );
     final charged = res.value.events.whereType<PowerCharged>().toList();
@@ -523,69 +528,72 @@ void main() {
     expect(isYarnedCode(after), isFalse);
   });
 
-  test('queued obstacles land at the start of the next round', () {
-    // Round 4 of 5, one move each; pending obstacles preset for both.
+  test('queued boxes land on the opponent board at the start of their next turn', () {
+    // Turn 7 of 10 (first's fourth turn), two turns left each; pending
+    // boxes preset for both receivers.
     final guardian = fixture(overrides: {
       idx(0, 0): kBomb, // swapping it with (0,1) is always productive
     });
     final s = stateWith(
       firstCells: guardian,
-      rounds: 5,
-      round: 4,
-      movesRemaining: [1, 1],
+      turn: 7,
+      turnsRemaining: [2, 2],
       pending: const [
-        [ObstacleKind.box, ObstacleKind.yarn],
+        [ObstacleKind.box, ObstacleKind.box],
         [ObstacleKind.box],
       ],
     );
     expectCleanFixture(guardian);
 
-    final m1 = mustApply(
-      s,
-      const SwapMove(firstCell: (row: 0, col: 0), secondCell: (row: 0, col: 1)),
-    );
-    expect(m1.value.state.round, 4);
-    final m2 = mustApply(
-      m1.value.state,
-      const SwapMove(firstCell: (row: 0, col: 0), secondCell: (row: 0, col: 1)),
-    );
-
-    final st = m2.value.state;
-    expect(st.round, 5);
-    expect(st.isFinished, isFalse);
-    final landed = m2.value.events.whereType<ObstacleLanded>().toList();
-    expect(landed, hasLength(2));
-    expect(landed[0].player, PlayerSlot.first);
-    expect(landed[0].cells, hasLength(2)); // box + yarn
-    expect(landed[1].player, PlayerSlot.second);
-    expect(landed[1].cells, hasLength(1)); // box
-    expect(st.pendingObstacles[0], isEmpty);
-    expect(st.pendingObstacles[1], isEmpty);
-
     int boxes(BoardState b) =>
         b.cells.where((c) => c == kCellBox).length;
-    int yarns(BoardState b) => b.cells.where(isYarnedCode).length;
-    expect(boxes(st.boardOf(PlayerSlot.first)), 1);
-    expect(yarns(st.boardOf(PlayerSlot.first)), 1);
-    expect(boxes(st.boardOf(PlayerSlot.second)), 1);
-    expect(yarns(st.boardOf(PlayerSlot.second)), 0);
+
+    // First ends turn 7: only the opponent's queue lands, on their board.
+    final m1 = mustApply(s, const EndTurnMove());
+    final st1 = m1.value.state;
+    expect(st1.turn, 8);
+    expect(st1.activePlayer, PlayerSlot.second);
+    expect(st1.turnsLeft(PlayerSlot.first), 1);
+    expect(st1.turnsLeft(PlayerSlot.second), 2);
+    final landed1 = m1.value.events.whereType<ObstacleLanded>().toList();
+    expect(landed1, hasLength(1));
+    expect(landed1.single.player, PlayerSlot.second);
+    expect(landed1.single.cells, hasLength(1)); // one box
+    expect(st1.pendingObstacles[1], isEmpty);
+    expect(st1.pendingObstacles[0], hasLength(2));
+    expect(boxes(st1.boardOf(PlayerSlot.second)), 1);
+    expect(boxes(st1.boardOf(PlayerSlot.first)), 0);
+
+    // Second ends turn 8: first's two boxes land on first's board.
+    final m2 = mustApply(st1, const EndTurnMove());
+    final st2 = m2.value.state;
+    expect(st2.turn, 9);
+    expect(st2.activePlayer, PlayerSlot.first);
+    expect(st2.isFinished, isFalse);
+    final landed2 = m2.value.events.whereType<ObstacleLanded>().toList();
+    expect(landed2, hasLength(1));
+    expect(landed2.single.player, PlayerSlot.first);
+    expect(landed2.single.cells, hasLength(2)); // two boxes
+    expect(st2.pendingObstacles[0], isEmpty);
+    expect(boxes(st2.boardOf(PlayerSlot.first)), 2);
+    expect(boxes(st2.boardOf(PlayerSlot.second)), 1);
   });
 
   // -------------------------------------------------------------------------
   // Powers
   // -------------------------------------------------------------------------
 
-  test('a power needs a full charge bar', () {
-    final s = stateWith(firstCells: fixture(), charge: [99, 0]);
-    final r = applyMove(s, const PowerMove(power: PowerKind.shadowPounce));
+  test('a power needs a full meter and the cat\'s own power', () {
+    final s = stateWith(firstCells: fixture(), charge: [kPowerMeterMax - 1, 0]);
+    final r = applyMove(s, const PowerMove(power: PowerKind.zoomies));
     expect(r, isA<EngineFailure<MoveResult>>());
     expect(
       (r as EngineFailure<MoveResult>).error.code,
       EngineErrorCode.insufficientCharge,
     );
-    // Zoomies without a valid row is an invalid move, not a charge issue.
-    final s2 = stateWith(firstCells: fixture(), charge: [kPowerCost, 0]);
-    final r2 = applyMove(s2, const PowerMove(power: PowerKind.zoomies));
+    // Firing a power the cat did not bring is an invalid move.
+    final s2 = stateWith(firstCells: fixture(), charge: [kPowerMeterMax, 0]);
+    final r2 = applyMove(s2, const PowerMove(power: PowerKind.shadowPounce));
     expect(r2, isA<EngineFailure<MoveResult>>());
     expect(
       (r2 as EngineFailure<MoveResult>).error.code,
@@ -593,34 +601,52 @@ void main() {
     );
   });
 
-  test('zoomies clears a row and sends two obstacles', () {
-    final cells = fixture();
-    final s = stateWith(firstCells: cells, charge: [kPowerCost, 0]);
+  test('the power meter is hard-capped at 100', () {
+    // Same clear as the charge test but starting one point below the cap:
+    // the meter saturates at kPowerMeterMax and never exceeds it.
+    final s = stateWith(
+      firstCells: fixture(overrides: {
+        idx(2, 0): 2,
+        idx(2, 1): 0, idx(2, 2): 0, idx(2, 3): 1, idx(2, 4): 0,
+      }),
+      charge: [kPowerMeterMax - 1, 0],
+    );
     final res = mustApply(
       s,
-      const PowerMove(power: PowerKind.zoomies, targetRow: 3),
+      const SwapMove(firstCell: (row: 2, col: 3), secondCell: (row: 2, col: 4)),
+    );
+    expect(res.value.state.chargeOf(PlayerSlot.first), kPowerMeterMax);
+  });
+
+  test('zoomies clears the fullest row and sends two boxes', () {
+    final cells = fixture();
+    final s = stateWith(firstCells: cells, charge: [kPowerMeterMax, 0]);
+    final res = mustApply(
+      s,
+      const PowerMove(power: PowerKind.zoomies),
     );
     final st = res.value.state;
     final fired = res.value.events.whereType<PowerFired>().single;
     expect(fired.power, PowerKind.zoomies);
-    // Row 3 of the fixture holds 7 pieces.
+    // Every fixture row holds 7 pieces; ties go to the lowest row.
     expect(fired.cells, hasLength(7));
+    expect(fired.cells.every((p) => p.row == 0), isTrue);
     expect(fired.points, 70);
     final queued = res.value.events.whereType<ObstacleQueued>().toList();
     expect(queued, hasLength(1));
     expect(queued.single.player, PlayerSlot.second);
-    expect(queued.single.sourceRound, 1);
-    expect(queued.single.count, 2);
-    expect(st.pendingObstacles[1], hasLength(2));
-    // Charge was spent then partially refilled by the clears.
-    expect(st.chargeOf(PlayerSlot.first), lessThanOrEqualTo(kPowerCost));
-    expect(st.chargeOf(PlayerSlot.first), greaterThan(0));
+    expect(queued.single.sourceTurn, 1);
+    expect(queued.single.count, kPowerObstacleCount);
+    expect(st.pendingObstacles[1], hasLength(kPowerObstacleCount));
+    // The meter was spent to zero, then partially refilled by the clears.
     expect(
       res.value.events
           .whereType<PowerCharged>()
-          .any((e) => e.amount == -powerChargeCost(PowerKind.zoomies)),
+          .any((e) => e.amount == -kPowerMeterMax),
       isTrue,
     );
+    expect(st.chargeOf(PlayerSlot.first), greaterThan(0));
+    expect(st.chargeOf(PlayerSlot.first), lessThanOrEqualTo(kPowerMeterMax));
     // Score equals the sum of point-bearing events.
     expect(
       st.scoreOf(PlayerSlot.first),
@@ -646,7 +672,11 @@ void main() {
         for (var c = 0; c < 7; c += 3) idx(r, c): 0,
     };
     final cells = fixture(overrides: overrides);
-    final s = stateWith(firstCells: cells, charge: [kPowerCost, 0]);
+    final s = stateWith(
+      firstCells: cells,
+      charge: [kPowerMeterMax, 0],
+      firstPower: PowerKind.shadowPounce,
+    );
     expectCleanFixture(cells);
 
     // Expected: every colour-0 piece on the pre-fire board.
@@ -662,19 +692,20 @@ void main() {
     expect(fired.power, PowerKind.shadowPounce);
     expect(fired.cells, posListOf(7, expected));
     expect(fired.points, expected.length * kPointsPerPiece);
+    // Equal strength: shadow pounce also sends boxes to the opponent.
+    expect(st_pendingBoxes(res.value.state), kPowerObstacleCount);
   });
 
-  test('laser chase breaks six pieces and clears own obstacles', () {
-    final boxAt = idx(5, 5);
-    final yarnAt = idx(1, 1);
-    final cells = fixture(overrides: {
-      boxAt: kCellBox,
-      yarnAt: 2 + kYarnOffset,
-    });
-    final s = stateWith(firstCells: cells, charge: [kPowerCost, 0]);
+  test('laser chase breaks eight pieces and sends two boxes', () {
+    final cells = fixture();
+    final s = stateWith(
+      firstCells: cells,
+      charge: [kPowerMeterMax, 0],
+      firstPower: PowerKind.laserChase,
+    );
     expectCleanFixture(cells);
 
-    // Replicate the deterministic pick of six piece cells.
+    // Replicate the deterministic pick of piece cells.
     final rng = GameRandom.fromState(s.rngState[PlayerSlot.first.index]);
     final eligible = <int>[
       for (var i = 0; i < cells.length; i++)
@@ -696,26 +727,15 @@ void main() {
     final fired = res.value.events.whereType<PowerFired>().single;
     expect(fired.power, PowerKind.laserChase);
     expect(fired.cells, posListOf(7, expected));
-
-    // Every own obstacle is cleared: the box and the yarn lock appear in
-    // the union of ObstacleBroken cells.
-    final brokenCells = res.value.events
-        .whereType<ObstacleBroken>()
-        .expand((e) => e.cells)
-        .toSet();
-    expect(brokenCells, contains((row: 5, col: 5)));
-    expect(brokenCells, contains((row: 1, col: 1)));
-
-    final after = res.value.state.boardOf(PlayerSlot.first);
-    expect(after.cellAt(5, 5) == kCellBox, isFalse);
-    expect(isYarnedCode(after.cellAt(1, 1)), isFalse);
+    // Equal strength: laser chase queues boxes for the opponent too.
+    expect(st_pendingBoxes(res.value.state), kPowerObstacleCount);
   });
 
   // -------------------------------------------------------------------------
   // Full scripted match
   // -------------------------------------------------------------------------
 
-  test('a scripted five-round match ends with MatchEnded and consistent scores',
+  test('a scripted timed-turn match ends with MatchEnded and consistent scores',
       () {
     const config = MatchConfig.duel();
     final start = newMatch(7, config);
@@ -725,16 +745,25 @@ void main() {
     final events = <GameEvent>[];
 
     var guard = 0;
-    while (!state.isFinished && guard++ < 400) {
+    while (!state.isFinished && guard++ < 600) {
       final moves = (legalMoves(state) as EngineOk<List<Move>>).value;
       expect(moves, isNotEmpty, reason: 'live match must always offer a move');
-      final powers = [for (final m in moves) if (m is PowerMove) m];
-      // Use a power every fifth move while charged, cycling the three kinds.
+      // End the turn periodically; timed turns only advance via
+      // EndTurnMove. Otherwise prefer a power when the meter is full,
+      // then a productive swap.
       final Move move;
-      if (powers.isNotEmpty && log.length % 5 == 4) {
-        move = powers[(log.length ~/ 5) % powers.length];
+      if (log.length % 8 == 7 && moves.last is EndTurnMove) {
+        move = const EndTurnMove();
       } else {
-        move = moves.firstWhere((m) => m is SwapMove, orElse: () => moves.first);
+        final powers = [for (final m in moves) if (m is PowerMove) m];
+        if (powers.isNotEmpty && log.length % 5 == 4) {
+          move = powers.first;
+        } else {
+          move = moves.firstWhere(
+            (m) => m is SwapMove,
+            orElse: () => moves.first,
+          );
+        }
       }
       final res = applyMove(state, move);
       expect(res, isA<EngineOk<MoveResult>>());
@@ -745,7 +774,9 @@ void main() {
     }
 
     expect(state.isFinished, isTrue, reason: 'match must finish within guard');
-    expect(state.round, 5);
+    expect(state.turn, 2 * config.turnsPerPlayer);
+    expect(state.turnsLeft(PlayerSlot.first), 0);
+    expect(state.turnsLeft(PlayerSlot.second), 0);
     final ended = events.whereType<MatchEnded>().single;
     expect(ended.outcome, state.outcome);
     expect(ended.scores.first, state.scores[0]);
@@ -770,6 +801,10 @@ void main() {
   });
 }
 
+/// Pending box count queued for [PlayerSlot.second].
+int st_pendingBoxes(MatchState s) =>
+    s.pendingObstacles[PlayerSlot.second.index].length;
+
 /// The [Cleared] event of the resolution wave that produced [created]:
 /// the last [Cleared] emitted before it in the event stream.
 Cleared clearedBefore(List<GameEvent> events, SpecialCreated created) {
@@ -777,7 +812,7 @@ Cleared clearedBefore(List<GameEvent> events, SpecialCreated created) {
   for (var i = at - 1; i >= 0; i--) {
     final e = events[i];
     if (e is Cleared) return e;
-    if (e is RoundEnded || e is MatchEnded) break;
+    if (e is TurnEnded || e is MatchEnded) break;
   }
   throw StateError('no Cleared wave before $created');
 }
