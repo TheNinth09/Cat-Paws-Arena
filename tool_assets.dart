@@ -9,6 +9,11 @@ void main(List<String> args) {
     generateLauncherIcons();
     return;
   }
+  if (args.contains('--images-only')) {
+    generateImages();
+    return;
+  }
+  generateImages();
   Directory('assets/generated').createSync(recursive: true);
   final sheets = <String, Map<String, List<int>>>{
     'tiles_obstacles': {
@@ -129,7 +134,6 @@ void generateLauncherIcons() {
       ),
     );
     final canvasSize = (size * 108 / 48).round();
-    final artSize = (canvasSize * 0.66).round();
     final foreground = im.Image(
       width: canvasSize,
       height: canvasSize,
@@ -139,12 +143,10 @@ void generateLauncherIcons() {
       foreground,
       im.copyResize(
         icon,
-        width: artSize,
-        height: artSize,
+        width: canvasSize,
+        height: canvasSize,
         interpolation: im.Interpolation.average,
       ),
-      dstX: (canvasSize - artSize) ~/ 2,
-      dstY: (canvasSize - artSize) ~/ 2,
     );
     File('$folder/ic_launcher_foreground.png')
         .writeAsBytesSync(im.encodePng(foreground));
@@ -169,4 +171,171 @@ void generateLauncherIcons() {
     <color name="ic_launcher_background">#$color</color>
 </resources>
 ''');
+}
+
+/// Final sprites written to `assets/images/` — the paths other lanes
+/// code against. The bool marks cutout sprites that need the white
+/// studio background removed; backgrounds, power icons and the
+/// splash keep their full frame. Sources stay in `assets/` and are
+/// reference-only (never shipped in the runtime bundle).
+const _kImageTargets = <String, bool>{
+  'cat_tzuki': true,
+  'cat_bubble': true,
+  'cat_cushion': true,
+  'tile_star': true,
+  'tile_fish': true,
+  'tile_mouse': true,
+  'tile_paw': true,
+  'tile_yarn': true,
+  'tile_box': true,
+  'milestone_chest': true,
+  'trophy_gold_fish': true,
+  'daily_gift': true,
+  'paws_pack_coins': true,
+  'paws_pack_bag': true,
+  'paws_pack_chest': true,
+  'bg_living_room': false,
+  'bg_hallway': false,
+  'bg_kitchen': false,
+  'bg_bedroom': false,
+  'power_zoomies': false,
+  'power_shadow_pounce': false,
+  'power_laser_chase': false,
+};
+
+void generateImages() {
+  Directory('assets/images').createSync(recursive: true);
+  for (final entry in _kImageTargets.entries) {
+    final source = im.decodeImage(
+      File('assets/${entry.key}.png').readAsBytesSync(),
+    )!;
+    final im.Image out;
+    if (entry.value) {
+      out = im.copyResize(
+        _removeWhiteBackground(source),
+        width: 512,
+        interpolation: im.Interpolation.average,
+      );
+    } else if (entry.key.startsWith('bg_')) {
+      out = im.copyResize(
+        source,
+        width: 1080,
+        interpolation: im.Interpolation.average,
+      );
+    } else {
+      out = im.copyResize(
+        source,
+        width: 512,
+        interpolation: im.Interpolation.average,
+      );
+    }
+    File('assets/images/${entry.key}.png').writeAsBytesSync(im.encodePng(out));
+    stdout.writeln('images/${entry.key}.png ${out.width}x${out.height}');
+  }
+  final splash = im.decodeImage(
+    File('assets/loading_screen.png.jpg').readAsBytesSync(),
+  )!;
+  final splashOut = im.copyResize(
+    splash,
+    width: 1080,
+    interpolation: im.Interpolation.average,
+  );
+  File('assets/images/splash_screen.png')
+      .writeAsBytesSync(im.encodePng(splashOut));
+  stdout.writeln(
+    'images/splash_screen.png ${splashOut.width}x${splashOut.height}',
+  );
+}
+
+/// Removes the near-white studio background by flood-filling from the
+/// image edges only, so white artwork inside the sprite is preserved.
+/// Exterior pixels become fully transparent; the 1px rim on the
+/// artwork side keeps a soft alpha derived from how white each pixel
+/// is, retaining anti-aliased edges.
+im.Image _removeWhiteBackground(im.Image source) {
+  const bgMin = 240; // min(r,g,b) at or above this is background
+  const rimMin = 200; // lighter rim pixels get partial alpha
+  final img = source.convert(numChannels: 4);
+  final w = img.width;
+  final h = img.height;
+  final n = w * h;
+  final px = img.toUint8List();
+  if (px.length < n * 4) {
+    throw StateError('unexpected pixel buffer for ${w}x$h');
+  }
+  final mins = Uint8List(n);
+  for (var i = 0; i < n; i++) {
+    final o = i * 4;
+    final r = px[o];
+    final g = px[o + 1];
+    final b = px[o + 2];
+    mins[i] = r < g ? (r < b ? r : b) : (g < b ? g : b);
+  }
+  final exterior = Uint8List(n);
+  final queue = <int>[];
+  void seed(int i) {
+    if (exterior[i] == 0 && mins[i] >= bgMin) {
+      exterior[i] = 1;
+      queue.add(i);
+    }
+  }
+
+  for (var x = 0; x < w; x++) {
+    seed(x);
+    seed((h - 1) * w + x);
+  }
+  for (var y = 0; y < h; y++) {
+    seed(y * w);
+    seed(y * w + w - 1);
+  }
+  var head = 0;
+  while (head < queue.length) {
+    final i = queue[head++];
+    final x = i % w;
+    final y = i ~/ w;
+    if (x > 0) {
+      seed(i - 1);
+    }
+    if (x < w - 1) {
+      seed(i + 1);
+    }
+    if (y > 0) {
+      seed(i - w);
+    }
+    if (y < h - 1) {
+      seed(i + w);
+    }
+  }
+  // Rim: artwork pixels (not exterior) touching the exterior get soft
+  // alpha so anti-aliased edges blend instead of haloing.
+  final rim = Uint8List(n);
+  for (var i = 0; i < n; i++) {
+    if (exterior[i] == 0) continue;
+    final x = i % w;
+    final y = i ~/ w;
+    for (var dy = -1; dy <= 1; dy++) {
+      final ny = y + dy;
+      if (ny < 0 || ny >= h) continue;
+      for (var dx = -1; dx <= 1; dx++) {
+        if (dx == 0 && dy == 0) continue;
+        final nx = x + dx;
+        if (nx < 0 || nx >= w) continue;
+        final j = ny * w + nx;
+        if (exterior[j] == 0) rim[j] = 1;
+      }
+    }
+  }
+  for (var i = 0; i < n; i++) {
+    final m = mins[i];
+    final int a;
+    if (exterior[i] != 0) {
+      a = 0;
+    } else if (rim[i] != 0 && m >= rimMin && m < bgMin) {
+      a = 255 - m;
+    } else {
+      continue;
+    }
+    px[i * 4 + 3] = a;
+  }
+  return img;
 }
