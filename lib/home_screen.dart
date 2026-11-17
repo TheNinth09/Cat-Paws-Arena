@@ -8,6 +8,7 @@ import 'house_tour_screen.dart';
 import 'lobby_screen.dart';
 import 'match_screen.dart';
 import 'profile.dart';
+import 'profile_screen.dart';
 import 'shell/app_info.dart';
 import 'shell/house_tour.dart';
 import 'shop_screen.dart';
@@ -48,8 +49,15 @@ class _HomeState extends State<Home> {
   void openHouseTour() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => HouseTourScreen(player: p, onBattle: startBattle),
+        builder: (_) => HouseTourScreen(player: p),
       ),
+    );
+  }
+
+  /// Avatar / name tap → the dedicated profile page (was a dialog).
+  void openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => ProfileScreen(player: p)),
     );
   }
 
@@ -149,7 +157,7 @@ class _HomeState extends State<Home> {
                   name: p.name,
                   trophies: p.trophies,
                   coins: p.coins,
-                  onProfile: () => showPlayerProfile(context, p),
+                  onProfile: openProfile,
                   onRoad: openHouseTour,
                   onShop: () => select(0),
                   onMenu: () => scaffold.currentState!.openEndDrawer(),

@@ -10,6 +10,7 @@ import 'package:cat_paws_arena/online/online_account.dart';
 import 'package:cat_paws_arena/online/online_backend.dart';
 import 'package:cat_paws_arena/online/rooms.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:cat_paws_arena/profile_screen.dart';
 import 'package:cat_paws_arena/shop_screen.dart';
 import 'package:cat_paws_arena/shell/app_info.dart';
 import 'package:cat_paws_arena/shell/daily_board.dart';
@@ -231,6 +232,19 @@ void main() {
       find.descendant(of: find.byType(PlayerHud), matching: find.text('Alex')),
     );
     await tester.pumpAndSettle();
+    // The avatar opens the profile page; the name editor lives behind the
+    // EDITEAZĂ NUMELE entry there.
+    expect(find.byType(ProfileScreen), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('EDITEAZĂ NUMELE'),
+      200,
+      scrollable: find.descendant(
+        of: find.byType(ProfileScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(find.text('EDITEAZĂ NUMELE'));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find
           .descendant(
@@ -275,6 +289,7 @@ void main() {
         find.descendant(of: shop, matching: find.text('DAILY DEAL')),
         findsOneWidget,
       );
+      // The daily gift on main is +5 paws every 6 hours.
       await tester.tap(find.text('+5 Lăbuțe'));
       await tester.pumpAndSettle();
       expect(p.coins, 505);
@@ -376,13 +391,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-2')));
     await tester.pumpAndSettle();
-    // New lobby: no bot list, no beige cards — progress strip + battle CTAs.
+    // Airy lobby: one LUPTĂ button, hub chips, no secondary cards/bot list.
     expect(find.text('MODE: 1v1 ARENA'), findsOneWidget);
     expect(find.byKey(const ValueKey('lobby-fight')), findsOneWidget);
-    expect(find.text('ONLINE ROOM'), findsOneWidget);
+    expect(find.text('ONLINE ROOM'), findsNothing);
+    expect(find.text('CAMERĂ ONLINE'), findsNothing);
+    for (final hub in ['hub-friends', 'hub-ranks', 'hub-account']) {
+      expect(find.byKey(ValueKey(hub)), findsOneWidget);
+    }
     expect(find.text('CADOU ZILNIC'), findsNothing);
     expect(find.text('Alege o pisică-bot din casă'), findsNothing);
-    expect(find.text('Nori'), findsNothing);
     expect(find.byKey(const ValueKey('trophy-progress')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('trophy-progress')));
     await tester.pumpAndSettle();
@@ -396,13 +414,23 @@ void main() {
     ]) {
       expect(find.text(name), findsOneWidget);
     }
-    for (final cat in ['Puf', 'Misu', 'Toto', 'Nori', 'Kiko', 'Biscuit']) {
-      expect(find.text(cat), findsOneWidget);
+    // The path carries milestones only — no bot entries anywhere.
+    for (final cat in [
+      'Puf',
+      'Misu',
+      'Toto',
+      'Nori',
+      'Kiko',
+      'Biscuit',
+      'Marmalade',
+    ]) {
+      expect(find.text(cat), findsNothing);
     }
-    expect(find.text('Marmalade'), findsNothing);
+    expect(find.text('MILESTONE'), findsNWidgets(3));
     expect(find.text('LOCKED AT 800 TROPHIES'), findsOneWidget);
     expect(find.text('LOCKED AT 1500 TROPHIES'), findsOneWidget);
     expect(find.text('CURRENT ROOM'), findsOneWidget);
+    expect(find.text('CLEARED'), findsOneWidget);
     expect(houseRoomForTrophies(299).name, 'Living');
     expect(houseRoomForTrophies(300).name, 'Hall');
     expect(tester.takeException(), isNull);
@@ -422,6 +450,14 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('lobby-fight')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('lobby-fight')));
+    await tester.pumpAndSettle();
+    // LUPTĂ opens the mode chooser first: offline house cats or friend room.
+    expect(find.text('ALEGE MODUL'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mode-offline')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mode-online')), findsOneWidget);
+    expect(find.text('CONTRA PISICILOR CASEI'), findsOneWidget);
+    expect(find.text('CAMERĂ DE PRIETEN'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('mode-offline')));
     // VsScreen runs an infinite preparing animation — settle would never
     // finish, so advance fixed frames instead.
     await tester.pump();
@@ -452,6 +488,8 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('lobby-fight')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('lobby-fight')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mode-offline')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.byType(VsScreen), findsOneWidget);
@@ -460,6 +498,95 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.byType(VsScreen), findsNothing);
     expect(find.text('MOD: 1v1 ARENA'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('avatar tap opens the dedicated profile screen', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance())
+      ..trophies = 300
+      ..coins = 1234
+      ..owned = {'acc_pirate_bandana'};
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    // Avatar + name area in the HUD opens the profile page.
+    await tester.tap(find.descendant(
+      of: find.byType(PlayerHud),
+      matching: find.text('Alex'),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(find.text('PROFILUL MEU'), findsOneWidget);
+    expect(find.text('TROFEE'), findsOneWidget);
+    expect(find.text('LĂBUȚE'), findsOneWidget);
+    expect(find.text('COSMETICE'), findsOneWidget);
+    expect(find.text('1234'), findsOneWidget);
+    // Organised sections — every one labelled, placeholders where honest.
+    for (final section in [
+      'REALIZĂRI',
+      'BANDAJE',
+      'EMOTE-URI',
+      'ACCESORII',
+    ]) {
+      expect(find.text(section), findsOneWidget);
+    }
+    // Emote preset chips are real; owned accessory is marked ECHIPAT/DEȚINUT.
+    expect(find.text('SALUT'), findsOneWidget);
+    expect(find.text('NEDEȚINUT'), findsWidgets);
+    // Name edit + account link stay reachable from the profile.
+    await tester.scrollUntilVisible(
+      find.text('EDITEAZĂ NUMELE'),
+      200,
+      scrollable: find.descendant(
+        of: find.byType(ProfileScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.text('EDITEAZĂ NUMELE'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('profile-account')),
+      150,
+      scrollable: find.descendant(
+        of: find.byType(ProfileScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.byKey(const ValueKey('profile-account')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('leaderboard hub shows a real local tab and honest global', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance())
+      ..trophies = 300
+      ..english = false;
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('hub-ranks')));
+    await tester.pumpAndSettle();
+    expect(find.text('CLASAMENT'), findsWidgets);
+    // LOCAL tab: the real house cats + the player's own row.
+    expect(find.textContaining('TU'), findsOneWidget);
+    expect(find.textContaining('BOT'), findsWidgets);
+    expect(find.text('1'), findsWidgets);
+    // GLOBAL tab is honest: coming soon, no fake strangers ranking.
+    await tester.tap(find.byKey(const ValueKey('ranks-global')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('În curând'), findsOneWidget);
+    expect(find.text('Puf'), findsNothing);
+    await closeDialogContaining(tester, 'CLASAMENT');
     expect(tester.takeException(), isNull);
   });
 
@@ -711,7 +838,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-2')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('CAMERĂ ONLINE'));
+    await tester.tap(find.byKey(const ValueKey('hub-friends')));
     await tester.pumpAndSettle();
     expect(find.text('Cameră de prieten'), findsOneWidget);
     expect(find.text('CREEAZĂ CAMERĂ'), findsOneWidget);
@@ -761,8 +888,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-2')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('CAMERĂ ONLINE'));
+    // Online mode in the fight chooser reuses the same friend-room flow.
+    await tester.tap(find.byKey(const ValueKey('lobby-fight')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mode-online')));
+    await tester.pumpAndSettle();
+    expect(find.text('Cameră de prieten'), findsOneWidget);
     await tester.tap(find.text('CREEAZĂ CAMERĂ'));
     await tester.pumpAndSettle();
     expect(cloud.rooms, hasLength(1));
