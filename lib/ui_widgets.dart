@@ -296,6 +296,8 @@ class PlayerHud extends StatelessWidget {
     required this.onRoad,
     required this.onShop,
     required this.onMenu,
+    this.onFriends,
+    this.onAccount,
     this.trophyBadgeKey,
     this.coinBadgeKey,
   });
@@ -303,6 +305,10 @@ class PlayerHud extends StatelessWidget {
   final String name;
   final int trophies, coins;
   final VoidCallback onProfile, onRoad, onShop, onMenu;
+
+  /// Optional hub shortcuts shown as small glossy circles next to the
+  /// hamburger (the match screen leaves them null).
+  final VoidCallback? onFriends, onAccount;
 
   /// Optional keys so a victory-flight overlay can find the badge centers.
   final Key? trophyBadgeKey, coinBadgeKey;
@@ -312,91 +318,165 @@ class PlayerHud extends StatelessWidget {
     String value,
     VoidCallback tap, {
     bool plus = false,
-  }) => Container(
-    height: 38,
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xcc8a5c3e), Color(0xcc6e432e)],
-      ),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: const Color(0x66ffe9bd), width: 1.6),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x33000000),
-          offset: Offset(0, 2),
-          blurRadius: 6,
+  }) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Container(
+        height: 36,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xcc8a5c3e), Color(0xcc6e432e)],
+          ),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0x66ffe9bd), width: 1.6),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              offset: Offset(0, 2),
+              blurRadius: 6,
+            ),
+          ],
         ),
-      ],
-    ),
-    foregroundDecoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(999),
-      gradient: const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0x40ffffff), Color(0x00ffffff)],
-        stops: [0, 0.45],
-      ),
-    ),
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: tap,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-          child: Row(
-            children: [
-              sprite(asset, size: 24),
-              const SizedBox(width: 5),
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: Text(
-                    value,
-                    style: const TextStyle(
-                      color: cream,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      shadows: [
-                        Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (plus) ...[
-                const SizedBox(width: 5),
-                Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xff93d94f), Color(0xff4e9c22)],
-                    ),
-                    border: Border.all(color: Colors.white, width: 1.5),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x44000000),
-                        offset: Offset(0, 1),
-                        blurRadius: 2,
+        foregroundDecoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x40ffffff), Color(0x00ffffff)],
+            stops: [0, 0.45],
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: tap,
+            borderRadius: BorderRadius.circular(999),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+              child: Row(
+                children: [
+                  sprite(asset, size: 20),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.center,
+                      child: Text(
+                        value,
+                        style: const TextStyle(
+                          color: cream,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                          shadows: [
+                            Shadow(
+                              color: Color(0x66000000),
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                  child: const Icon(Icons.add, size: 15, color: Colors.white),
-                ),
-              ],
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
-    ),
+      // "+" badge sits on the pill's corner so it never eats label width.
+      if (plus)
+        Positioned(
+          top: -4,
+          right: -4,
+          child: IgnorePointer(
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xff93d94f), Color(0xff4e9c22)],
+                ),
+                border: Border.all(color: Colors.white, width: 1.2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x44000000),
+                    offset: Offset(0, 1),
+                    blurRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.add, size: 12, color: Colors.white),
+            ),
+          ),
+        ),
+    ],
   );
+
+  /// Small glossy circle button used for the top-right hub shortcuts
+  /// (friends, account) — same warm-glass language as the pills.
+  Widget _hubCircle(
+    String asset,
+    IconData fallback,
+    VoidCallback tap, {
+    String? tooltip,
+    Key? key_,
+  }) {
+    final circle = Container(
+      width: 34,
+      height: 34,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xcc8a5c3e), Color(0xcc6e432e)],
+        ),
+        border: Border.fromBorderSide(
+          BorderSide(color: Color(0x66ffe9bd), width: 1.6),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x33000000),
+            offset: Offset(0, 2),
+            blurRadius: 5,
+          ),
+        ],
+      ),
+      foregroundDecoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x40ffffff), Color(0x00ffffff)],
+          stops: [0, 0.45],
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: tap,
+          customBorder: const CircleBorder(),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: arenaImage(
+              asset,
+              fit: BoxFit.contain,
+              fallback: Icon(fallback, color: gold, size: 19),
+            ),
+          ),
+        ),
+      ),
+    );
+    final wrapped = tooltip == null
+        ? circle
+        : Tooltip(message: tooltip, child: circle);
+    return KeyedSubtree(key: key_, child: wrapped);
+  }
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -430,8 +510,8 @@ class PlayerHud extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 54,
-                      height: 54,
+                      width: 48,
+                      height: 48,
                       padding: const EdgeInsets.all(3),
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
@@ -459,7 +539,7 @@ class PlayerHud extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     SizedBox(
-                      width: 56,
+                      width: 50,
                       child: Text(
                         name,
                         maxLines: 1,
@@ -468,7 +548,7 @@ class PlayerHud extends StatelessWidget {
                         style: const TextStyle(
                           color: cream,
                           fontWeight: FontWeight.w800,
-                          fontSize: 11.5,
+                          fontSize: 10.5,
                           shadows: [
                             Shadow(
                               color: Color(0x66000000),
@@ -483,7 +563,7 @@ class PlayerHud extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 5),
           Expanded(
             child: Row(
               children: [
@@ -493,7 +573,7 @@ class PlayerHud extends StatelessWidget {
                     child: pill('icon_trophy', '$trophies', onRoad),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Expanded(
                   child: KeyedSubtree(
                     key: coinBadgeKey,
@@ -503,12 +583,30 @@ class PlayerHud extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
+          if (onFriends != null)
+            _hubCircle(
+              'icon_friends',
+              Icons.people_alt_rounded,
+              onFriends!,
+              tooltip: 'Prieteni',
+              key_: const ValueKey('hub-friends'),
+            ),
+          if (onFriends != null) const SizedBox(width: 4),
+          if (onAccount != null)
+            _hubCircle(
+              'icon_cloud_account',
+              Icons.account_circle_rounded,
+              onAccount!,
+              tooltip: 'Cont',
+              key_: const ValueKey('hub-account'),
+            ),
+          if (onAccount != null) const SizedBox(width: 4),
           Tooltip(
             message: 'Meniu',
             child: Container(
-              width: 46,
-              height: 46,
+              width: 42,
+              height: 42,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -541,7 +639,7 @@ class PlayerHud extends StatelessWidget {
                   child: const Icon(
                     Icons.menu_rounded,
                     color: Colors.white,
-                    size: 26,
+                    size: 24,
                   ),
                 ),
               ),

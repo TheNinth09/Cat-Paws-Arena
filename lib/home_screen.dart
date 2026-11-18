@@ -12,6 +12,7 @@ import 'match_screen.dart';
 import 'profile.dart';
 import 'profile_screen.dart';
 import 'shell/app_info.dart';
+import 'shell/friend_room.dart';
 import 'shell/house_tour.dart';
 import 'shop_screen.dart';
 import 'team_screen.dart';
@@ -109,22 +110,150 @@ class _HomeState extends State<Home> {
     return box.localToGlobal(Offset.zero) + box.size.center(Offset.zero);
   }
 
-  void menu(String item) {
+  /// Hamburger menu entries — the hub shortcuts plus settings, styled like
+  /// the reference dropdown menus. Every entry opens a real surface.
+  static const _menuItems = [
+    (
+      id: 'daily',
+      ro: 'Recompensa zilnică',
+      en: 'Daily reward',
+      asset: 'paws_daily_5',
+    ),
+    (id: 'friends', ro: 'Prieteni', en: 'Friends', asset: 'icon_friends'),
+    (
+      id: 'ranks',
+      ro: 'Clasament',
+      en: 'Leaderboard',
+      asset: 'icon_leaderboard',
+    ),
+    (id: 'news', ro: 'Noutăți', en: 'News', asset: 'icon_events'),
+    (id: 'support', ro: 'Suport', en: 'Support', asset: null),
+    (id: 'account', ro: 'Cont', en: 'Account', asset: 'icon_cloud_account'),
+    (id: 'settings', ro: 'Setări', en: 'Settings', asset: null),
+  ];
+
+  void menuAction(String id) {
     Navigator.pop(context);
-    switch (item) {
-      case 'Setări':
-        showSettings(context, p);
-      case 'Noutăți':
+    switch (id) {
+      case 'daily':
+        select(0);
+      case 'friends':
+        showFriendRoom(context, english: p.english, player: p);
+      case 'ranks':
+        showLeaderboard(context, english: p.english, player: p);
+      case 'news':
         showAppDialog(
           context,
-          item,
+          p.english ? 'News' : 'Noutăți',
           Text(
             'Versiunea $appVersion • Cinci tab-uri, un singur mod de joc și identitate One Ear Games.',
           ),
         );
-      default:
-        unavailable(item);
+      case 'support':
+        unavailable(p.english ? 'Support' : 'Suport');
+      case 'account':
+        showAccount(context, p);
+      case 'settings':
+        showSettings(context, p);
     }
+  }
+
+  /// One glossy row inside the floating menu panel: icon tile, label,
+  /// chevron — plus a real red badge for the claimable daily reward.
+  Widget _menuTile(
+    String id,
+    String label,
+    String? asset, {
+    bool badge = false,
+  }) {
+    const fallbacks = {
+      'daily': Icons.card_giftcard_rounded,
+      'friends': Icons.people_alt_rounded,
+      'ranks': Icons.leaderboard_rounded,
+      'news': Icons.newspaper_rounded,
+      'support': Icons.support_agent_rounded,
+      'account': Icons.account_circle_rounded,
+      'settings': Icons.settings_rounded,
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => menuAction(id),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xdd8a5c3e), Color(0xdd5d3a2c)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0x55ffe9bd), width: 1.2),
+            ),
+            child: Row(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0x553c241a),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: asset != null
+                          ? arenaImage(
+                              asset,
+                              fit: BoxFit.contain,
+                              fallback: Icon(
+                                fallbacks[id],
+                                color: gold,
+                                size: 19,
+                              ),
+                            )
+                          : Icon(fallbacks[id], color: gold, size: 20),
+                    ),
+                    if (badge)
+                      Positioned(
+                        right: -3,
+                        top: -3,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: const Color(0xffe2433a),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: cream, width: 1.4),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: cream,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: gold, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -132,49 +261,101 @@ class _HomeState extends State<Home> {
     animation: p,
     builder: (context, _) => Scaffold(
       key: scaffold,
+      // Floating dropdown panel under the hamburger — the reference menus
+      // are compact rounded cards, not a full-height drawer.
       endDrawer: Drawer(
-        backgroundColor: cream,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         child: SafeArea(
-          child: ListView(
-            children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Color(0x3320130e), width: 1),
+          child: Align(
+            alignment: Alignment.topRight,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(30, 8, 8, 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xfff8e7bd), Color(0xfff0d49b)],
                   ),
-                ),
-                child: const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.pets, size: 42, color: ink),
-                    SizedBox(height: 8),
-                    Text(
-                      studioName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 22,
-                      ),
-                    ),
-                    Text(
-                      appName,
-                      style: TextStyle(
-                        color: Color(0xff8a5a3b),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: gold, width: 2),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x6620130e),
+                      offset: Offset(0, 6),
+                      blurRadius: 14,
                     ),
                   ],
                 ),
-              ),
-              for (final item in ['Setări', 'Suport', 'Noutăți'])
-                ListTile(
-                  title: Text(item),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => menu(item),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Color(0xff8a5c3e), Color(0xff5d3a2c)],
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.pets,
+                              size: 20,
+                              color: gold,
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          const Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  studioName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 15,
+                                    color: ink,
+                                  ),
+                                ),
+                                Text(
+                                  appName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Color(0xff8a5a3b),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    for (final item in _menuItems)
+                      _menuTile(
+                        item.id,
+                        p.english ? item.en : item.ro,
+                        item.asset,
+                        badge: item.id == 'daily' && p.dailyReady,
+                      ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
         ),
       ),
@@ -195,6 +376,9 @@ class _HomeState extends State<Home> {
                   onRoad: openHouseTour,
                   onShop: () => select(0),
                   onMenu: () => scaffold.currentState!.openEndDrawer(),
+                  onFriends: () =>
+                      showFriendRoom(context, english: p.english, player: p),
+                  onAccount: () => showAccount(context, p),
                 ),
                 Expanded(
                   child: RoomBackground(
@@ -214,6 +398,7 @@ class _HomeState extends State<Home> {
                           player: p,
                           onBattle: startBattle,
                           onRoad: openHouseTour,
+                          onShop: () => select(0),
                         ),
                         TeamScreen(player: p, onUnavailable: unavailable),
                         EventsScreen(player: p, onUnavailable: unavailable),

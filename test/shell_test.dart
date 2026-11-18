@@ -151,9 +151,7 @@ void main() {
     }
   }
 
-  testWidgets('menu keeps only settings, support and whats new', (
-    tester,
-  ) async {
+  testWidgets('menu shows the full hub entry list', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final p = Player(await SharedPreferences.getInstance())..english = true;
     await tester.pumpWidget(MaterialApp(home: Home(player: p)));
@@ -161,17 +159,18 @@ void main() {
     await tester.tap(find.byTooltip('Meniu'));
     await tester.pumpAndSettle();
     expect(find.text(studioName), findsOneWidget);
-    expect(find.text('Setări'), findsOneWidget);
-    expect(find.text('Suport'), findsOneWidget);
-    expect(find.text('Noutăți'), findsOneWidget);
-    for (final removed in [
-      'Google Play / Facebook Cloud Sync',
-      'Prieteni',
-      'Clasamente',
+    for (final item in [
+      'Daily reward',
+      'Friends',
+      'Leaderboard',
+      'News',
+      'Support',
+      'Account',
+      'Settings',
     ]) {
-      expect(find.text(removed), findsNothing);
+      expect(find.text(item), findsOneWidget);
     }
-    await tester.tap(find.text('Noutăți'));
+    await tester.tap(find.text('News'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Versiunea $appVersion'), findsOneWidget);
     await tester.tap(find.text('ÎNCHIDE'));
@@ -407,7 +406,12 @@ void main() {
     expect(find.byKey(const ValueKey('lobby-fight')), findsOneWidget);
     expect(find.text('ONLINE ROOM'), findsNothing);
     expect(find.text('CAMERĂ ONLINE'), findsNothing);
-    for (final hub in ['hub-friends', 'hub-ranks', 'hub-account']) {
+    for (final hub in [
+      'hub-friends',
+      'hub-ranks',
+      'hub-account',
+      'hub-quests',
+    ]) {
       expect(find.byKey(ValueKey(hub)), findsOneWidget);
     }
     expect(find.text('CADOU ZILNIC'), findsNothing);
@@ -538,10 +542,9 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Home(player: p)));
     await tester.pumpAndSettle();
     // Avatar + name area in the HUD opens the profile page.
-    await tester.tap(find.descendant(
-      of: find.byType(PlayerHud),
-      matching: find.text('Alex'),
-    ));
+    await tester.tap(
+      find.descendant(of: find.byType(PlayerHud), matching: find.text('Alex')),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(ProfileScreen), findsOneWidget);
     expect(find.text('PROFILUL MEU'), findsOneWidget);
@@ -685,9 +688,7 @@ void main() {
     }
     expect(pickBattleCat(p, 7), pickBattleCat(p, 7));
     p.trophies = 350;
-    final names = {
-      for (var i = 0; i < 40; i++) pickBattleCat(p, i)!.name,
-    };
+    final names = {for (var i = 0; i < 40; i++) pickBattleCat(p, i)!.name};
     expect(names, containsAll(['Puf', 'Nori', 'Kiko']));
     expect(names, isNot(contains('Marmalade')));
   });

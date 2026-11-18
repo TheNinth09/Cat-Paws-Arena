@@ -204,6 +204,38 @@ class _ProfileEditorState extends State<_ProfileEditor> {
   );
 }
 
+/// The honest offline tile shared by the settings and account dialogs when
+/// no online backend is configured.
+Widget _offlineOnline() => const ListTile(
+  contentPadding: EdgeInsets.zero,
+  leading: Icon(Icons.cloud_off, color: Color(0xffa97153), size: 26),
+  title: Text(
+    'Joc online',
+    style: TextStyle(color: ink, fontWeight: FontWeight.w800, fontSize: 15),
+  ),
+  subtitle: Text(
+    'Indisponibil',
+    style: TextStyle(
+      color: Color(0xff8a6a52),
+      fontWeight: FontWeight.w700,
+      fontSize: 12,
+    ),
+  ),
+);
+
+/// Dedicated account dialog — opened from the top-bar CONT circle and the
+/// CONT entry in the hamburger menu. Same online section as settings.
+Future<void> showAccount(BuildContext context, Player p) => showAppDialog(
+  context,
+  p.english ? 'ACCOUNT' : 'CONT',
+  AnimatedBuilder(
+    animation: p,
+    builder: (context, _) => OnlinePlay.services != null
+        ? _OnlineSettings(player: p, services: OnlinePlay.services!)
+        : _offlineOnline(),
+  ),
+);
+
 Future<void> showSettings(BuildContext context, Player p) => showAppDialog(
   context,
   'Setări',
@@ -212,109 +244,61 @@ Future<void> showSettings(BuildContext context, Player p) => showAppDialog(
     builder: (context, _) => Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _SettingTile(
-                image: 'icon_sfx',
-                fallbackIcon: Icons.volume_up,
-                title: 'Efecte sonore',
-                value: p.sfx,
-                onChanged: (v) {
-                  p.sfx = v;
-                  p.save();
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _SettingTile(
-                image: 'icon_music',
-                fallbackIcon: Icons.music_note,
-                title: 'Muzică',
-                value: p.music,
-                onChanged: (v) {
-                  p.music = v;
-                  p.save();
-                },
-              ),
-            ),
-          ],
+        _SettingRow(
+          image: 'icon_music',
+          fallbackIcon: Icons.music_note,
+          title: 'Muzică',
+          value: p.music,
+          onChanged: (v) {
+            p.music = v;
+            p.save();
+          },
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _SettingTile(
-                image: 'icon_haptics',
-                fallbackIcon: Icons.vibration,
-                title: 'Vibrații',
-                value: p.haptics,
-                onChanged: (v) {
-                  p.haptics = v;
-                  p.save();
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _SettingTile(
-                image: 'icon_language',
-                fallbackIcon: Icons.translate,
-                title: 'English',
-                value: p.english,
-                onChanged: (v) {
-                  p.english = v;
-                  p.save();
-                },
-              ),
-            ),
-          ],
+        _SettingRow(
+          image: 'icon_sfx',
+          fallbackIcon: Icons.volume_up,
+          title: 'Efecte sonore',
+          value: p.sfx,
+          onChanged: (v) {
+            p.sfx = v;
+            p.save();
+          },
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          secondary: const Icon(
-            Icons.notifications,
-            color: Color(0xffa97153),
-            size: 26,
-          ),
-          title: const Text(
-            'Notificări',
-            style: TextStyle(
-              color: ink,
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-            ),
-          ),
+        _SettingRow(
+          image: 'icon_haptics',
+          fallbackIcon: Icons.vibration,
+          title: 'Vibrații',
+          value: p.haptics,
+          onChanged: (v) {
+            p.haptics = v;
+            p.save();
+          },
+        ),
+        _SettingRow(
+          image: null,
+          fallbackIcon: Icons.notifications_none_rounded,
+          title: 'Notificări',
           value: p.notifications,
           onChanged: (v) {
             p.notifications = v;
             p.save();
           },
         ),
+        _SettingRow(
+          image: 'icon_language',
+          fallbackIcon: Icons.translate,
+          title: 'English',
+          value: p.english,
+          onChanged: (v) {
+            p.english = v;
+            p.save();
+          },
+        ),
+        const SizedBox(height: 4),
         if (OnlinePlay.services != null)
           _OnlineSettings(player: p, services: OnlinePlay.services!)
         else
-          const ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.cloud_off, color: Color(0xffa97153), size: 26),
-            title: Text(
-              'Joc online',
-              style: TextStyle(
-                color: ink,
-                fontWeight: FontWeight.w800,
-                fontSize: 15,
-              ),
-            ),
-            subtitle: Text(
-              'Indisponibil',
-              style: TextStyle(
-                color: Color(0xff8a6a52),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-          ),
+          _offlineOnline(),
         const SizedBox(height: 6),
         const Text(
           'Preferințele sunt salvate local. Muzica și livrarea notificărilor necesită conținut și servicii suplimentare.',
@@ -761,90 +745,138 @@ Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
   ),
 );
 
-/// Tap-to-toggle tile used by the settings 2x2 grid: bundled icon, label and
-/// a compact switch-styled state pill.
-class _SettingTile extends StatelessWidget {
-  const _SettingTile({
+/// Settings row styled like the reference panels: a warm icon tile, the
+/// label, then a glossy toggle pill on the right (green = on).
+class _SettingRow extends StatelessWidget {
+  const _SettingRow({
     required this.image,
     required this.fallbackIcon,
     required this.title,
     required this.value,
     required this.onChanged,
   });
-  final String image, title;
+  final String? image;
   final IconData fallbackIcon;
+  final String title;
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: ink,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-      const SizedBox(height: 5),
-      Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () => onChanged(!value),
-          child: Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: value
-                    ? const [Color(0xff93d94f), Color(0xff4e9c22)]
-                    : const [Color(0xffe8d6b4), Color(0xffc3a87e)],
-              ),
-              border: Border.all(
-                color: value ? Colors.white : const Color(0xffd9b98a),
-                width: 2.5,
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x33000000),
-                  offset: Offset(0, 3),
-                  blurRadius: 5,
-                ),
-              ],
-            ),
-            foregroundDecoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x66ffffff), Color(0x00ffffff)],
-                stops: [0, 0.45],
-              ),
-            ),
-            child: Center(
-              child: arenaImage(
-                image,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => onChanged(!value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xfffff9e8),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xffe0c294), width: 1.2),
+          ),
+          child: Row(
+            children: [
+              Container(
                 width: 34,
                 height: 34,
-                fallback: Icon(
-                  fallbackIcon,
-                  color: value ? Colors.white : const Color(0xffa97153),
-                  size: 30,
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xff8a6242), Color(0xff6b4634)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: gold, width: 1.2),
+                ),
+                child: image == null
+                    ? Icon(fallbackIcon, color: gold, size: 19)
+                    : arenaImage(
+                        image!,
+                        fit: BoxFit.contain,
+                        fallback: Icon(fallbackIcon, color: gold, size: 19),
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
-            ),
+              _GlossySwitch(value: value, onChanged: onChanged),
+            ],
           ),
         ),
       ),
-    ],
+    ),
+  );
+}
+
+/// Glossy pill toggle: green gradient + white knob when on, beige + knob to
+/// the left when off.
+class _GlossySwitch extends StatelessWidget {
+  const _GlossySwitch({required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () => onChanged(!value),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 54,
+      height: 30,
+      padding: const EdgeInsets.all(3),
+      alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: value
+              ? const [Color(0xff9ede55), Color(0xff4e9c22)]
+              : const [Color(0xfff0e2c6), Color(0xffc3a87e)],
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: value ? const Color(0xff3f7d1c) : const Color(0xffa98d64),
+          width: 1.6,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x2a000000),
+            offset: Offset(0, 2),
+            blurRadius: 3,
+          ),
+        ],
+      ),
+      child: Container(
+        width: 22,
+        height: 22,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.white, Color(0xffe8e2d4)],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x33000000),
+              offset: Offset(0, 1),
+              blurRadius: 2,
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 }

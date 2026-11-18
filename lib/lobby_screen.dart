@@ -44,10 +44,14 @@ class LobbyScreen extends StatelessWidget {
     required this.player,
     required this.onBattle,
     required this.onRoad,
+    required this.onShop,
   });
   final Player player;
   final void Function(HouseCat? cat) onBattle;
   final VoidCallback onRoad;
+
+  /// SARCINI → daily reward row jumps to the shop tab.
+  final VoidCallback onShop;
 
   String get _bgAsset =>
       _roomBackgrounds[player.tier.clamp(0, _roomBackgrounds.length - 1)];
@@ -138,13 +142,6 @@ class LobbyScreen extends StatelessWidget {
               ),
             ),
             content,
-            // Side rail with the hub shortcuts, floating over the room art
-            // like the reference home screens.
-            Positioned(
-              right: 8,
-              top: compact ? 74 : 78,
-              child: _sideRail(context),
-            ),
           ],
         );
       },
@@ -373,117 +370,322 @@ class LobbyScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _PlayButton(
-          text: english ? 'PLAY' : 'LUPTĂ',
-          onTap: () => _modeChooser(context),
+        // Royal-Kingdom-style row: round hub buttons flanking the big PLAY.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _RoundHubButton(
+              label: english ? 'LEADERBOARD' : 'CLASAMENT',
+              iconAsset: 'icon_leaderboard',
+              fallback: Icons.leaderboard_rounded,
+              onTap: () =>
+                  showLeaderboard(context, english: english, player: player),
+              key_: const ValueKey('hub-ranks'),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _PlayButton(
+                text: english ? 'PLAY' : 'LUPTĂ',
+                onTap: () => _modeChooser(context),
+              ),
+            ),
+            const SizedBox(width: 10),
+            _RoundHubButton(
+              label: english ? 'TASKS' : 'SARCINI',
+              iconAsset: 'icon_achievements',
+              fallback: Icons.flag_rounded,
+              onTap: () => _quests(context),
+              key_: const ValueKey('hub-quests'),
+            ),
+          ],
         ),
       ],
     ),
   );
 
-  /// Vertical hub rail on the right edge — square glossy buttons with the
-  /// lane-1 icon art and a tiny label, like the reference home screens.
-  Widget _sideRail(BuildContext context) {
-    Widget tile(
-      String label,
-      String iconAsset,
-      IconData fallback,
-      VoidCallback tap, {
-      String? key_,
-    }) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: key_ == null ? null : ValueKey(key_),
-            onTap: tap,
-            borderRadius: BorderRadius.circular(14),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xdd5a3b46), Color(0xdd3a232c)],
+  /// SARCINI — the real objectives list: the daily reward (jumps to the
+  /// shop), the next house-tour milestone (jumps to the tour map) and the
+  /// honest milestone-chest counter. No invented task system.
+  void _quests(BuildContext context) {
+    final current = houseRoomForTrophies(player.trophies);
+    final index = houseRooms.indexOf(current);
+    final next = index + 1 < houseRooms.length ? houseRooms[index + 1] : null;
+    final chests = houseRooms
+        .where((room) => player.claims.contains(room.threshold))
+        .length;
+    showAppDialog(
+      context,
+      english ? 'TASKS' : 'SARCINI',
+      Builder(
+        builder: (dialogContext) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _QuestRow(
+              iconAsset: 'paws_daily_5',
+              fallback: Icons.card_giftcard_rounded,
+              title: english ? 'DAILY REWARD' : 'RECOMPENSA ZILNICĂ',
+              subtitle: player.dailyReady
+                  ? (english ? 'Ready to claim' : 'Disponibilă acum')
+                  : (english ? 'Come back later' : 'Revino mai târziu'),
+              action: english ? 'OPEN' : 'DESCHIDE',
+              onTap: () {
+                Navigator.pop(dialogContext);
+                onShop();
+              },
+            ),
+            _QuestRow(
+              iconAsset: 'milestone_chest',
+              fallback: Icons.flag_rounded,
+              title: english ? 'NEXT MILESTONE' : 'URMĂTORUL PRAG',
+              subtitle: next == null
+                  ? (english
+                        ? 'All rooms unlocked'
+                        : 'Toate camerele deblocate')
+                  : english
+                  ? '${houseRoomDisplayNamesEn[index + 1]} at ${next.threshold} trophies'
+                  : '${houseRoomDisplayNames[index + 1]} la ${next.threshold} trofee',
+              action: english ? 'VIEW' : 'VEZI',
+              onTap: () {
+                Navigator.pop(dialogContext);
+                onRoad();
+              },
+            ),
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xfffff9e8),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xffe0c294), width: 1.2),
+              ),
+              child: Row(
+                children: [
+                  arenaImage(
+                    'icon_chest',
+                    width: 30,
+                    height: 30,
+                    fallback: const Icon(
+                      Icons.inventory_2_rounded,
+                      color: Color(0xff8a6242),
+                      size: 24,
                     ),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: gold, width: 1.6),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x66000000),
-                        offset: Offset(0, 3),
-                        blurRadius: 5,
-                      ),
-                    ],
                   ),
-                  child: arenaImage(
-                    iconAsset,
-                    fit: BoxFit.contain,
-                    fallback: Icon(fallback, color: gold, size: 24),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                SizedBox(
-                  width: 58,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
+                  const SizedBox(width: 10),
+                  Expanded(
                     child: Text(
-                      label,
+                      english
+                          ? 'MILESTONE CHESTS: $chests/${houseRooms.length}'
+                          : 'CUFERE DE PRAG: $chests/${houseRooms.length}',
                       style: const TextStyle(
-                        color: cream,
-                        fontSize: 9,
+                        color: ink,
+                        fontSize: 13,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: .4,
-                        shadows: [
-                          Shadow(
-                            color: Color(0xcc20130e),
-                            offset: Offset(0, 1),
-                          ),
-                        ],
                       ),
                     ),
                   ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Round glossy hub button flanking the LUPTĂ button — circle with bundled
+/// art plus a tiny label underneath, like the reference home screens.
+class _RoundHubButton extends StatelessWidget {
+  const _RoundHubButton({
+    required this.label,
+    required this.iconAsset,
+    required this.fallback,
+    required this.onTap,
+    required this.key_,
+  });
+  final String label, iconAsset;
+  final IconData fallback;
+  final VoidCallback onTap;
+  final Key key_;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: key_,
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 54,
+            height: 54,
+            padding: const EdgeInsets.all(9),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xdd8a5c3e), Color(0xdd5d3a2c)],
+              ),
+              border: Border.fromBorderSide(BorderSide(color: gold, width: 2)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x66000000),
+                  offset: Offset(0, 3),
+                  blurRadius: 6,
                 ),
               ],
             ),
+            foregroundDecoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x45ffffff), Color(0x00ffffff)],
+                stops: [0, 0.45],
+              ),
+            ),
+            child: arenaImage(
+              iconAsset,
+              fit: BoxFit.contain,
+              fallback: Icon(fallback, color: gold, size: 26),
+            ),
           ),
         ),
-      );
-    }
+      ),
+      const SizedBox(height: 2),
+      SizedBox(
+        width: 66,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: cream,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .4,
+              shadows: [Shadow(color: Color(0xcc20130e), offset: Offset(0, 1))],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        tile(
-          english ? 'FRIENDS' : 'PRIETENI',
-          'icon_friends',
-          Icons.people_alt_rounded,
-          () => showFriendRoom(context, english: english, player: player),
-          key_: 'hub-friends',
+/// One row in the SARCINI dialog: icon tile, title + honest status, and a
+/// small green action pill that navigates to the real surface.
+class _QuestRow extends StatelessWidget {
+  const _QuestRow({
+    required this.iconAsset,
+    required this.fallback,
+    required this.title,
+    required this.subtitle,
+    required this.action,
+    required this.onTap,
+  });
+  final String iconAsset, title, subtitle, action;
+  final IconData fallback;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xfffff9e8),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xffe0c294), width: 1.2),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xff8a6242), Color(0xff6b4634)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: gold, width: 1.2),
+                ),
+                child: arenaImage(
+                  iconAsset,
+                  fit: BoxFit.contain,
+                  fallback: Icon(fallback, color: gold, size: 22),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: ink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xff8a6242),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xff93d94f), Color(0xff4e9c22)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white, width: 1.4),
+                ),
+                child: Text(
+                  action,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        tile(
-          english ? 'LEADERBOARD' : 'CLASAMENT',
-          'icon_leaderboard',
-          Icons.leaderboard_rounded,
-          () => showLeaderboard(context, english: english, player: player),
-          key_: 'hub-ranks',
-        ),
-        tile(
-          english ? 'LINK ACCOUNT' : 'CONT',
-          'icon_cloud_account',
-          Icons.account_circle_rounded,
-          () => showSettings(context, player),
-          key_: 'hub-account',
-        ),
-      ],
-    );
-  }
+      ),
+    ),
+  );
 }
 
 /// Hero PLAY/LUPTĂ button — big, glossy, gold with the paw sprite, styled
