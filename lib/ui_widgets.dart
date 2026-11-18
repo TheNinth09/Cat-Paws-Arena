@@ -313,15 +313,15 @@ class PlayerHud extends StatelessWidget {
     VoidCallback tap, {
     bool plus = false,
   }) => Container(
-    height: 40,
+    height: 38,
     decoration: BoxDecoration(
       gradient: const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xfffff8e0), Color(0xfff6e0a8), Color(0xffeac87e)],
+        colors: [Color(0xcc8a5c3e), Color(0xcc6e432e)],
       ),
       borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: const Color(0xffc98d3a), width: 2),
+      border: Border.all(color: const Color(0x66ffe9bd), width: 1.6),
       boxShadow: const [
         BoxShadow(
           color: Color(0x33000000),
@@ -335,7 +335,7 @@ class PlayerHud extends StatelessWidget {
       gradient: const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0x80ffffff), Color(0x00ffffff)],
+        colors: [Color(0x40ffffff), Color(0x00ffffff)],
         stops: [0, 0.45],
       ),
     ),
@@ -348,7 +348,7 @@ class PlayerHud extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
           child: Row(
             children: [
-              sprite(asset, size: 26),
+              sprite(asset, size: 24),
               const SizedBox(width: 5),
               Expanded(
                 child: FittedBox(
@@ -357,9 +357,12 @@ class PlayerHud extends StatelessWidget {
                   child: Text(
                     value,
                     style: const TextStyle(
-                      color: ink,
+                      color: cream,
                       fontWeight: FontWeight.w900,
                       fontSize: 16,
+                      shadows: [
+                        Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
+                      ],
                     ),
                   ),
                 ),
@@ -440,16 +443,11 @@ class PlayerHud extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Color(0xfffff6bd),
-                            Color(0xffe8a01f),
-                            Color(0xffb97a10),
+                            Color(0xff9a6b4a),
+                            Color(0xff5c3a26),
                           ],
                         ),
                         boxShadow: [
-                          BoxShadow(
-                            color: Color(0x55ffc63c),
-                            blurRadius: 10,
-                          ),
                           BoxShadow(
                             color: Color(0x44000000),
                             offset: Offset(0, 2),
@@ -523,17 +521,9 @@ class PlayerHud extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xfffff6bd),
-                    Color(0xffe8a01f),
-                    Color(0xffb97a10),
-                  ],
+                  colors: [Color(0xff5f96d4), Color(0xff2e5c96)],
                 ),
                 boxShadow: [
-                  BoxShadow(
-                    color: Color(0x55ffc63c),
-                    blurRadius: 10,
-                  ),
                   BoxShadow(
                     color: Color(0x44000000),
                     offset: Offset(0, 2),
@@ -541,15 +531,24 @@ class PlayerHud extends StatelessWidget {
                   ),
                 ],
               ),
+              foregroundDecoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x59ffffff), Color(0x00ffffff)],
+                  stops: [0, 0.45],
+                ),
+              ),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: onMenu,
                   customBorder: const CircleBorder(),
                   child: const Icon(
-                    Icons.settings_rounded,
-                    color: Color(0xff6b3a12),
-                    size: 27,
+                    Icons.menu_rounded,
+                    color: Colors.white,
+                    size: 26,
                   ),
                 ),
               ),
@@ -641,6 +640,19 @@ class ArenaBottomBar extends StatelessWidget {
                                     ),
                                   ),
                               ],
+                            )
+                          : i == 3 || i == 4
+                          ? arenaImage(
+                              i == 3 ? 'icon_team' : 'icon_events',
+                              width: 26,
+                              height: 26,
+                              fallback: Icon(
+                                icons[i],
+                                size: 25,
+                                color: selected == i
+                                    ? gold
+                                    : const Color(0xffd8b48f),
+                              ),
                             )
                           : Icon(
                               icons[i],

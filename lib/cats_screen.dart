@@ -1121,11 +1121,22 @@ class _CatPickCard extends StatelessWidget {
   }
 
   Widget _face() {
-    if (cat == 'Custom') return CatAvatar(player, size: 72);
-    return CatSpecAvatar(
-      catSpecFor(cat, player),
-      size: 72,
-      showAccessory: false,
+    final art = cat == 'Custom'
+        ? 'cat_custom'
+        : cat == 'Tzuki'
+        ? 'cat_tzuki'
+        : 'cat_bubble';
+    return arenaImage(
+      art,
+      width: 72,
+      height: 72,
+      fallback: cat == 'Custom'
+          ? CatAvatar(player, size: 72)
+          : CatSpecAvatar(
+              catSpecFor(cat, player),
+              size: 72,
+              showAccessory: false,
+            ),
     );
   }
 }
@@ -1473,7 +1484,31 @@ class _AvatarCushionPreview extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.only(bottom: 20),
-          child: AvatarAvatar(spec, size: 150),
+          child: Stack(
+            alignment: Alignment.topCenter,
+            children: [
+              ColorFiltered(
+                colorFilter: ColorFilter.mode(
+                  catFurColours[spec.fur.clamp(
+                    0,
+                    catFurColours.length - 1,
+                  )].withValues(alpha: 0.55),
+                  BlendMode.modulate,
+                ),
+                child: _BundledAsset(
+                  asset: 'assets/images/cat_custom.png',
+                  height: 150,
+                  fit: BoxFit.contain,
+                  fallback: AvatarAvatar(spec, size: 150),
+                ),
+              ),
+              if (spec.accessory.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: sprite(spec.accessory, size: 58),
+                ),
+            ],
+          ),
         ),
       ],
     ),
