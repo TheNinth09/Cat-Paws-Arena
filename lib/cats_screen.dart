@@ -19,11 +19,6 @@ const _selectedGradient = LinearGradient(
   end: Alignment.bottomCenter,
   colors: [Color(0xfffff3c4), Color(0xffffe0a0), Color(0xfff0b45e)],
 );
-const _bannerGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xff9a6242), Color(0xff74463a)],
-);
 const _goldGradient = LinearGradient(
   colors: [Color(0xfffff3c4), gold, Color(0xffe8a92e)],
 );
@@ -473,75 +468,6 @@ class _CatsScreenState extends State<CatsScreen> {
 
   /// Profile avatar card: the user's own creature, separate from the duel
   /// cats below. Opens the avatar editor.
-  Widget _avatarCard() => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-      decoration: BoxDecoration(
-        gradient: _cardGradient,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ink, width: 2.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x6651312d),
-            offset: Offset(0, 3),
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xfffff8e6),
-                  border: Border.all(color: ink, width: 2.5),
-                ),
-                child: ClipOval(child: AvatarAvatar(_avatar, size: 64)),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'AVATARUL TĂU',
-                      style: TextStyle(
-                        color: ink,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Arată ca mine • separat de pisica de duel',
-                      style: TextStyle(
-                        color: Color(0xff8a5a3b),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ArenaButton(
-            text: 'EDITEAZĂ',
-            onPressed: _editAvatar,
-            green: true,
-            singleLine: true,
-          ),
-        ],
-      ),
-    ),
-  );
-
   void _editAvatar() {
     showModalBottomSheet<void>(
       context: context,
@@ -558,94 +484,152 @@ class _CatsScreenState extends State<CatsScreen> {
     );
   }
 
+  /// Three cat chips above the stage — the two defaults plus the
+  /// custom creation, with a gold ring on the equipped one.
+  Widget _catChips() => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      for (final cat in ['Tzuki', 'Bubble', 'Custom'])
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: GestureDetector(
+            onTap: () => change(() {
+              player.cat = cat;
+              player.photo = null;
+            }),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xfffff3d9),
+                    border: Border.all(
+                      color: player.cat == cat ? gold : ink,
+                      width: player.cat == cat ? 3 : 2,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x5551312d),
+                        offset: Offset(0, 3),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: arenaImage(
+                    cat == 'Custom'
+                        ? 'cat_custom'
+                        : 'cat_${cat.toLowerCase()}',
+                    fit: BoxFit.cover,
+                    fallback: CatAvatar(player, size: 52),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SizedBox(
+                  width: 64,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      cat == 'Custom' ? 'CUSTOM' : cat.toUpperCase(),
+                      style: TextStyle(
+                        color: player.cat == cat ? ink : const Color(0xff8a6242),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) => ListView(
     key: const PageStorageKey('cats-scroll'),
     padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
     children: [
-      const _CatsBanner(),
-      _avatarCard(),
-      _CatStage(player: player, catName: _catName),
+      const _CreatorTitle(),
+      const SizedBox(height: 4),
+      _catChips(),
       const SizedBox(height: 8),
-      const SectionHeading('ALEGE PISICA'),
-      AdaptiveCardGrid(
-        minWidth: 104,
-        maxColumns: 3,
-        children: [
-          for (final cat in ['Tzuki', 'Bubble', 'Custom'])
-            _CatPickCard(
-              cat: cat,
-              player: player,
-              onTap: () => change(() {
-                player.cat = cat;
-                player.photo = null;
-              }),
-            ),
-        ],
-      ),
+      _CatStage(player: player, catName: _catName),
       if (player.cat == 'Custom') ...[
-        panel(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  const Expanded(child: _PanelTitle('CREATOR')),
-                  SizedBox(
-                    width: 150,
-                    child: ArenaButton(
-                      text: 'ALEATORIU',
-                      onPressed: _randomise,
-                      green: true,
-                      singleLine: true,
-                    ),
-                  ),
-                ],
-              ),
-              nameRow(),
-              _swatchesRow(
-                'Culoare blană',
-                catFurColours,
-                const ['Gri', 'Portocaliu', 'Crem', 'Mov', 'Negru', 'Alb'],
-                player.fur,
-                (i) => change(() => player.fur = i),
-              ),
-              _choicesRow(
-                'Model',
-                const ['Uniform', 'Tigrat', 'Bicolor', 'Calico', 'Colorpoint'],
-                player.pattern,
-                (i) => change(() => player.pattern = i),
-              ),
-              _swatchesRow(
-                'Culoare ochi',
-                catEyeColours,
-                const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
-                player.eyes,
-                (i) => change(() => player.eyes = i),
-              ),
-              _choicesRow(
-                'Urechi',
-                const ['Două urechi', 'Doar stânga', 'Plisate', 'Smocuri'],
-                player.ears,
-                (i) => change(() => player.ears = i),
-              ),
-            ],
-          ),
+        nameRow(),
+        _swatchesRow(
+          'BLANĂ',
+          catFurColours,
+          const ['Gri', 'Portocaliu', 'Crem', 'Mov', 'Negru', 'Alb'],
+          player.fur,
+          (i) => change(() => player.fur = i),
         ),
-        const SectionHeading('PUTERE'),
-        AdaptiveCardGrid(
-          minWidth: 100,
-          maxColumns: 3,
+        _choicesRow(
+          'MODEL',
+          const ['Uniform', 'Tigrat', 'Bicolor', 'Calico', 'Colorpoint'],
+          player.pattern,
+          (i) => change(() => player.pattern = i),
+        ),
+        _swatchesRow(
+          'OCHI',
+          catEyeColours,
+          const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
+          player.eyes,
+          (i) => change(() => player.eyes = i),
+        ),
+        _choicesRow(
+          'URECHI',
+          const ['Două urechi', 'Doar stânga', 'Plisate', 'Smocuri'],
+          player.ears,
+          (i) => change(() => player.ears = i),
+        ),
+        const _PanelTitle('PUTEREA AVATARULUI'),
+        Row(
           children: [
             for (var i = 0; i < powers.length; i++)
-              _EquipCard(
-                art: powers[i],
-                title: powerNames[i],
-                selected: i == player.power,
-                buttonText: i == player.power ? 'ECHIPAT' : 'ECHIPEAZĂ',
-                green: i != player.power,
-                onPressed: () => change(() => player.power = i),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: _AvatarPowerCard(
+                    asset:
+                        'assets/images/${[
+                          'power_zoomies',
+                          'power_shadow_pounce',
+                          'power_laser_chase',
+                        ][i]}.png',
+                    fallback: powers[i],
+                    title: powerNames[i],
+                    selected: i == player.power,
+                    onTap: () => change(() => player.power = i),
+                  ),
+                ),
               ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: ArenaButton(
+                text: 'ALEATORIU',
+                onPressed: _randomise,
+                secondary: true,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: ArenaButton(
+                text: 'SALVEAZĂ AVATAR',
+                onPressed: () => change(() {}),
+                green: true,
+              ),
+            ),
           ],
         ),
       ] else
@@ -673,6 +657,23 @@ class _CatsScreenState extends State<CatsScreen> {
             ],
           ),
         ),
+      const SizedBox(height: 14),
+      const SectionHeading('AVATARUL TĂU'),
+      panel(
+        Row(
+          children: [
+            AvatarAvatar(_avatar, size: 64),
+            const SizedBox(width: 14),
+            Expanded(
+              child: ArenaButton(
+                text: 'EDITEAZĂ',
+                onPressed: _editAvatar,
+                secondary: true,
+              ),
+            ),
+          ],
+        ),
+      ),
       const SectionHeading('ACCESORII'),
       ArenaButton(
         text: 'FĂRĂ ACCESORIU',
@@ -704,50 +705,33 @@ class _CatsScreenState extends State<CatsScreen> {
   );
 }
 
-class _CatsBanner extends StatelessWidget {
-  const _CatsBanner();
+/// Big cartoon page title like the reference creator screen.
+class _CreatorTitle extends StatelessWidget {
+  const _CreatorTitle();
 
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 6),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    decoration: BoxDecoration(
-      gradient: _bannerGradient,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: gold, width: 2),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x6651312d),
-          offset: Offset(0, 4),
-          blurRadius: 6,
+  Widget build(BuildContext context) => const Center(
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        'CREEAZĂ-ȚI\nPISICA',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Color(0xffff9430),
+          fontSize: 30,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.5,
+          height: 1.05,
+          shadows: [
+            Shadow(color: Color(0xff5a2f16), offset: Offset(0, 3)),
+            Shadow(
+              color: Color(0x665a2f16),
+              offset: Offset(0, 5),
+              blurRadius: 6,
+            ),
+          ],
         ),
-      ],
-    ),
-    child: Row(
-      children: [
-        sprite('tile_paw', size: 44),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              label('PISICILE TALE', size: 22),
-              const SizedBox(height: 2),
-              Text(
-                'Alege-ți companionul de arenă',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: cream.withValues(alpha: 0.85),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-        sprite('tile_paw', size: 44),
-      ],
+      ),
     ),
   );
 }
@@ -804,7 +788,7 @@ class _CatStage extends StatelessWidget {
                     child: sprite('tile_paw', size: 30),
                   ),
                 ),
-                CatCharacter(player, height: 215),
+                _catHeroArt(player),
               ],
             ),
           ),
@@ -837,6 +821,43 @@ class _CatStage extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Hero cat art for the stage: the real PNG sprites for the presets and
+/// the tinted custom art for the created cat — never the painter look.
+Widget _catHeroArt(Player player) {
+  if (player.cat == 'Custom') {
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        ColorFiltered(
+          colorFilter: ColorFilter.mode(
+            catFurColours[player.fur.clamp(
+              0,
+              catFurColours.length - 1,
+            )].withValues(alpha: 0.55),
+            BlendMode.modulate,
+          ),
+          child: _BundledAsset(
+            asset: 'assets/images/cat_custom.png',
+            height: 210,
+            fit: BoxFit.contain,
+            fallback: CatCharacter(player, height: 215),
+          ),
+        ),
+        if (player.accessory.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: sprite(player.accessory, size: 64),
+          ),
+      ],
+    );
+  }
+  return arenaImage(
+    'cat_${player.cat.toLowerCase()}',
+    height: 210,
+    fallback: CatCharacter(player, height: 215),
+  );
 }
 
 class _LoadoutChip extends StatelessWidget {
@@ -1052,93 +1073,6 @@ class _SwatchChip extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _CatPickCard extends StatelessWidget {
-  const _CatPickCard({
-    required this.cat,
-    required this.player,
-    required this.onTap,
-  });
-  final String cat;
-  final Player player;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = player.cat == cat;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
-          decoration: BoxDecoration(
-            gradient: selected ? _selectedGradient : _cardGradient,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected ? gold : ink,
-              width: selected ? 3 : 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: selected
-                    ? const Color(0x88ffc63c)
-                    : const Color(0x6651312d),
-                offset: const Offset(0, 3),
-                blurRadius: selected ? 8 : 4,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: 76, child: Center(child: _face())),
-              const SizedBox(height: 6),
-              Text(
-                cat == 'Custom' ? 'Creează-ți Pisica' : cat,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: ink,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const Spacer(),
-              const SizedBox(height: 6),
-              ArenaButton(
-                text: selected ? 'ECHIPAT' : 'ALEGE',
-                onPressed: onTap,
-                green: !selected,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _face() {
-    final art = cat == 'Custom'
-        ? 'cat_custom'
-        : cat == 'Tzuki'
-        ? 'cat_tzuki'
-        : 'cat_bubble';
-    return arenaImage(
-      art,
-      width: 72,
-      height: 72,
-      fallback: cat == 'Custom'
-          ? CatAvatar(player, size: 72)
-          : CatSpecAvatar(
-              catSpecFor(cat, player),
-              size: 72,
-              showAccessory: false,
-            ),
-    );
-  }
 }
 
 class _EquipCard extends StatelessWidget {

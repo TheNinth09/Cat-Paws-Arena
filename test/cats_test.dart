@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cat_paws_arena/cat_avatar.dart';
 import 'package:cat_paws_arena/cats_screen.dart';
 import 'package:cat_paws_arena/profile.dart';
-import 'package:cat_paws_arena/ui_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
@@ -300,7 +299,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Creează-ți Pisica'));
+    await tester.tap(find.text('CUSTOM'));
     await tester.pumpAndSettle();
     expect(player.cat, 'Custom');
 
@@ -320,7 +319,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(player.ears, 3);
 
-    await tester.tap(find.widgetWithText(ArenaButton, 'ECHIPEAZĂ').first);
+    await tester.tap(find.text('Shadow Pounce'));
     await tester.pumpAndSettle();
     expect(player.power, 1);
 
@@ -343,7 +342,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('CREATOR'), findsOneWidget);
+    expect(find.text('CUSTOM'), findsOneWidget);
     expect(find.text(savedName!), findsOneWidget);
   });
 
