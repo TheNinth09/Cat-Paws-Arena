@@ -517,10 +517,12 @@ class ArenaBottomBar extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     this.english = false,
+    this.shopBadge = false,
   });
   final int selected;
   final ValueChanged<int> onSelected;
   final bool english;
+  final bool shopBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -561,11 +563,42 @@ class ArenaBottomBar extends StatelessWidget {
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(15),
                       ),
-                      child: Icon(
-                        icons[i],
-                        size: 25,
-                        color: selected == i ? gold : const Color(0xffd8b48f),
-                      ),
+                      child: i == 0
+                          ? Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                CustomPaint(
+                                  size: const Size(26, 26),
+                                  painter: _ShopIconPainter(
+                                    selected: selected == i,
+                                  ),
+                                ),
+                                if (shopBadge)
+                                  Positioned(
+                                    right: -4,
+                                    top: -4,
+                                    child: Container(
+                                      width: 11,
+                                      height: 11,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xffe2433a),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: const Color(0xff7c4e37),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            )
+                          : Icon(
+                              icons[i],
+                              size: 25,
+                              color: selected == i
+                                  ? gold
+                                  : const Color(0xffd8b48f),
+                            ),
                     ),
                     const SizedBox(height: 2),
                     SizedBox(
@@ -752,6 +785,78 @@ class ArenaBottomBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Storefront glyph for the shop tab: scalloped striped awning over a
+/// little stall. Drawn from shapes so it stays crisp at any size.
+class _ShopIconPainter extends CustomPainter {
+  const _ShopIconPainter({required this.selected});
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final ink = Paint()
+      ..color = selected ? const Color(0xff6b3a12) : const Color(0xff7a5335)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()..style = PaintingStyle.fill;
+
+    // Stall body.
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTRB(w * 0.16, h * 0.42, w * 0.84, h * 0.92),
+      Radius.circular(w * 0.10),
+    );
+    fill.color = selected ? const Color(0xffffe9b0) : const Color(0xffe6c493);
+    canvas.drawRRect(body, fill);
+    canvas.drawRRect(body, ink);
+
+    // Awning: striped valance with a scalloped lower edge.
+    final awn = Path()
+      ..moveTo(w * 0.06, h * 0.42)
+      ..lineTo(w * 0.18, h * 0.14)
+      ..lineTo(w * 0.82, h * 0.14)
+      ..lineTo(w * 0.94, h * 0.42)
+      ..close();
+    fill.color = selected ? const Color(0xffe2503e) : const Color(0xffc08a63);
+    canvas.drawPath(awn, fill);
+    // Stripes clipped inside the awning.
+    canvas.save();
+    canvas.clipPath(awn);
+    fill.color = selected ? const Color(0xfffff3d6) : const Color(0xffedd3ad);
+    for (var x = 0.0; x < 4; x++) {
+      final sx = w * (0.16 + x * 0.17);
+      canvas.drawRect(
+        Rect.fromLTRB(sx, h * 0.10, sx + w * 0.085, h * 0.46),
+        fill,
+      );
+    }
+    canvas.restore();
+    canvas.drawPath(awn, ink);
+
+    // Scallops under the awning edge.
+    fill.color = selected ? const Color(0xffe2503e) : const Color(0xffc08a63);
+    for (var x = 0.0; x < 4; x++) {
+      final cx = w * (0.17 + x * 0.22);
+      canvas.drawCircle(Offset(cx, h * 0.42), w * 0.10, fill);
+      canvas.drawCircle(Offset(cx, h * 0.42), w * 0.10, ink);
+    }
+
+    // Door / window slit on the stall.
+    fill.color = selected ? const Color(0xff8a4b1e) : const Color(0xff9c7044);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(w * 0.42, h * 0.60, w * 0.58, h * 0.92),
+        Radius.circular(w * 0.05),
+      ),
+      fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ShopIconPainter old) => old.selected != selected;
 }
 
 class ProductCard extends StatelessWidget {

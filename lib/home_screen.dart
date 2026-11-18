@@ -230,6 +230,7 @@ class _HomeState extends State<Home> {
                   selected: tab,
                   onSelected: select,
                   english: p.english,
+                  shopBadge: p.dailyReady,
                 ),
               ],
             ),
