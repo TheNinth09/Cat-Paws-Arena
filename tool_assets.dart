@@ -181,6 +181,7 @@ void generateLauncherIcons() {
 const _kImageTargets = <String, bool>{
   'cat_tzuki': true,
   'cat_bubble': true,
+  'cat_custom': true,
   'cat_cushion': true,
   'tile_star': true,
   'tile_fish': true,
@@ -203,6 +204,7 @@ const _kImageTargets = <String, bool>{
   'special_mouse_copter': true,
   'special_rainbow_paw': true,
   'btn_emote': true,
+  'zoomies_emblem': true,
   'emote_happy': true,
   'emote_cheer': true,
   'emote_surprised': true,
@@ -247,6 +249,18 @@ void generateImages() {
         width: 512,
         interpolation: im.Interpolation.average,
       );
+      // Hard guarantee: every cutout keeps a fully transparent outer
+      // ring. Some subjects (e.g. the cushion) are cropped by the source
+      // frame — their AA slivers at the edge get zeroed here; centred
+      // sprites are unaffected (verified: only cat_cushion had any).
+      for (final p in out) {
+        if (p.x < 4 ||
+            p.x >= out.width - 4 ||
+            p.y < 4 ||
+            p.y >= out.height - 4) {
+          p.a = 0;
+        }
+      }
     } else if (entry.key.startsWith('bg_')) {
       out = im.copyResize(
         source,
