@@ -108,6 +108,63 @@ void main() {
     },
   );
 
+  testWidgets('paw-priced accessories spend earned coins and mark owned', (
+    tester,
+  ) async {
+    final player = await _player(tester)..coins = 3000;
+    final messages = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ShopScreen(
+            player: player,
+            onUnavailable: (_) {},
+            onMessage: (title, message) => messages.add('$title: $message'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final shop = find.byType(ShopScreen);
+    final scrollable = find
+        .descendant(of: shop, matching: find.byType(Scrollable))
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('8,500'),
+      400,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2,500'), findsWidgets);
+    expect(find.text('8,500'), findsOneWidget);
+    expect(find.text('-15%'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: shop,
+        matching: find.textContaining(RegExp(r'\b\d{1,2}:\d{2}\b')),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('2,500').first);
+    await tester.pumpAndSettle();
+    expect(player.coins, 500);
+    expect(player.owned.contains('acc_pirate_bandana'), isTrue);
+    expect(find.text('DEȚINUT'), findsOneWidget);
+
+    await tester.tap(find.text('2,500').first);
+    await tester.pumpAndSettle();
+    expect(player.coins, 500);
+    expect(
+      messages,
+      contains(
+        'Magazin: Nu ai destule lăbuțe încă — le câștigi din meciuri și din recompensa zilnică.',
+      ),
+    );
+  });
+
   testWidgets('team screen keeps social layout parked and honest', (
     tester,
   ) async {

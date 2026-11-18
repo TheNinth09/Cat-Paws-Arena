@@ -12,11 +12,6 @@ const _cardGradient = LinearGradient(
   end: Alignment.bottomCenter,
   colors: [Color(0xffffe0a0), Color(0xffffedbb), Color(0xffe9ab60)],
 );
-const _bannerGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xff9a6242), Color(0xff74463a)],
-);
 const _badgeGradient = LinearGradient(
   colors: [Color(0xffe2725b), Color(0xffa83a2e)],
 );
@@ -108,7 +103,7 @@ class _BundledAssetState extends State<_BundledAsset> {
       : widget.fallback;
 }
 
-class ShopScreen extends StatelessWidget {
+class ShopScreen extends StatefulWidget {
   const ShopScreen({
     super.key,
     required this.player,
@@ -121,39 +116,70 @@ class ShopScreen extends StatelessWidget {
   final void Function(String, String) onMessage;
   final PurchaseService purchaseService;
 
+  @override
+  State<ShopScreen> createState() => _ShopScreenState();
+}
+
+class _ShopScreenState extends State<ShopScreen> {
+  Player get player => widget.player;
+
   bool ownsOffer(CosmeticOffer offer) =>
       offer.items.every(player.owned.contains);
 
   Future<void> buyOffer(CosmeticOffer offer) async {
-    final result = await purchaseService.purchase(offer.id);
+    final result = await widget.purchaseService.purchase(offer.id);
     if (result.success) {
       player.owned.addAll(offer.items);
       await player.save();
       return;
     }
-    onMessage('Magazin', result.message);
+    widget.onMessage('Magazin', result.message);
   }
 
   Future<void> buyCoinBundle(int index) async {
     final bundle = coinBundles[index];
     final amount = bundle.$1.replaceAll(',', '');
-    final result = await purchaseService.purchase('coin_bundle_$amount');
+    final result = await widget.purchaseService.purchase(
+      'coin_bundle_$amount',
+    );
     if (result.success) {
       player.coins += int.tryParse(amount) ?? 0;
       await player.save();
       return;
     }
-    onMessage('Pachete Lăbuțe', result.message);
+    widget.onMessage('Pachete Lăbuțe', result.message);
+  }
+
+  /// Packs priced in earned paws — real offline economy, no billing.
+  Future<void> buyPawOffer(List<String> items, int price) async {
+    if (items.every(player.owned.contains)) return;
+    if (player.coins < price) {
+      widget.onMessage(
+        'Magazin',
+        'Nu ai destule lăbuțe încă — le câștigi din meciuri și din recompensa zilnică.',
+      );
+      return;
+    }
+    player.coins -= price;
+    player.owned.addAll(items);
+    await player.save();
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final ownsDeal = ownsOffer(_dailyDeal);
-    return ListView(
-      key: const PageStorageKey('shop-scroll'),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+    return Stack(
       children: [
-        const _ShopBanner(),
+        const Positioned.fill(
+          child: RepaintBoundary(
+            child: CustomPaint(painter: _ShopBackdropPainter()),
+          ),
+        ),
+        ListView(
+          key: const PageStorageKey('shop-scroll'),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+          children: [
         const SectionHeading('ZONA DE OFERTE'),
         _HeroDealCard(
           owned: ownsDeal,
@@ -179,6 +205,34 @@ class ShopScreen extends StatelessWidget {
               ),
           ],
         ),
+        const SectionHeading('ACCESORII PE LĂBUȚE'),
+        AdaptiveCardGrid(
+          key: const ValueKey('paw-offer-grid'),
+          minWidth: 150,
+          maxColumns: 2,
+          children: [
+            for (var i = 0; i < accessories.length; i++)
+              _CoinCard(
+                key: ValueKey('paw-offer-$i'),
+                title: accessoryNames[i],
+                art: accessories[i],
+                price: 2500,
+                owned: player.owned.contains(accessories[i]),
+                onTap: () => buyPawOffer([accessories[i]], 2500),
+              ),
+            _CoinCard(
+              key: const ValueKey('paw-offer-bundle'),
+              title: 'PACHET COMPLET',
+              subtitle: 'Toate cele 4 accesorii',
+              art: accessories[0],
+              extraArt: accessories[2],
+              price: 8500,
+              badge: '-15%',
+              owned: accessories.every(player.owned.contains),
+              onTap: () => buyPawOffer(accessories, 8500),
+            ),
+          ],
+        ),
         const SectionHeading('PACHETE COSMETICE'),
         AdaptiveCardGrid(
           minWidth: 180,
@@ -200,56 +254,10 @@ class ShopScreen extends StatelessWidget {
           ],
         ),
       ],
+        ),
+      ],
     );
   }
-}
-
-class _ShopBanner extends StatelessWidget {
-  const _ShopBanner();
-
-  @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 6),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    decoration: BoxDecoration(
-      gradient: _bannerGradient,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: gold, width: 2),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x6651312d),
-          offset: Offset(0, 4),
-          blurRadius: 6,
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        sprite('icon_paw_coin', size: 46),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              label('MAGAZINUL', size: 26),
-              const SizedBox(height: 2),
-              Text(
-                'Cosmetice și pachete de Lăbuțe',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: cream.withValues(alpha: 0.85),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-        sprite('icon_chest', size: 46),
-      ],
-    ),
-  );
 }
 
 /// Big featured-deal banner inspired by premium match-3 shops: deep
@@ -541,6 +549,274 @@ class _PackCard extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Cosmetic tile paid with earned paws: same card language as the paw
+/// packs, but the bottom strip is gold and shows a paw icon + price.
+class _CoinCard extends StatelessWidget {
+  const _CoinCard({
+    super.key,
+    required this.title,
+    required this.art,
+    required this.price,
+    required this.owned,
+    required this.onTap,
+    this.subtitle,
+    this.extraArt,
+    this.badge = '',
+  });
+  final String title, art;
+  final String? subtitle, extraArt;
+  final String badge;
+  final int price;
+  final bool owned;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: owned ? null : onTap,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: _cardGradient,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: ink, width: 2),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x6651312d),
+              offset: Offset(0, 4),
+              blurRadius: 5,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(height: badge.isNotEmpty ? 14 : 10),
+            if (extraArt == null)
+              sprite(art, size: 56)
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(child: sprite(art, size: 44)),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 3),
+                    child: Text(
+                      '+',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: ink,
+                      ),
+                    ),
+                  ),
+                  Flexible(child: sprite(extraArt!, size: 44)),
+                ],
+              ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: ink,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            if (subtitle != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: ink.withValues(alpha: 0.62),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: owned
+                          ? const [Color(0xff9a8a78), Color(0xff6f6257)]
+                          : const [Color(0xfff0b93e), Color(0xffcf8a10)],
+                    ),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(16),
+                    ),
+                    border: Border(
+                      top: BorderSide(
+                        color: owned
+                            ? const Color(0xff5c5044)
+                            : const Color(0xffa06a08),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                  child: owned
+                      ? const Center(
+                          child: Text(
+                            'DEȚINUT',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            sprite('icon_paw_coin', size: 18),
+                            const SizedBox(width: 5),
+                            Text(
+                              _pawPrice(price),
+                              maxLines: 1,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                shadows: [
+                                  Shadow(
+                                    color: Color(0x66000000),
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+                if (badge.isNotEmpty)
+                  Positioned(
+                    top: -11,
+                    left: -10,
+                    right: -10,
+                    child: Center(child: _OfferBadge(badge)),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+String _pawPrice(int v) => v >= 1000
+    ? '${v ~/ 1000},${(v % 1000).toString().padLeft(3, '0')}'
+    : '$v';
+
+/// Market-stall backdrop for the shop: a scalloped striped awning at
+/// the top, warm wall, and wooden floor — opaque so it replaces the
+/// shared room art only on this page.
+class _ShopBackdropPainter extends CustomPainter {
+  const _ShopBackdropPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    // Wall.
+    canvas.drawRect(
+      Offset.zero & size,
+      paint
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xfff0d9b2), Color(0xffe3bd8d)],
+        ).createShader(Offset.zero & size),
+    );
+
+    // Floor (bottom ~15%) with plank seams.
+    final floorTop = h * 0.86;
+    final floor = Rect.fromLTWH(0, floorTop, w, h - floorTop);
+    paint.shader = const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0xffb87a4c), Color(0xff8a5533)],
+    ).createShader(floor);
+    canvas.drawRect(floor, paint);
+    paint.shader = null;
+    paint.color = const Color(0x338a5533);
+    for (var y = floorTop + 26.0; y < h; y += 26) {
+      canvas.drawRect(Rect.fromLTWH(0, y, w, 2), paint);
+    }
+    // Baseboard where wall meets floor.
+    paint.color = const Color(0xffc98d5a);
+    canvas.drawRect(Rect.fromLTWH(0, floorTop - 8, w, 10), paint);
+    paint.color = const Color(0xff8a5533);
+    canvas.drawRect(Rect.fromLTWH(0, floorTop - 9, w, 2), paint);
+
+    // Awning: hanging canopy with stripes and a scalloped edge.
+    const awnH = 62.0;
+    const stripeW = 46.0;
+    final awnPath = Path()
+      ..moveTo(0, 0)
+      ..lineTo(w, 0)
+      ..lineTo(w, awnH)
+      ..lineTo(0, awnH)
+      ..close();
+    canvas.save();
+    canvas.clipPath(awnPath);
+    for (var i = 0; i * stripeW < w + stripeW; i++) {
+      paint.color = i.isEven
+          ? const Color(0xffd95440)
+          : const Color(0xfffff0d0);
+      canvas.drawRect(
+        Rect.fromLTWH(i * stripeW, 0, stripeW, awnH),
+        paint,
+      );
+    }
+    canvas.restore();
+    // Scallops hanging below the awning edge.
+    for (var i = 0; i * stripeW < w + stripeW; i++) {
+      paint.color = i.isEven
+          ? const Color(0xffd95440)
+          : const Color(0xfffff0d0);
+      canvas.drawCircle(
+        Offset(i * stripeW + stripeW / 2, awnH),
+        stripeW / 2,
+        paint,
+      );
+    }
+    // Awning outline + soft shadow under the canopy.
+    paint.color = const Color(0xff8a3a28);
+    canvas.drawRect(Rect.fromLTWH(0, awnH - 2.5, w, 3), paint);
+    canvas.drawRect(
+      Rect.fromLTWH(0, awnH + 20, w, 14),
+      paint
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x33623a20), Color(0x00623a20)],
+        ).createShader(Rect.fromLTWH(0, awnH + 20, w, 14)),
+    );
+    paint.shader = null;
+  }
+
+  @override
+  bool shouldRepaint(_ShopBackdropPainter old) => false;
 }
 
 class _OfferBadge extends StatelessWidget {
