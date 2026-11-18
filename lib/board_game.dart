@@ -377,21 +377,6 @@ class BoardViewState extends State<BoardView>
                   dur: 0.4,
                 ),
               );
-            case SpecialKind.copter:
-              var rr = 0, cc = 0;
-              for (final i in cells) {
-                rr += i ~/ width;
-                cc += i % width;
-              }
-              fx.add(
-                _staticFx(
-                  event,
-                  _FxKind.blast,
-                  (rr ~/ cells.length) * width + (cc ~/ cells.length),
-                  start: start,
-                  dur: 0.4,
-                ),
-              );
             case SpecialKind.rainbow:
               fx.add(
                 _staticFx(
