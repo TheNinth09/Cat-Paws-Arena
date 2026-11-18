@@ -50,8 +50,8 @@ class TeamScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           english
-              ? 'Preview only — teams, free-text chat and trading are parked. Nothing here is a live service.'
-              : 'Doar previzualizare — echipele, chatul liber și schimburile sunt parked. Nimic de aici nu este un serviciu live.',
+              ? 'Preview only — teams, chat and trading arrive later. Nothing here is a live service.'
+              : 'Doar previzualizare — echipele, chatul și schimburile vin în curând. Nimic de aici nu este live.',
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Color(0xff6b4a32),
@@ -242,7 +242,7 @@ class TeamScreen extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            english ? 'Chat is parked...' : 'Chatul este parked...',
+            english ? 'Chat arrives soon...' : 'Chatul vine în curând...',
             style: TextStyle(
               color: ink.withValues(alpha: 0.45),
               fontWeight: FontWeight.w800,
@@ -305,8 +305,8 @@ class _TeamHeader extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 english
-                    ? 'Members: parked • preset emotes only'
-                    : 'Membri: parked • doar emote presetate',
+                    ? 'Members: coming soon • preset emotes only'
+                    : 'Membri: în curând • doar emote presetate',
                 style: const TextStyle(
                   color: Color(0xff6b4a32),
                   fontSize: 12,

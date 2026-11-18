@@ -373,6 +373,21 @@ class BoardViewState extends State<BoardView>
                   dur: 0.4,
                 ),
               );
+            case SpecialKind.copter:
+              var rr = 0, cc = 0;
+              for (final i in cells) {
+                rr += i ~/ width;
+                cc += i % width;
+              }
+              fx.add(
+                _staticFx(
+                  event,
+                  _FxKind.blast,
+                  (rr ~/ cells.length) * width + (cc ~/ cells.length),
+                  start: start,
+                  dur: 0.4,
+                ),
+              );
             case SpecialKind.rainbow:
               fx.add(
                 _staticFx(
@@ -1198,6 +1213,7 @@ class _BoardPainter extends CustomPainter {
           SpecialKind.lineHorizontal || SpecialKind.lineVertical =>
             const Color(0xffffe28a),
           SpecialKind.bomb => const Color(0xffff8d5a),
+          SpecialKind.copter => const Color(0xff9fe8c0),
           SpecialKind.rainbow => const Color(0xff9fd7ff),
           SpecialKind.none => const Color(0xfffff3c4),
         };
@@ -1457,6 +1473,7 @@ class _BoardPainter extends CustomPainter {
       SpecialKind.lineHorizontal || SpecialKind.lineVertical =>
         const Color(0xfffff3c4),
       SpecialKind.bomb => const Color(0xff4a2c2c),
+      SpecialKind.copter => const Color(0xff2c4a3a),
       SpecialKind.rainbow => const Color(0xff7ec8ff),
       SpecialKind.none => null,
     };
@@ -1522,6 +1539,26 @@ class _BoardPainter extends CustomPainter {
           s * 0.07 * (1 + 0.3 * math.sin(now * 9)),
           Paint()
             ..color = const Color(0xffffe28a).withValues(alpha: alpha),
+        );
+      case SpecialKind.copter:
+        // Little spinning rotor mark over the mouse copter tile.
+        final rotor = Paint()
+          ..color = const Color(0xff2c4a3a).withValues(alpha: 0.9 * alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = s * 0.07
+          ..strokeCap = StrokeCap.round;
+        for (var i = 0; i < 2; i++) {
+          final a = now * 6 + i * math.pi / 2;
+          canvas.drawLine(
+            Offset(c.dx - s * 0.22 * math.cos(a), c.dy - s * 0.22 * math.sin(a)),
+            Offset(c.dx + s * 0.22 * math.cos(a), c.dy + s * 0.22 * math.sin(a)),
+            rotor,
+          );
+        }
+        canvas.drawCircle(
+          c,
+          s * 0.08,
+          Paint()..color = const Color(0xff2c4a3a).withValues(alpha: alpha),
         );
       case SpecialKind.rainbow:
         // The tile itself rotates; paint a static shimmer ring of three

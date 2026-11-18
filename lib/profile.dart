@@ -25,6 +25,7 @@ class Player extends ChangeNotifier {
       music = d['music'] ?? true;
       english = d['english'] ?? false;
       notifications = d['notifications'] ?? false;
+      haptics = d['haptics'] ?? true;
       photo = d['photo'];
       avatarSpec = d['avatarSpec'] ?? '';
     }
@@ -40,7 +41,11 @@ class Player extends ChangeNotifier {
       ears = 1,
       pattern = 0,
       power = 0;
-  bool sfx = true, music = true, english = false, notifications = false;
+  bool sfx = true,
+      music = true,
+      english = false,
+      notifications = false,
+      haptics = true;
   Set<String> owned = {};
   Set<int> claims = {};
   int get tier => trophies >= 1500
@@ -76,6 +81,7 @@ class Player extends ChangeNotifier {
         'music': music,
         'english': english,
         'notifications': notifications,
+        'haptics': haptics,
         'photo': photo,
         'avatarSpec': avatarSpec,
       }),

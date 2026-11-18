@@ -126,7 +126,7 @@ void main() {
     expect(find.text('TEAM: ROYAL CATS'), findsOneWidget);
     expect(find.text('TRADE REQUEST'), findsOneWidget);
     expect(find.text('PREVIEW'), findsOneWidget);
-    expect(find.textContaining('parked'), findsWidgets);
+    expect(find.textContaining('coming soon'), findsWidgets);
     // No fabricated live members count or real chat content.
     expect(find.textContaining(RegExp(r'\d+\s*/\s*30')), findsNothing);
     await tester.tap(find.text('TRADE'));
@@ -152,7 +152,7 @@ void main() {
     expect(find.text('GLOBAL'), findsOneWidget);
     expect(find.text('PRIVATE'), findsOneWidget);
     expect(find.text('GLOBAL WEEKEND TOURNAMENT'), findsOneWidget);
-    expect(find.textContaining('parked'), findsWidgets);
+    expect(find.textContaining('Coming soon'), findsWidgets);
     // No live countdown — tournaments are parked.
     expect(find.textContaining(RegExp(r'\d+[Zz]\s*\d+[Hh]')), findsNothing);
 

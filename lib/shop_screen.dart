@@ -32,12 +32,12 @@ const _dailyDeal = CosmeticOffer(
 );
 
 const _pawPackAssets = [
-  'paws_pack_coins',
-  'paws_pack_bag',
-  'paws_pack_bag',
-  'paws_pack_bag',
-  'paws_pack_chest',
-  'paws_pack_chest',
+  'shop_paws_small',
+  'shop_paws_medium',
+  'shop_paws_medium',
+  'shop_paws_mega',
+  'shop_paws_mega',
+  'shop_paws_mega',
 ];
 const _pawPackFallbacks = [
   'icon_paw_coin',
@@ -161,10 +161,10 @@ class ShopScreen extends StatelessWidget {
             ShopOfferCard(
               title: 'RECOMPENSĂ ZILNICĂ',
               art: 'icon_chest',
-              asset: 'assets/images/daily_gift.png',
+              asset: 'assets/images/paws_daily_5.png',
               subtitle: player.dailyReady
                   ? 'Cadou gratuit (la 6 ore)'
-                  : 'Revendicat — revino peste 6 ore',
+                  : 'Revino peste 6 ore',
               badge: player.dailyReady ? 'GRATIS' : '',
               buttonText: player.dailyReady ? '+5 Lăbuțe' : 'REVENDICAT',
               onPressed: player.dailyReady ? player.claimDaily : null,
@@ -187,9 +187,6 @@ class ShopScreen extends StatelessWidget {
           ],
         ),
         const SectionHeading('PACHETE LĂBUȚE'),
-        const _BillingNote(
-          'Prețuri în LEI. Lăbuțele se câștigă și în joc — cumpărăturile se activează la lansare.',
-        ),
         AdaptiveCardGrid(
           key: const ValueKey('coin-bundle-grid'),
           minWidth: 96,
@@ -211,9 +208,6 @@ class ShopScreen extends StatelessWidget {
           ],
         ),
         const SectionHeading('PACHETE COSMETICE'),
-        const _BillingNote(
-          'Doar cosmetice — nu schimbă jocul. Același preț onest, fără presiune.',
-        ),
         AdaptiveCardGrid(
           minWidth: 180,
           maxColumns: 2,
@@ -281,39 +275,6 @@ class _ShopBanner extends StatelessWidget {
           ),
         ),
         sprite('icon_chest', size: 46),
-      ],
-    ),
-  );
-}
-
-class _BillingNote extends StatelessWidget {
-  const _BillingNote(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 10),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    decoration: BoxDecoration(
-      color: const Color(0xeefff3d6),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: ink, width: 1.5),
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.info_outline, color: ink, size: 17),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: ink,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
       ],
     ),
   );

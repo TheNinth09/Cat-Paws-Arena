@@ -37,8 +37,8 @@ class _EventsScreenState extends State<EventsScreen> {
       const SizedBox(height: 10),
       Text(
         english
-            ? 'Events and tournaments are parked. No live leaderboard, tournament or online event is connected.'
-            : 'Evenimentele și turneele sunt parked. Niciun leaderboard, turneu sau eveniment online live nu este conectat.',
+            ? 'Tournaments arrive later. Only code-join opens a real friend room today.'
+            : 'Turneele vin în curând. Doar intrarea cu cod deschide azi o cameră de prieten reală.',
         textAlign: TextAlign.center,
         style: const TextStyle(
           color: Color(0xff6b4a32),
@@ -127,8 +127,8 @@ class _EventsScreenState extends State<EventsScreen> {
                   const SizedBox(height: 2),
                   Text(
                     english
-                        ? 'parked: no live bracket, leaderboard or countdown.'
-                        : 'parked: fără bracket live, clasament sau countdown.',
+                        ? 'Coming soon: no live bracket, leaderboard or countdown.'
+                        : 'În curând: fără bracket live, clasament sau countdown.',
                     style: TextStyle(
                       color: cream.withValues(alpha: 0.85),
                       fontSize: 12,
@@ -176,8 +176,8 @@ class _EventsScreenState extends State<EventsScreen> {
         const SizedBox(height: 4),
         Text(
           english
-              ? 'Private events are parked/local. Joining by code opens the existing friend-room flow.'
-              : 'Evenimentele private sunt parked/locale. Intrarea cu cod deschide fluxul existent de cameră de prieten.',
+              ? 'Joining by code opens the real friend-room flow (6 characters).'
+              : 'Intrarea cu cod deschide fluxul real de cameră de prieten (6 caractere).',
           style: const TextStyle(
             color: Color(0xff6b4a32),
             fontWeight: FontWeight.w700,

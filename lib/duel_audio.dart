@@ -23,13 +23,16 @@ enum HapticKind { selection, light, medium, heavy }
 class DuelAudio {
   DuelAudio({
     bool Function()? enabled,
+    bool Function()? hapticsEnabled,
     SfxOutput? output,
     void Function(HapticKind kind)? haptics,
   }) : _enabled = enabled ?? (() => true),
+       _hapticsEnabled = hapticsEnabled ?? (() => true),
        _out = output ?? _AudioPlayersOutput(),
        _haptics = haptics ?? _platformHaptics;
 
   final bool Function() _enabled;
+  final bool Function() _hapticsEnabled;
   final SfxOutput _out;
   final void Function(HapticKind kind) _haptics;
 
@@ -43,7 +46,7 @@ class DuelAudio {
     final cue = _cueFor(event);
     _out.play(cue.asset, volume: cue.volume, rate: rate);
     final h = cue.haptic;
-    if (h != null) _haptics(h);
+    if (h != null && _hapticsEnabled()) _haptics(h);
   }
 
   double _rateFor(BoardEvent e) {

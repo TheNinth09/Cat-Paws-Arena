@@ -148,7 +148,7 @@ class _MatchScreenState extends State<MatchScreen>
         if (mounted) setState(() => opponentEmote = '');
       });
     });
-    _audio = DuelAudio(enabled: () => p.sfx);
+    _audio = DuelAudio(enabled: () => p.sfx, hapticsEnabled: () => p.haptics);
     _momentFx = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1300),

@@ -139,12 +139,12 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(TeamScreen), findsOneWidget);
         expect(find.text('ECHIPĂ'), findsOneWidget);
-        expect(find.textContaining('parked'), findsWidgets);
+        expect(find.textContaining('coming soon'), findsWidgets);
         await tester.tap(find.byKey(const ValueKey('nav-4')));
         await tester.pumpAndSettle();
         expect(find.byType(EventsScreen), findsOneWidget);
         expect(find.text('EVENIMINTE'), findsOneWidget);
-        expect(find.textContaining('parked'), findsWidgets);
+        expect(find.textContaining('Coming soon'), findsWidgets);
         await tester.pumpWidget(const SizedBox.shrink());
       });
     }

@@ -1,10 +1,7 @@
 import 'dart:math';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cat_avatar.dart';
@@ -414,51 +411,6 @@ class _CatsScreenState extends State<CatsScreen> {
     );
   }
 
-  /// Renders [CatShareCard] offstage, captures it as a PNG and hands it to
-  /// the platform share sheet. The card carries only the cat, its preset
-  /// name, the room and the game name — never the player's name or photo.
-  Future<void> _shareCard() async {
-    final spec = catSpecForPlayer(player);
-    final catName = player.cat == 'Custom'
-        ? (_catName ?? 'Pisică')
-        : player.cat;
-    final boundaryKey = GlobalKey();
-    final overlay = Overlay.of(context);
-    late final OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (_) => Positioned(
-        left: -4000,
-        top: -4000,
-        child: RepaintBoundary(
-          key: boundaryKey,
-          child: CatShareCard(spec: spec, catName: catName, room: player.room),
-        ),
-      ),
-    );
-    overlay.insert(entry);
-    try {
-      await WidgetsBinding.instance.endOfFrame;
-      final boundary =
-          boundaryKey.currentContext?.findRenderObject()
-              as RenderRepaintBoundary?;
-      if (boundary == null) return;
-      final image = await boundary.toImage(pixelRatio: 3);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-      if (data == null) return;
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [
-            XFile.fromData(data.buffer.asUint8List(), mimeType: 'image/png'),
-          ],
-          fileNameOverrides: const ['pisica_mea.png'],
-        ),
-      );
-    } finally {
-      entry.remove();
-    }
-  }
-
   Widget nameRow() => Padding(
     padding: const EdgeInsets.only(top: 12),
     child: Column(
@@ -615,11 +567,6 @@ class _CatsScreenState extends State<CatsScreen> {
       _avatarCard(),
       _CatStage(player: player, catName: _catName),
       const SizedBox(height: 8),
-      ArenaButton(
-        text: 'DISTRUIE CARDUL',
-        onPressed: _shareCard,
-        secondary: true,
-      ),
       const SectionHeading('ALEGE PISICA'),
       AdaptiveCardGrid(
         minWidth: 104,
@@ -644,11 +591,14 @@ class _CatsScreenState extends State<CatsScreen> {
               Row(
                 children: [
                   const Expanded(child: _PanelTitle('CREATOR')),
-                  ArenaButton(
-                    text: 'ALEATORIZEAZĂ',
-                    onPressed: _randomise,
-                    green: true,
-                    singleLine: true,
+                  SizedBox(
+                    width: 150,
+                    child: ArenaButton(
+                      text: 'ALEATORIU',
+                      onPressed: _randomise,
+                      green: true,
+                      singleLine: true,
+                    ),
                   ),
                 ],
               ),

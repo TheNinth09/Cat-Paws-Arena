@@ -212,42 +212,86 @@ Future<void> showSettings(BuildContext context, Player p) => showAppDialog(
     builder: (context, _) => Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (final setting in [
-          ('Efecte sonore', Icons.volume_up, p.sfx),
-          ('Muzică', Icons.music_note, p.music),
-          ('English', Icons.translate, p.english),
-          ('Notificări', Icons.notifications, p.notifications),
-        ])
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            secondary: Icon(
-              setting.$2,
-              color: const Color(0xffa97153),
-              size: 26,
-            ),
-            title: Text(
-              setting.$1,
-              style: const TextStyle(
-                color: ink,
-                fontWeight: FontWeight.w800,
-                fontSize: 15,
+        Row(
+          children: [
+            Expanded(
+              child: _SettingTile(
+                image: 'icon_sfx',
+                fallbackIcon: Icons.volume_up,
+                title: 'Efecte sonore',
+                value: p.sfx,
+                onChanged: (v) {
+                  p.sfx = v;
+                  p.save();
+                },
               ),
             ),
-            value: setting.$3,
-            onChanged: (v) {
-              switch (setting.$1) {
-                case 'Efecte sonore':
-                  p.sfx = v;
-                case 'Muzică':
+            const SizedBox(width: 8),
+            Expanded(
+              child: _SettingTile(
+                image: 'icon_music',
+                fallbackIcon: Icons.music_note,
+                title: 'Muzică',
+                value: p.music,
+                onChanged: (v) {
                   p.music = v;
-                case 'English':
+                  p.save();
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _SettingTile(
+                image: 'icon_haptics',
+                fallbackIcon: Icons.vibration,
+                title: 'Vibrații',
+                value: p.haptics,
+                onChanged: (v) {
+                  p.haptics = v;
+                  p.save();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _SettingTile(
+                image: 'icon_language',
+                fallbackIcon: Icons.translate,
+                title: 'English',
+                value: p.english,
+                onChanged: (v) {
                   p.english = v;
-                case 'Notificări':
-                  p.notifications = v;
-              }
-              p.save();
-            },
+                  p.save();
+                },
+              ),
+            ),
+          ],
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(
+            Icons.notifications,
+            color: Color(0xffa97153),
+            size: 26,
           ),
+          title: const Text(
+            'Notificări',
+            style: TextStyle(
+              color: ink,
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+            ),
+          ),
+          value: p.notifications,
+          onChanged: (v) {
+            p.notifications = v;
+            p.save();
+          },
+        ),
         if (OnlinePlay.services != null)
           _OnlineSettings(player: p, services: OnlinePlay.services!)
         else
@@ -716,3 +760,67 @@ Future<void> showTrophyRoad(BuildContext context, Player p) => showAppDialog(
     ),
   ),
 );
+
+/// Tap-to-toggle tile used by the settings 2x2 grid: bundled icon, label and
+/// a compact switch-styled state pill.
+class _SettingTile extends StatelessWidget {
+  const _SettingTile({
+    required this.image,
+    required this.fallbackIcon,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+  final String image, title;
+  final IconData fallbackIcon;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: value ? const Color(0xfff6d98c) : const Color(0xfff3e4c4),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: value ? gold : const Color(0xffd9b98a),
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            arenaImage(
+              image,
+              width: 30,
+              height: 30,
+              fallback: Icon(fallbackIcon, color: const Color(0xffa97153), size: 26),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                style: const TextStyle(
+                  color: ink,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                  height: 1.1,
+                ),
+              ),
+            ),
+            Icon(
+              value ? Icons.check_circle : Icons.radio_button_unchecked,
+              color: value ? const Color(0xff3f6d22) : const Color(0xffb08c62),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}

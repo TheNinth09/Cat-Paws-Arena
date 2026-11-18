@@ -267,3 +267,11 @@ Request: Informational for lane 5 / deploy — kEngineVersion is now 3 (2x2 squa
 Reason: rule change is contract-visible per docs/contract.md; flagging so the version bump is not a surprise.
 Status: answered — orchestrator updated firestore.rules + rules.test.js to engineVersion 3 / 'v3|' fingerprint alongside this merge; owner must redeploy `firebase deploy --only firestore:rules`. In-flight v2 matches void on upgrade, as noted.
 ```
+
+```text
+Lane: 2
+Blocking PR: lane-2-v05 (special sprites + battle UX on the 43-asset pack)
+Request: Informational only — orchestrator already landed the haptics preference on main: Player.haptics (profile.dart), a 'Vibrații' tile in the settings grid (app_dialogs.dart), DuelAudio.hapticsEnabled gate (duel_audio.dart) and the wiring `DuelAudio(enabled: () => p.sfx, hapticsEnabled: () => p.haptics)` at match_screen.dart. If your rebase touches those lines keep the hapticsEnabled gate; do not revert it.
+Reason: the settings 2x2 grid is lane-4 scope delivered directly by the orchestrator; the gate is additive and optional (defaults to enabled), so duel tests still pass unchanged.
+Status: answered — implemented on main in this lane-4 commit.
+```
