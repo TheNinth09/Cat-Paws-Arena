@@ -4,6 +4,7 @@ import 'package:cat_paws_arena/events_screen.dart';
 import 'package:cat_paws_arena/house_tour_screen.dart';
 import 'package:cat_paws_arena/lobby_screen.dart';
 import 'package:cat_paws_arena/main.dart';
+import 'package:cat_paws_arena/match_controller.dart';
 import 'package:cat_paws_arena/online/cloud_profile.dart';
 import 'package:cat_paws_arena/online/fake_backend.dart';
 import 'package:cat_paws_arena/online/online_account.dart';
@@ -238,10 +239,12 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('EDITEAZĂ NUMELE'),
       200,
-      scrollable: find.descendant(
-        of: find.byType(ProfileScreen),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: find
+          .descendant(
+            of: find.byType(ProfileScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.tap(find.text('EDITEAZĂ NUMELE'));
     await tester.pumpAndSettle();
@@ -433,6 +436,19 @@ void main() {
     expect(find.text('CLEARED'), findsOneWidget);
     expect(houseRoomForTrophies(299).name, 'Living');
     expect(houseRoomForTrophies(300).name, 'Hall');
+    // Room titles render untruncated in Romanian too (no ellipsis).
+    p.english = false;
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('trophy-progress')));
+    await tester.pumpAndSettle();
+    for (final name in [
+      '2. HOLUL PRINCIPAL',
+      '3. BUCATARIA',
+      '4. DORMITORUL',
+    ]) {
+      expect(find.text(name), findsOneWidget);
+    }
     expect(tester.takeException(), isNull);
   });
 
@@ -526,12 +542,22 @@ void main() {
     expect(find.text('COSMETICE'), findsOneWidget);
     expect(find.text('1234'), findsOneWidget);
     // Organised sections — every one labelled, placeholders where honest.
-    for (final section in [
-      'REALIZĂRI',
-      'BANDAJE',
-      'EMOTE-URI',
-      'ACCESORII',
-    ]) {
+    // Lower sections need a scroll because the list builds lazily.
+    for (final section in ['REALIZĂRI', 'BANDAJE']) {
+      expect(find.text(section), findsOneWidget);
+    }
+    final profileScroll = find
+        .descendant(
+          of: find.byType(ProfileScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    for (final section in ['EMOTE-URI', 'ACCESORII']) {
+      await tester.scrollUntilVisible(
+        find.text(section),
+        150,
+        scrollable: profileScroll,
+      );
       expect(find.text(section), findsOneWidget);
     }
     // Emote preset chips are real; owned accessory is marked ECHIPAT/DEȚINUT.
@@ -541,19 +567,13 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('EDITEAZĂ NUMELE'),
       200,
-      scrollable: find.descendant(
-        of: find.byType(ProfileScreen),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: profileScroll,
     );
     expect(find.text('EDITEAZĂ NUMELE'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('profile-account')),
       150,
-      scrollable: find.descendant(
-        of: find.byType(ProfileScreen),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: profileScroll,
     );
     expect(find.byKey(const ValueKey('profile-account')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -587,6 +607,63 @@ void main() {
     expect(find.textContaining('În curând'), findsOneWidget);
     expect(find.text('Puf'), findsNothing);
     await closeDialogContaining(tester, 'CLASAMENT');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('match return never resurfaces the house tour or profile', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: Home(player: p)));
+    await tester.pumpAndSettle();
+    // The tour is still mounted on the stack when the duel starts (e.g. an
+    // online duel arriving while a page was open). On ACASĂ the lobby must
+    // be on top — a leftover translucent page must never resurface.
+    await tester.tap(find.byKey(const ValueKey('trophy-progress')));
+    await tester.pumpAndSettle();
+    expect(find.byType(HouseTourScreen), findsOneWidget);
+    // Same entry point as the mode chooser: the lobby's onBattle callback.
+    // The covered lobby is offstage, so the finder must include it.
+    tester
+        .widget<LobbyScreen>(find.byType(LobbyScreen, skipOffstage: false))
+        .onBattle(null);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(MatchScreen), findsOneWidget);
+    // Drive the engine duel to a result quickly (same harness as duel_test).
+    final m =
+        (tester.state(find.byType(MatchScreen)) as dynamic).match
+            as ArenaMatchController;
+    m.botMoveDelay = Duration.zero;
+    m.eventSink = (_) => m.onBoardIdle();
+    // searching → playing is paced by a short intro timer.
+    var intro = 0;
+    while (m.phase == MatchPhase.searching && intro++ < 120) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    var guard = 0;
+    while (m.phase == MatchPhase.playing && guard++ < 1200) {
+      if (m.playerTurn && m.acceptingInput) {
+        m.endTurn();
+      }
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(m.phase, MatchPhase.finished, reason: 'match did not finish');
+    // The result screen animates continuously — advance fixed frames.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.tap(find.text('ACASĂ'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.byType(HouseTourScreen), findsNothing);
+    expect(find.byType(MatchScreen), findsNothing);
+    expect(find.text('MOD: 1v1 ARENA'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

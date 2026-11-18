@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import 'app_dialogs.dart';
@@ -26,6 +28,8 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   final scaffold = GlobalKey<ScaffoldState>();
   final pages = PageController(initialPage: 2);
+  final _trophyBadgeKey = GlobalKey();
+  final _coinBadgeKey = GlobalKey();
   int tab = 2;
   Player get p => widget.player;
   @override
@@ -61,17 +65,50 @@ class _HomeState extends State<Home> {
     );
   }
 
-  /// LUPTĂ (or a house cat picked on the tour) → VS screen → duel.
+  /// LUPTĂ (or a house cat picked on the tour) → VS screen → duel. Any
+  /// pushed routes left on the stack (house tour, profile, dialogs) are
+  /// removed, so returning from the match always lands on the lobby root —
+  /// never on a stray translucent page.
   void startBattle(HouseCat? cat) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (vsContext) => VsScreen(
-          player: p,
-          opponent: VsOpponent.houseCat(p, cat),
-          matchScreen: MatchScreen(player: p, mode: 0, opponent: cat),
-        ),
+    final trophiesBefore = p.trophies;
+    final coinsBefore = p.coins;
+    Navigator.of(context)
+        .pushAndRemoveUntil(
+          MaterialPageRoute<void>(
+            builder: (vsContext) => VsScreen(
+              player: p,
+              opponent: VsOpponent.houseCat(p, cat),
+              matchScreen: MatchScreen(player: p, mode: 0, opponent: cat),
+            ),
+          ),
+          (route) => route.isFirst,
+        )
+        .then((_) {
+          if (p.trophies > trophiesBefore || p.coins > coinsBefore) {
+            _victoryFly();
+          }
+        });
+  }
+
+  /// Small celebration on a rewarded match return: a trophy and a paw coin
+  /// fly from mid-screen to the HUD badges (pure overlay, no libraries).
+  void _victoryFly() {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _VictoryFlight(
+        trophyTarget: _badgeOffset(_trophyBadgeKey),
+        coinTarget: _badgeOffset(_coinBadgeKey),
+        onDone: entry.remove,
       ),
     );
+    overlay.insert(entry);
+  }
+
+  static Offset? _badgeOffset(GlobalKey key) {
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) + box.size.center(Offset.zero);
   }
 
   void menu(String item) {
@@ -157,6 +194,8 @@ class _HomeState extends State<Home> {
                   name: p.name,
                   trophies: p.trophies,
                   coins: p.coins,
+                  trophyBadgeKey: _trophyBadgeKey,
+                  coinBadgeKey: _coinBadgeKey,
                   onProfile: openProfile,
                   onRoad: openHouseTour,
                   onShop: () => select(0),
@@ -199,4 +238,80 @@ class _HomeState extends State<Home> {
       ),
     ),
   );
+}
+
+/// Victory celebration overlay: a trophy and a paw coin arc from the
+/// screen centre into the HUD badges, then fade out. Pure overlay +
+/// AnimationController — no external libraries.
+class _VictoryFlight extends StatefulWidget {
+  const _VictoryFlight({
+    required this.trophyTarget,
+    required this.coinTarget,
+    required this.onDone,
+  });
+
+  /// Badge centres in global coordinates; null = fly to the top bar area.
+  final Offset? trophyTarget, coinTarget;
+  final VoidCallback onDone;
+
+  @override
+  State<_VictoryFlight> createState() => _VictoryFlightState();
+}
+
+class _VictoryFlightState extends State<_VictoryFlight>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..forward().whenComplete(widget.onDone);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final from = Offset(size.width / 2, size.height * .55);
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) => Stack(
+          children: [
+            _flyer(
+              sprite('icon_trophy', size: 34),
+              from,
+              widget.trophyTarget ?? Offset(size.width * .38, 40),
+              0,
+            ),
+            _flyer(
+              sprite('icon_paw_coin', size: 30),
+              from + const Offset(30, 14),
+              widget.coinTarget ?? Offset(size.width * .62, 40),
+              .18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One sprite arcing upward to its target with a fade-out tail.
+  Widget _flyer(Widget child, Offset from, Offset to, double delay) {
+    final t = ((_c.value - delay) / (1 - delay)).clamp(0.0, 1.0);
+    final eased = Curves.easeInOut.transform(t);
+    final arc = sin(eased * pi) * 90; // parabolic hop upward
+    final pos = Offset.lerp(from, to, eased)! - Offset(0, arc);
+    final opacity = t < .82 ? 1.0 : (1 - t) / .18;
+    return Positioned(
+      left: pos.dx - 17,
+      top: pos.dy - 17,
+      child: Opacity(
+        opacity: opacity.clamp(0.0, 1.0),
+        child: Transform.scale(scale: 1.25 - .45 * eased, child: child),
+      ),
+    );
+  }
 }
