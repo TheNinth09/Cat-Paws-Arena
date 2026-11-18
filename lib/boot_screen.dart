@@ -52,23 +52,42 @@ class _BootState extends State<Boot> {
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     setState(() => splash = false);
-    final assets = [
+    final imageAssets = [
       ...MatchBoard.names,
+      'tile_box',
+      'special_fish_rocket',
+      'special_yarn_bomb',
+      'special_mouse_copter',
+      'special_rainbow_paw',
+      'cat_tzuki',
+      'cat_bubble',
+      'cat_cushion',
+      'trophy_gold_fish',
+      'milestone_chest',
+      'paws_daily_5',
+      'btn_emote',
+      'emote_happy',
+      'emote_cheer',
+      'emote_surprised',
+      'emote_laugh',
+    ];
+    final generatedAssets = [
       'icon_paw_coin',
       'icon_trophy',
       'icon_chest',
       ...powers,
       ...accessories,
-      'emote_laugh',
       'emote_angry',
       'emote_love',
     ];
+    final assets = [
+      for (final n in imageAssets) 'assets/images/$n.png',
+      for (final n in generatedAssets) 'assets/generated/$n.png',
+    ];
     for (var i = 0; i < assets.length; i++) {
       if (!mounted) return;
-      await precacheImage(
-        AssetImage('assets/generated/${assets[i]}.png'),
-        context,
-      );
+      await precacheImage(AssetImage(assets[i]), context)
+          .catchError((Object _) {});
       if (!mounted) return;
       setState(() => progress = (i + 1) / assets.length);
     }

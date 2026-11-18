@@ -179,6 +179,8 @@ void generateLauncherIcons() {
 /// splash keep their full frame. Sources stay in `assets/` and are
 /// reference-only (never shipped in the runtime bundle).
 const _kImageTargets = <String, bool>{
+  'cat_tzuki': true,
+  'cat_bubble': true,
   'cat_cushion': true,
   'tile_star': true,
   'tile_fish': true,
@@ -189,10 +191,36 @@ const _kImageTargets = <String, bool>{
   'milestone_chest': true,
   'trophy_gold_fish': true,
   'daily_gift': true,
+  'paws_daily_5': true,
   'paws_pack_coins': true,
   'paws_pack_bag': true,
   'paws_pack_chest': true,
+  'shop_paws_small': true,
+  'shop_paws_medium': true,
+  'shop_paws_mega': true,
+  'special_fish_rocket': true,
+  'special_yarn_bomb': true,
+  'special_mouse_copter': true,
+  'special_rainbow_paw': true,
+  'btn_emote': true,
+  'emote_happy': true,
+  'emote_cheer': true,
+  'emote_surprised': true,
+  'emote_laugh': true,
+  'icon_friends': true,
+  'icon_leaderboard': true,
+  'icon_cloud_account': true,
+  'icon_achievements': true,
+  'icon_bandages': true,
+  'icon_accessories': true,
+  'icon_music': true,
+  'icon_sfx': true,
+  'icon_haptics': true,
+  'icon_language': true,
+  'icon_events': true,
+  'icon_team': true,
   'bg_living_room': false,
+  'bg_main_hall': false,
   'bg_hallway': false,
   'bg_kitchen': false,
   'bg_bedroom': false,
@@ -204,9 +232,14 @@ const _kImageTargets = <String, bool>{
 void generateImages() {
   Directory('assets/images').createSync(recursive: true);
   for (final entry in _kImageTargets.entries) {
-    final source = im.decodeImage(
-      File('assets/${entry.key}.png').readAsBytesSync(),
-    )!;
+    final sourceFile = File('assets/${entry.key}.png');
+    if (!sourceFile.existsSync()) {
+      // Missing new source: keep any existing runtime art at the
+      // destination untouched (e.g. tile_paw has no new download yet).
+      stdout.writeln('images/${entry.key}.png SKIPPED (no source)');
+      continue;
+    }
+    final source = im.decodeImage(sourceFile.readAsBytesSync())!;
     final im.Image out;
     if (entry.value) {
       out = im.copyResize(
@@ -230,20 +263,16 @@ void generateImages() {
     File('assets/images/${entry.key}.png').writeAsBytesSync(im.encodePng(out));
     stdout.writeln('images/${entry.key}.png ${out.width}x${out.height}');
   }
-  // The cats are redrawn procedurally in a clean 2D cartoon style —
-  // painted at 4x and downsampled for smooth edges (replaces the
-  // converted AI source art at the same paths other lanes consume).
-  for (final cat in ['cat_tzuki', 'cat_bubble', 'cat_run']) {
-    final out = im.copyResize(
-      _drawCatSprite(cat),
-      width: 512,
-      interpolation: im.Interpolation.average,
-    );
-    File('assets/images/$cat.png').writeAsBytesSync(im.encodePng(out));
-    stdout.writeln('images/$cat.png ${out.width}x${out.height}');
-  }
+  // cat_run has no downloaded source — keep the procedural runner.
+  final run = im.copyResize(
+    _drawCatSprite('cat_run'),
+    width: 512,
+    interpolation: im.Interpolation.average,
+  );
+  File('assets/images/cat_run.png').writeAsBytesSync(im.encodePng(run));
+  stdout.writeln('images/cat_run.png ${run.width}x${run.height}');
   final splash = im.decodeImage(
-    File('assets/loading_screen.png.jpg').readAsBytesSync(),
+    File('assets/splash_screen.png').readAsBytesSync(),
   )!;
   final splashOut = im.copyResize(
     splash,
