@@ -313,14 +313,15 @@ class PlayerHud extends StatelessWidget {
     VoidCallback tap, {
     bool plus = false,
   }) => Container(
+    height: 40,
     decoration: BoxDecoration(
       gradient: const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xff96684c), Color(0xff75503a), Color(0xff64402f)],
+        colors: [Color(0xfffff8e0), Color(0xfff6e0a8), Color(0xffeac87e)],
       ),
       borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: const Color(0x59ffe9bd), width: 1),
+      border: Border.all(color: const Color(0xffc98d3a), width: 2),
       boxShadow: const [
         BoxShadow(
           color: Color(0x33000000),
@@ -329,30 +330,36 @@ class PlayerHud extends StatelessWidget {
         ),
       ],
     ),
+    foregroundDecoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(999),
+      gradient: const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0x80ffffff), Color(0x00ffffff)],
+        stops: [0, 0.45],
+      ),
+    ),
     child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: tap,
         borderRadius: BorderRadius.circular(999),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
           child: Row(
             children: [
-              sprite(asset, size: 24),
+              sprite(asset, size: 26),
               const SizedBox(width: 5),
               Expanded(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                  alignment: Alignment.center,
                   child: Text(
                     value,
                     style: const TextStyle(
-                      color: cream,
+                      color: ink,
                       fontWeight: FontWeight.w900,
                       fontSize: 16,
-                      shadows: [
-                        Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-                      ],
                     ),
                   ),
                 ),
@@ -360,13 +367,29 @@ class PlayerHud extends StatelessWidget {
               if (plus) ...[
                 const SizedBox(width: 5),
                 Container(
-                  width: 18,
-                  height: 18,
-                  decoration: const BoxDecoration(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Color(0xffb9e07a),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xff93d94f), Color(0xff4e9c22)],
+                    ),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x44000000),
+                        offset: Offset(0, 1),
+                        blurRadius: 2,
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.add, size: 13, color: ink),
+                  child: const Icon(
+                    Icons.add,
+                    size: 15,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ],
@@ -408,17 +431,25 @@ class PlayerHud extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 50,
-                      height: 50,
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        gradient: const LinearGradient(
+                      width: 54,
+                      height: 54,
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [Color(0xffffe9bd), Color(0xffe0b070)],
+                          colors: [
+                            Color(0xfffff6bd),
+                            Color(0xffe8a01f),
+                            Color(0xffb97a10),
+                          ],
                         ),
-                        boxShadow: const [
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x55ffc63c),
+                            blurRadius: 10,
+                          ),
                           BoxShadow(
                             color: Color(0x44000000),
                             offset: Offset(0, 2),
@@ -426,8 +457,12 @@ class PlayerHud extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(13),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xfff3d99b),
+                        ),
+                        clipBehavior: Clip.hardEdge,
                         child: avatar,
                       ),
                     ),
@@ -481,15 +516,26 @@ class PlayerHud extends StatelessWidget {
           Tooltip(
             message: 'Meniu',
             child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xff3e6fb0),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0x59dbe9ff), width: 1),
-                boxShadow: const [
+              width: 46,
+              height: 46,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xfffff6bd),
+                    Color(0xffe8a01f),
+                    Color(0xffb97a10),
+                  ],
+                ),
+                boxShadow: [
                   BoxShadow(
-                    color: Color(0x33000000),
+                    color: Color(0x55ffc63c),
+                    blurRadius: 10,
+                  ),
+                  BoxShadow(
+                    color: Color(0x44000000),
                     offset: Offset(0, 2),
                     blurRadius: 5,
                   ),
@@ -499,8 +545,12 @@ class PlayerHud extends StatelessWidget {
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: onMenu,
-                  borderRadius: BorderRadius.circular(14),
-                  child: const Icon(Icons.menu_rounded, color: cream, size: 26),
+                  customBorder: const CircleBorder(),
+                  child: const Icon(
+                    Icons.settings_rounded,
+                    color: Color(0xff6b3a12),
+                    size: 27,
+                  ),
                 ),
               ),
             ),
