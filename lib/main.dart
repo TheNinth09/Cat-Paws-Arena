@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'boot_screen.dart';
 import 'online/online_config.dart';
 import 'online/online_errors.dart';
 import 'profile.dart';
 import 'shell/online_play.dart';
+import 'studio_intro.dart';
 import 'ui_widgets.dart';
 
-export 'boot_screen.dart' show Boot, StudioSplash;
+export 'boot_screen.dart' show Boot;
+export 'studio_intro.dart' show StudioIntro;
 export 'cat_avatar.dart' show CatAvatar, CatCharacter;
 export 'home_screen.dart' show Home;
 export 'match_screen.dart' show MatchScreen;
@@ -60,6 +61,6 @@ class CatPawsApp extends StatelessWidget {
         labelStyle: TextStyle(color: ink),
       ),
     ),
-    home: Boot(player: player),
+    home: StudioIntro(player: player),
   );
 }

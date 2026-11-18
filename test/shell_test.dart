@@ -179,18 +179,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('splash shows One Ear Games and the shared version', (
+  testWidgets('studio intro shows branding art then reaches the game splash', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: StudioSplash()));
+    SharedPreferences.setMockInitialValues({});
+    final p = Player(await SharedPreferences.getInstance());
+    await tester.pumpWidget(MaterialApp(home: StudioIntro(player: p)));
     await tester.pump();
-    expect(find.text(studioName), findsOneWidget);
-    expect(find.text('v$appVersion'), findsOneWidget);
+    expect(
+      find.image(const AssetImage('assets/images/studio_logo.png')),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(milliseconds: 2500));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(Boot), findsOneWidget);
     expect(
       find.textContaining('Paws & Claws', findRichText: true),
       findsNothing,
     );
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('house tour hides parked team event and mode surfaces', (

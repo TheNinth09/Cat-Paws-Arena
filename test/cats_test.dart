@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cat_paws_arena/cat_avatar.dart';
 import 'package:cat_paws_arena/cats_screen.dart';
-import 'package:cat_paws_arena/main.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/ui_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -71,11 +70,20 @@ void main() {
         (name) =>
             !name.startsWith('assets/generated/') &&
             !name.startsWith('assets/images/') &&
+            !name.startsWith('assets/audio/') &&
             !name.startsWith('assets/fonts/'),
       ),
       isEmpty,
     );
-    await tester.pumpWidget(const MaterialApp(home: StudioSplash()));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Image(image: AssetImage('assets/images/studio_logo.png')),
+          ),
+        ),
+      ),
+    );
     expectCleanArtwork(tester);
   });
 

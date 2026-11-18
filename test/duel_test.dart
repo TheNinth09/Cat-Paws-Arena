@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:arena_engine/arena_engine.dart' as engine;
-import 'package:cat_paws_arena/main.dart';
 import 'package:cat_paws_arena/board_game.dart';
 import 'package:cat_paws_arena/duel_audio.dart';
 import 'package:cat_paws_arena/duel_events.dart';
@@ -41,7 +40,15 @@ void main() {
       ),
       isEmpty,
     );
-    await tester.pumpWidget(const MaterialApp(home: StudioSplash()));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Image(image: AssetImage('assets/images/studio_logo.png')),
+          ),
+        ),
+      ),
+    );
     expectCleanArtwork(tester);
   });
 
