@@ -777,50 +777,74 @@ class _SettingTile extends StatelessWidget {
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: value ? const Color(0xfff6d98c) : const Color(0xfff3e4c4),
-    borderRadius: BorderRadius.circular(14),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: value ? gold : const Color(0xffd9b98a),
-            width: 2,
-          ),
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: ink,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
         ),
-        child: Row(
-          children: [
-            arenaImage(
-              image,
-              width: 30,
-              height: 30,
-              fallback: Icon(fallbackIcon, color: const Color(0xffa97153), size: 26),
+      ),
+      const SizedBox(height: 5),
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => onChanged(!value),
+          child: Container(
+            width: 62,
+            height: 62,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: value
+                    ? const [Color(0xff93d94f), Color(0xff4e9c22)]
+                    : const [Color(0xffe8d6b4), Color(0xffc3a87e)],
+              ),
+              border: Border.all(
+                color: value ? Colors.white : const Color(0xffd9b98a),
+                width: 2.5,
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  offset: Offset(0, 3),
+                  blurRadius: 5,
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 2,
-                style: const TextStyle(
-                  color: ink,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w900,
-                  height: 1.1,
+            foregroundDecoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x66ffffff), Color(0x00ffffff)],
+                stops: [0, 0.45],
+              ),
+            ),
+            child: Center(
+              child: arenaImage(
+                image,
+                width: 34,
+                height: 34,
+                fallback: Icon(
+                  fallbackIcon,
+                  color: value ? Colors.white : const Color(0xffa97153),
+                  size: 30,
                 ),
               ),
             ),
-            Icon(
-              value ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: value ? const Color(0xff3f6d22) : const Color(0xffb08c62),
-              size: 18,
-            ),
-          ],
+          ),
         ),
       ),
-    ),
+    ],
   );
 }

@@ -157,67 +157,153 @@ class ProfileScreen extends StatelessWidget {
         ),
       ],
     ),
-    child: Row(
+    child: Stack(
       children: [
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xffffe9bd), Color(0xffd9a86a)],
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xfffff6bd),
+                    Color(0xffe8a01f),
+                    Color(0xffb97a10),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x55ffc63c),
+                    blurRadius: 10,
+                  ),
+                  BoxShadow(
+                    color: Color(0x44000000),
+                    offset: Offset(0, 3),
+                    blurRadius: 6,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: AvatarAvatar(
+                  AvatarSpec.fromJsonString(player.avatarSpec),
+                  size: 74,
+                ),
+              ),
             ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(17),
-            child: AvatarAvatar(
-              AvatarSpec.fromJsonString(player.avatarSpec),
-              size: 74,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    player.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: ink,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xfffdf0cd),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: const Color(0xffd9a86a),
+                        width: 1.4,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        sprite('icon_trophy', size: 16),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${player.trophies}',
+                          style: const TextStyle(
+                            color: ink,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    english
+                        ? 'Current room: ${houseRoomDisplayNamesEn[player.tier]}'
+                        : 'Camera curentă: ${houseRoomDisplayNames[player.tier]}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xff8a6242),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    english
+                        ? 'Cat in duel: ${player.cat}'
+                        : 'Pisica din duel: ${player.cat}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xff8a6242),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                player.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: ink,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w900,
+        Positioned(
+          top: 0,
+          right: 0,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => showPlayerProfile(context, player),
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xff93d94f), Color(0xff4e9c22)],
+                  ),
+                  border: Border.all(color: Colors.white, width: 1.6),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x44000000),
+                      offset: Offset(0, 2),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.edit_rounded,
+                  color: Colors.white,
+                  size: 17,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                english
-                    ? 'Current room: ${houseRoomDisplayNamesEn[player.tier]}'
-                    : 'Camera curentă: ${houseRoomDisplayNames[player.tier]}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xff8a6242),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                english ? 'Cat in duel: ${player.cat}' : 'Pisica din duel: ${player.cat}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xff8a6242),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ],
