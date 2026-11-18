@@ -138,6 +138,13 @@ class LobbyScreen extends StatelessWidget {
               ),
             ),
             content,
+            // Side rail with the hub shortcuts, floating over the room art
+            // like the reference home screens.
+            Positioned(
+              right: 8,
+              top: compact ? 74 : 78,
+              child: _sideRail(context),
+            ),
           ],
         );
       },
@@ -238,9 +245,9 @@ class LobbyScreen extends StatelessWidget {
                                   ? (english
                                         ? 'ALL ROOMS'
                                         : 'TOATE CAMERELE')
-                                  : (english
-                                        ? 'NEXT: ${houseRoomDisplayNamesEn[index + 1]} @ ${next.threshold}'
-                                        : 'URM.: ${houseRoomDisplayNames[index + 1]} LA ${next.threshold}'),
+                                  : english
+                                  ? 'NEXT: ${houseRoomDisplayNamesEn[index + 1]} @ ${next.threshold} • ~${((next.threshold - player.trophies) / 30).ceil()} W'
+                                  : 'URM.: ${houseRoomDisplayNames[index + 1]} LA ${next.threshold} • ~${((next.threshold - player.trophies) / 30).ceil()} VIC.',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -396,58 +403,78 @@ class LobbyScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: ArenaButton(
-            key: const ValueKey('lobby-fight'),
-            text: english ? 'BATTLE' : 'LUPTĂ',
-            onPressed: () => _modeChooser(context),
-            spriteName: 'btn_play_paw',
-          ),
+        _PlayButton(
+          text: english ? 'PLAY' : 'LUPTĂ',
+          onTap: () => _modeChooser(context),
         ),
-        const SizedBox(height: 6),
-        _hubRow(context),
       ],
     ),
   );
 
-  /// Compact hub entries on the main screen: friend room, local
-  /// leaderboard and the Google link inside settings. Small dark chips so
-  /// the scene keeps breathing.
-  Widget _hubRow(BuildContext context) {
-    Widget chip(
+  /// Vertical hub rail on the right edge — square glossy buttons with the
+  /// lane-1 icon art and a tiny label, like the reference home screens.
+  Widget _sideRail(BuildContext context) {
+    Widget tile(
       String label,
       String iconAsset,
       IconData fallback,
       VoidCallback tap, {
       String? key_,
     }) {
-      return Material(
-        color: const Color(0x9926131e),
-        borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          key: key_ == null ? null : ValueKey(key_),
-          onTap: tap,
-          borderRadius: BorderRadius.circular(999),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: key_ == null ? null : ValueKey(key_),
+            onTap: tap,
+            borderRadius: BorderRadius.circular(14),
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                arenaImage(
-                  iconAsset,
-                  width: 17,
-                  height: 17,
-                  fallback: Icon(fallback, color: gold, size: 15),
+                Container(
+                  width: 48,
+                  height: 48,
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xdd5a3b46), Color(0xdd3a232c)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: gold, width: 1.6),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x66000000),
+                        offset: Offset(0, 3),
+                        blurRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: arenaImage(
+                    iconAsset,
+                    fit: BoxFit.contain,
+                    fallback: Icon(fallback, color: gold, size: 24),
+                  ),
                 ),
-                const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: cream,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .6,
+                const SizedBox(height: 2),
+                SizedBox(
+                  width: 58,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        color: cream,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .4,
+                        shadows: [
+                          Shadow(color: Color(0xcc20130e), offset: Offset(0, 1)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -457,37 +484,101 @@ class LobbyScreen extends StatelessWidget {
       );
     }
 
-    return Center(
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        alignment: WrapAlignment.center,
-        children: [
-          chip(
-            english ? 'FRIENDS' : 'PRIETENI',
-            'icon_friends',
-            Icons.people_alt_rounded,
-            () => showFriendRoom(context, english: english, player: player),
-            key_: 'hub-friends',
-          ),
-          chip(
-            english ? 'LEADERBOARD' : 'CLASAMENT',
-            'icon_leaderboard',
-            Icons.leaderboard_rounded,
-            () => showLeaderboard(context, english: english, player: player),
-            key_: 'hub-ranks',
-          ),
-          chip(
-            english ? 'LINK ACCOUNT' : 'CONECTARE CONT',
-            'icon_cloud_account',
-            Icons.account_circle_rounded,
-            () => showSettings(context, player),
-            key_: 'hub-account',
-          ),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        tile(
+          english ? 'FRIENDS' : 'PRIETENI',
+          'icon_friends',
+          Icons.people_alt_rounded,
+          () => showFriendRoom(context, english: english, player: player),
+          key_: 'hub-friends',
+        ),
+        tile(
+          english ? 'LEADERBOARD' : 'CLASAMENT',
+          'icon_leaderboard',
+          Icons.leaderboard_rounded,
+          () => showLeaderboard(context, english: english, player: player),
+          key_: 'hub-ranks',
+        ),
+        tile(
+          english ? 'LINK ACCOUNT' : 'CONT',
+          'icon_cloud_account',
+          Icons.account_circle_rounded,
+          () => showSettings(context, player),
+          key_: 'hub-account',
+        ),
+      ],
     );
   }
+}
+
+/// Hero PLAY/LUPTĂ button — big, glossy, gold with the paw sprite, styled
+/// after the main call-to-action in the reference home screens.
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({required this.text, required this.onTap});
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      key: const ValueKey('lobby-fight'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        height: 66,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xfffff6b8),
+              Color(0xffffe08a),
+              gold,
+              Color(0xffeda52c),
+              Color(0xffdf931f),
+            ],
+            stops: [0, .38, .62, .82, 1],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: ink, width: 3),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x8851312d),
+              offset: Offset(0, 5),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            sprite('tile_paw', size: 32),
+            const SizedBox(width: 10),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: ink,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.6,
+                    shadows: [
+                      Shadow(color: Color(0x66ffffff), offset: Offset(0, 2)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// Mode chooser shown by the LUPTĂ button: offline against the house cats

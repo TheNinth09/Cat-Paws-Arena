@@ -112,7 +112,7 @@ void main(List<String> args) {
 }
 
 void generateLauncherIcons() {
-  final icon = im.decodeImage(File('assets/app_icon.png').readAsBytesSync())!;
+  final icon = im.decodeImage(File('assets/app_icon.jpg').readAsBytesSync())!;
   const root = 'android/app/src/main/res';
   for (final entry in {
     'mdpi': 48,
@@ -143,10 +143,11 @@ void generateLauncherIcons() {
       foreground,
       im.copyResize(
         icon,
-        width: canvasSize,
-        height: canvasSize,
+        width: (canvasSize * 0.82).round(),
+        height: (canvasSize * 0.82).round(),
         interpolation: im.Interpolation.average,
       ),
+      center: true,
     );
     File('$folder/ic_launcher_foreground.png')
         .writeAsBytesSync(im.encodePng(foreground));
