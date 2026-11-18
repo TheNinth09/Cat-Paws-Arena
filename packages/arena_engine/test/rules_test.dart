@@ -129,7 +129,8 @@ int neighbourPiece(BoardState b, int at) {
 }
 
 /// Cells a fired special at [pos] would clear, replicating the spec:
-/// line clears its row/column, bomb its 3x3, rainbow handled separately.
+/// line clears its row/column, bomb its 3x3; rainbow and copter are
+/// computed in fireSpecial where the rng stream is available.
 Set<int> expectedBlast(List<int> scratch, int w, int h, int pos, int base) {
   final r = pos ~/ w, c = pos % w;
   final cells = <int>{};
@@ -246,7 +247,7 @@ void main() {
       expect(findSpecial(res.value.state, PlayerSlot.first, kBomb), isNonNegative);
     });
 
-    test('a 2x2 square creates a bomb piece', () {
+    test('a 2x2 square creates a copter piece', () {
       // Three corners already placed; swapping (3,3)<->(4,3) fills the
       // fourth and completes the square at rows 2-3, cols 2-3. (3,1) is
       // overridden off the fixture's colour-0 diagonal so the square does
@@ -270,14 +271,14 @@ void main() {
       );
       final events = res.value.events;
 
-      final bomb = events.whereType<SpecialCreated>().firstWhere(
-        (e) => e.kind == SpecialKind.bomb,
-        orElse: () => throw StateError('no bomb created'),
+      final copter = events.whereType<SpecialCreated>().firstWhere(
+        (e) => e.kind == SpecialKind.copter,
+        orElse: () => throw StateError('no copter created'),
       );
       // The anchor is the group's lowest-index cell (top-left corner).
-      expect(bomb.cell, (row: 2, col: 2));
-      expect(bomb.orientation, isNull);
-      final waveCleared = clearedBefore(events, bomb);
+      expect(copter.cell, (row: 2, col: 2));
+      expect(copter.orientation, isNull);
+      final waveCleared = clearedBefore(events, copter);
       expect(waveCleared.cells, isNot(contains((row: 2, col: 2))));
       for (final p in [
         (row: 2, col: 3),
@@ -286,7 +287,10 @@ void main() {
       ]) {
         expect(waveCleared.cells, contains(p));
       }
-      expect(findSpecial(res.value.state, PlayerSlot.first, kBomb), isNonNegative);
+      expect(
+        findSpecial(res.value.state, PlayerSlot.first, kCopter),
+        isNonNegative,
+      );
     });
 
     test('a straight five creates a rainbow piece', () {
@@ -398,6 +402,29 @@ void main() {
         }
         expected.add(specialNow);
       }
+    } else if (base == kCopter) {
+      // Priority target: a box if any exist, else a random colour piece
+      // (same rng stream the engine uses); the copter is consumed.
+      expected = <int>{};
+      final rng = GameRandom.fromState(
+        state.rngState[PlayerSlot.first.index],
+      );
+      final boxes = <int>[
+        for (var j = 0; j < scratch.length; j++)
+          if (isBoxCode(scratch[j])) j,
+      ];
+      if (boxes.isNotEmpty) {
+        expected.add(boxes[rng.nextInt(boxes.length)]);
+      } else {
+        final colours = <int>[
+          for (var j = 0; j < scratch.length; j++)
+            if (j != specialNow && isColourCode(scratch[j])) j,
+        ];
+        if (colours.isNotEmpty) {
+          expected.add(colours[rng.nextInt(colours.length)]);
+        }
+      }
+      expected.add(specialNow);
     } else {
       expected = expectedBlast(scratch, w, h, specialNow, base);
     }
@@ -423,6 +450,43 @@ void main() {
       specialCode: kLineColumn,
       kind: SpecialKind.line,
     );
+  });
+
+  test('a fired copter strikes one target and is consumed', () {
+    const w = 7, h = 7;
+    final copterAt = idx(3, 3);
+    final cells = fixture(overrides: {copterAt: kCopter});
+    final state = stateWith(firstCells: cells);
+    final board = state.boardOf(PlayerSlot.first);
+    final partner = neighbourPiece(board, copterAt);
+    expect(partner, isNonNegative, reason: 'copter needs a swappable neighbour');
+
+    final scratch = List<int>.of(board.cells);
+    final tmp = scratch[copterAt];
+    scratch[copterAt] = scratch[partner];
+    scratch[partner] = tmp;
+
+    final res = mustApply(
+      state,
+      SwapMove(
+        firstCell: (row: copterAt ~/ w, col: copterAt % w),
+        secondCell: (row: partner ~/ w, col: partner % w),
+      ),
+    );
+    final fired = res.value.events.whereType<SpecialFired>().firstWhere(
+      (e) => e.kind == SpecialKind.copter,
+      orElse: () => throw StateError('no SpecialFired event'),
+    );
+    // No boxes on the fixture board: the copter strikes one colour piece
+    // (deterministic rng pick) and is consumed itself.
+    final rng = GameRandom.fromState(state.rngState[PlayerSlot.first.index]);
+    final colours = <int>[
+      for (var j = 0; j < scratch.length; j++)
+        if (j != partner && isColourCode(scratch[j])) j,
+    ];
+    final expected = <int>{colours[rng.nextInt(colours.length)], partner};
+    expect(fired.cells, posListOf(w, expected));
+    expect(fired.points, expected.length * kPointsPerPiece);
   });
 
   test('a fired bomb clears a 3x3 area', () {

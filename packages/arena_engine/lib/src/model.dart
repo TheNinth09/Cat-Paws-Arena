@@ -78,6 +78,10 @@ enum SpecialKind {
   /// Created by an L/T/bent five. Clears a 3x3 area when fired.
   bomb,
 
+  /// Created by a 2x2 same-colour square. Flies to a priority target
+  /// (a box if present, else a random colour piece) and clears it.
+  copter,
+
   /// Created by a straight five or more. Effect depends on
   /// [MatchConfig.rainbowRule].
   rainbow,
@@ -300,6 +304,9 @@ class MatchConfig {
 /// Supported rules/serialization version. Bump only via an announced
 /// contract change; [MatchConfig.engineVersion] must match it.
 ///
+/// Version 4: a 2x2 same-colour square creates a [SpecialKind.copter]
+/// (priority-target strike) instead of a bomb.
+///
 /// Version 3: a 2x2 same-colour square is a match shape — it creates a
 /// [SpecialKind.bomb] like an L/T bend, completes a productive swap, and
 /// dealt boards avoid starting squares.
@@ -309,7 +316,7 @@ class MatchConfig {
 /// replace round/move counters, [EndTurnMove] and [TurnEnded] replace
 /// per-move turn consumption and [RoundEnded], powers fire from a shared
 /// 0..100 meter and always queue cardboard boxes.
-const int kEngineVersion = 3;
+const int kEngineVersion = 4;
 
 /// Maximum pending obstacles queued for one player. Obstacles earned beyond
 /// this cap are discarded (the oldest queued obstacles are kept).

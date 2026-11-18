@@ -29,6 +29,10 @@ const int kBomb = 22;
 /// Rainbow piece; effect depends on [MatchConfig.rainbowRule].
 const int kRainbow = 23;
 
+/// Copter piece: flies to the highest-priority target when fired —
+/// a box if one is on the board, otherwise a random colour piece.
+const int kCopter = 24;
+
 /// First special-piece code. Codes below this are regular colours.
 const int kFirstSpecial = kLineRow;
 

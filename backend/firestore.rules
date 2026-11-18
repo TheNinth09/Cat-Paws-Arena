@@ -124,9 +124,9 @@ service cloud.firestore {
 
     // The agreed timed-turn duel fingerprint; the loadout part names each
     // player's chosen power (MatchConfig.fingerprint in the engine).
-    // v3 = 2x2 squares create bombs (kEngineVersion bump in the engine).
+    // v4 = 2x2 squares create copters (kEngineVersion bump in the engine).
     function duelFingerprint(p1, p2) {
-      return 'v3|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:'
+      return 'v4|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:'
         + powerName(p1) + '/' + powerName(p2);
     }
 
@@ -146,7 +146,7 @@ service cloud.firestore {
         && d.config == duelFingerprint(
             ('power1' in d) ? d.power1 : 0,
             ('power2' in d) ? d.power2 : 0)
-        && d.engineVersion == 3
+        && d.engineVersion == 4
         && d.contractVersion == 1
         && exists(roomPath)
         && !existsAfter(roomPath)

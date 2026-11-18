@@ -582,6 +582,25 @@ Set<int> _specialEffectCells({
         }
       }
       cells.add(index); // the rainbow piece itself is consumed
+    case kCopter:
+      // Priority target: a box if any exist, otherwise a random colour
+      // piece. The copter itself is consumed.
+      final boxes = <int>[
+        for (var j = 0; j < scratch.length; j++)
+          if (isBoxCode(scratch[j])) j,
+      ];
+      if (boxes.isNotEmpty) {
+        cells.add(boxes[rng.nextInt(boxes.length)]);
+      } else {
+        final colours = <int>[
+          for (var j = 0; j < scratch.length; j++)
+            if (j != index && isColourCode(scratch[j])) j,
+        ];
+        if (colours.isNotEmpty) {
+          cells.add(colours[rng.nextInt(colours.length)]);
+        }
+      }
+      cells.add(index);
     default:
       break;
   }
@@ -591,6 +610,7 @@ Set<int> _specialEffectCells({
 SpecialKind _specialKindOf(int base) => switch (base) {
   kLineRow || kLineColumn => SpecialKind.line,
   kBomb => SpecialKind.bomb,
+  kCopter => SpecialKind.copter,
   kRainbow => SpecialKind.rainbow,
   _ => throw ArgumentError.value(base, 'base', 'not a special code'),
 };
@@ -670,16 +690,19 @@ void _resolveMatches(_Work work, PlayerSlot slot) {
     final groups = scanMatches(board);
     if (groups.isEmpty) break;
 
-    // Decide special creations: bent or 2x2 square -> bomb, straight 5+
-    // -> rainbow, straight 4 -> line (orientation perpendicular to the
-    // run).
+    // Decide special creations: 2x2 square -> copter, bent -> bomb,
+    // straight 5+ -> rainbow, straight 4 -> line (orientation
+    // perpendicular to the run).
     final creations = <(int, int, LineOrientation?)>[]; // anchor, code, orient
     final anchors = <int>{};
     for (final g in groups) {
       int anchor;
       int code;
       LineOrientation? orient;
-      if (g.isBent || g.isSquare) {
+      if (g.isSquare) {
+        anchor = _bombAnchor(g, board);
+        code = kCopter;
+      } else if (g.isBent) {
         anchor = _bombAnchor(g, board);
         code = kBomb;
       } else if (g.cells.length >= 5) {
