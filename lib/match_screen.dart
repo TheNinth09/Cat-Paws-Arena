@@ -34,23 +34,41 @@ const _barGradient = LinearGradient(
 );
 const _modeIcons = [Icons.group, Icons.bolt, Icons.shield, Icons.emoji_events];
 /// Preset emotes offered in the duel. Only these wire values ever leave the
-/// device (contract: preset emotes only, never free text). Three sprites
-/// back six presets; the caption disambiguates at send time.
+/// device (contract: preset emotes only, never free text). The new
+/// `assets/images/` sticker art backs six presets; generated sprites stay
+/// as fallbacks and the caption disambiguates at send time.
 const _emoteItems = [
-  ('emote_laugh', 'SALUT', Emote.hello),
-  ('emote_laugh', 'WOW', Emote.wow),
-  ('emote_love', 'BRAVO', Emote.goodGame),
-  ('emote_angry', 'OPS', Emote.oops),
-  ('emote_love', 'MERCI', Emote.thanks),
-  ('emote_love', 'PURR', Emote.purr),
+  ('emote_happy', 'SALUT', Emote.hello),
+  ('emote_surprised', 'WOW', Emote.wow),
+  ('emote_cheer', 'BRAVO', Emote.goodGame),
+  ('emote_surprised', 'OPS', Emote.oops),
+  ('emote_happy', 'MERCI', Emote.thanks),
+  ('emote_laugh', 'PURR', Emote.purr),
 ];
 
 /// Sprite shown for a received preset emote.
 String emoteSpriteFor(Emote emote) => switch (emote) {
-  Emote.hello || Emote.wow => 'emote_laugh',
-  Emote.oops => 'emote_angry',
-  _ => 'emote_love',
+  Emote.hello || Emote.thanks => 'emote_happy',
+  Emote.wow || Emote.oops => 'emote_surprised',
+  Emote.goodGame => 'emote_cheer',
+  Emote.purr => 'emote_laugh',
 };
+
+/// New-art name -> generated fallback, for sticker images.
+const _emoteFallback = {
+  'emote_happy': 'emote_love',
+  'emote_cheer': 'emote_laugh',
+  'emote_surprised': 'emote_laugh',
+  'emote_laugh': 'emote_laugh',
+};
+
+/// Sticker image: `assets/images/` art first, generated sprite fallback.
+Widget _emoteImage(String name, double size) => arenaImage(
+  name,
+  width: size,
+  height: size,
+  fallback: sprite(_emoteFallback[name] ?? name, size: size),
+);
 
 class MatchScreen extends StatefulWidget {
   const MatchScreen({
@@ -629,29 +647,18 @@ class _MatchScreenState extends State<MatchScreen>
       child: Row(
         children: [
           Expanded(
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _PortraitPlate(
-                  avatar: CatAvatar(p, size: 50),
-                  name: p.name,
-                  score: match.playerScore,
-                  charge: match.playerCharge,
-                  ringColor: const Color(0xff7ed957),
-                  accentColor: gold,
-                  meterColor: const Color(0xff7ed957),
-                  iconSprite: 'tile_yarn',
-                  active: match.playerTurn,
-                  emote: emote,
-                  pulse: fx,
-                ),
-                // Preset emotes sit next to the player's own portrait.
-                Positioned(
-                  left: 0,
-                  bottom: 14,
-                  child: _EmoteCatButton(onTap: emotes),
-                ),
-              ],
+            child: _PortraitPlate(
+              avatar: CatAvatar(p, size: 50),
+              name: p.name,
+              score: match.playerScore,
+              charge: match.playerCharge,
+              ringColor: const Color(0xff7ed957),
+              accentColor: gold,
+              meterColor: const Color(0xff7ed957),
+              iconSprite: 'tile_yarn',
+              active: match.playerTurn,
+              emote: emote,
+              pulse: fx,
             ),
           ),
           const SizedBox(width: 6),
@@ -992,6 +999,12 @@ class _MatchScreenState extends State<MatchScreen>
                     top: 6,
                     child: IgnorePointer(child: _EmoteBubble(emote)),
                   ),
+                // Small cat button, bottom-right corner: preset emotes.
+                Positioned(
+                  right: 6,
+                  bottom: 6,
+                  child: _EmoteCatButton(onTap: emotes),
+                ),
                 _tutorialOverlay(),
               ],
             ),
@@ -1841,8 +1854,9 @@ class _PortraitPlate extends StatelessWidget {
   }
 }
 
-/// Small white cat button (bottom-right of the board) opening the preset
-/// emote sheet. Procedural cat face — no sprite dependency.
+/// Small cat button at the board's bottom-right corner opening the preset
+/// emote sheet. Lane-1 `btn_emote.png` art when bundled; procedural cat
+/// face as fallback.
 class _EmoteCatButton extends StatelessWidget {
   const _EmoteCatButton({required this.onTap});
   final VoidCallback onTap;
@@ -1852,22 +1866,29 @@ class _EmoteCatButton extends StatelessWidget {
     message: 'Emote',
     child: GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: const Color(0xf5fff8ea),
-          border: Border.all(color: ink, width: 1.6),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x55000000),
-              offset: Offset(0, 2),
-              blurRadius: 5,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: arenaImage(
+          'btn_emote',
+          width: 44,
+          height: 44,
+          fallback: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xf5fff8ea),
+              border: Border.all(color: ink, width: 1.6),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x55000000),
+                  offset: Offset(0, 2),
+                  blurRadius: 5,
+                ),
+              ],
             ),
-          ],
+            child: CustomPaint(painter: _CatFacePainter()),
+          ),
         ),
-        child: CustomPaint(painter: _CatFacePainter()),
       ),
     ),
   );
@@ -2171,7 +2192,7 @@ class _EmoteBubble extends StatelessWidget {
         ),
       ],
     ),
-    child: sprite(name, size: 42),
+    child: _emoteImage(name, 42),
   );
 }
 
@@ -2260,7 +2281,7 @@ class _EmoteCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            sprite(spriteName, size: 56),
+            _emoteImage(spriteName, 56),
             const SizedBox(height: 6),
             Text(
               caption,
@@ -2295,61 +2316,126 @@ class PowerMoment extends StatelessWidget {
     return Opacity(
       opacity: opacity,
       key: Key('power-moment-${power.name}'),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          CustomPaint(painter: _MomentPainter(power: power, t: t)),
-          // Power banner: "MIDNIGHT ZOOMIES"-style title across the top.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Transform.scale(
-                scale: 0.6 + 0.5 * Curves.easeOutBack.transform(
-                  (t / 0.25).clamp(0.0, 1.0),
-                ),
-                child: Text(
-                  powerNames[power.index].toUpperCase(),
-                  style: const TextStyle(
-                    color: Color(0xffffd166),
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 3,
-                    shadows: [
-                      Shadow(color: Color(0xaa7a4a00), blurRadius: 14),
-                      Shadow(color: Color(0x66000000), offset: Offset(0, 3)),
-                    ],
+      child: LayoutBuilder(
+        builder: (context, constraints) => Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(painter: _MomentPainter(power: power, t: t)),
+            // Power banner centred inside the frame: emblem + title in a
+            // framed pill, with real margins — nothing clips the edges.
+            Positioned(
+              top: constraints.maxHeight * 0.06,
+              left: 14,
+              right: 14,
+              child: Center(
+                child: Transform.scale(
+                  scale: 0.6 + 0.5 * Curves.easeOutBack.transform(
+                    (t / 0.25).clamp(0.0, 1.0),
                   ),
+                  child: _PowerBanner(power: power),
                 ),
               ),
             ),
-          ),
-          // Cat runner crossing the board and smashing pieces.
-          Positioned.fill(child: _CatRunner(t: t)),
-          if (power == PowerKind.zoomies)
-            Center(
-              child: Transform.scale(
-                scale: 0.7 + 0.5 * Curves.easeOutBack.transform(t),
-                child: const Text(
-                  'ZOOM!',
-                  style: TextStyle(
-                    color: Color(0xffffd166),
-                    fontSize: 84,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 4,
-                    shadows: [
-                      Shadow(color: Color(0xaa7a4a00), blurRadius: 18),
-                      Shadow(color: Color(0x66000000), offset: Offset(0, 3)),
-                    ],
+            // Cat runner crossing the board and smashing pieces.
+            Positioned.fill(child: _CatRunner(t: t)),
+            if (power == PowerKind.zoomies)
+              Center(
+                child: Transform.scale(
+                  scale: 0.7 + 0.5 * Curves.easeOutBack.transform(t),
+                  child: const Text(
+                    'ZOOM!',
+                    style: TextStyle(
+                      color: Color(0xffffd166),
+                      fontSize: 84,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 4,
+                      shadows: [
+                        Shadow(color: Color(0xaa7a4a00), blurRadius: 18),
+                        Shadow(color: Color(0x66000000), offset: Offset(0, 3)),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Framed banner shown at the top of the power moment: the power's emblem
+/// (`assets/images/` art with a graceful fallback chain) and its display
+/// name, inside a wooden pill that never reaches the screen edges.
+class _PowerBanner extends StatelessWidget {
+  const _PowerBanner({required this.power});
+  final PowerKind power;
+
+  /// Emblem candidates per power, tried in order under `assets/images/`.
+  static const _emblems = {
+    PowerKind.zoomies: ['zoomies_emblem', 'power_zoomies'],
+    PowerKind.shadowPounce: ['power_shadow_pounce'],
+    PowerKind.laserChase: ['power_laser_chase'],
+  };
+
+  /// First bundled candidate wins; missing art hides gracefully (the
+  /// banner keeps its title text either way).
+  Widget _emblem(List<String> names) {
+    if (names.isEmpty) return const SizedBox.shrink();
+    return Image.asset(
+      'assets/images/${names.first}.png',
+      width: 40,
+      height: 40,
+      fit: BoxFit.contain,
+      errorBuilder: (_, _, _) => _emblem(names.sublist(1)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xff8a5a44), Color(0xff54342a)],
+      ),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: gold, width: 2),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x77000000),
+          offset: Offset(0, 4),
+          blurRadius: 10,
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _emblem(_emblems[power] ?? const []),
+        const SizedBox(width: 10),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              powerNames[power.index].toUpperCase(),
+              style: const TextStyle(
+                color: Color(0xffffd166),
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2.5,
+                shadows: [
+                  Shadow(color: Color(0xaa7a4a00), blurRadius: 10),
+                  Shadow(color: Color(0x66000000), offset: Offset(0, 2)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Cat sprinting across the board during the power moment. Tries the

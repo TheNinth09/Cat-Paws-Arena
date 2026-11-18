@@ -598,6 +598,12 @@ void main() {
           orientation: null,
           cell: c(2, 4),
         ),
+        engine.SpecialCreated(
+          player: engine.PlayerSlot.first,
+          kind: engine.SpecialKind.copter,
+          orientation: null,
+          cell: c(1, 1),
+        ),
         engine.SpecialFired(
           player: engine.PlayerSlot.first,
           kind: engine.SpecialKind.bomb,
@@ -678,7 +684,7 @@ void main() {
     expect(view.whereType<Swapped>(), hasLength(1));
     expect(view.whereType<SwapRejected>(), hasLength(1));
     expect(view.whereType<Cleared>(), hasLength(1));
-    expect(view.whereType<SpecialCreated>(), hasLength(3));
+    expect(view.whereType<SpecialCreated>(), hasLength(4));
     expect(view.whereType<SpecialFired>(), hasLength(1));
     expect(view.whereType<Fell>(), hasLength(1));
     expect(view.whereType<Refilled>(), hasLength(1));
@@ -697,6 +703,7 @@ void main() {
       containsAll([
         SpecialKind.lineHorizontal,
         SpecialKind.bomb,
+        SpecialKind.copter,
         SpecialKind.rainbow,
       ]),
     );
@@ -728,7 +735,7 @@ void main() {
     for (
       var seed = 0;
       seed < 600 &&
-          (specials.length < 3 ||
+          (specials.length < engine.SpecialKind.values.length ||
               powers.length < engine.PowerKind.values.length ||
               !obstaclesQueued ||
               !obstaclesLanded ||
@@ -771,14 +778,7 @@ void main() {
       matches++;
     }
     expect(matches, greaterThan(0));
-    expect(
-      specials,
-      containsAll([
-        engine.SpecialKind.line,
-        engine.SpecialKind.bomb,
-        engine.SpecialKind.rainbow,
-      ]),
-    );
+    expect(specials, containsAll(engine.SpecialKind.values));
     expect(powers, containsAll(engine.PowerKind.values));
     expect(obstaclesQueued, isTrue);
     expect(obstaclesLanded, isTrue);

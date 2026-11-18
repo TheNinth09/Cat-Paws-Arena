@@ -37,6 +37,10 @@ const _spriteCandidates = <String, List<String>>{
   'obs_cardboard_box': ['tile_box', 'obs_cardboard_box'],
   'obs_slipper': ['obs_slipper'],
   'obs_tangled_yarn': ['obs_tangled_yarn'],
+  'special_line': ['special_fish_rocket'],
+  'special_bomb': ['special_yarn_bomb'],
+  'special_copter': ['special_mouse_copter'],
+  'special_rainbow': ['special_rainbow_paw'],
 };
 
 const _gemColors = [
@@ -358,7 +362,7 @@ class BoardViewState extends State<BoardView>
                   dur: 0.34,
                 ),
               );
-            case SpecialKind.bomb:
+            case SpecialKind.bomb || SpecialKind.copter:
               var rr = 0, cc = 0;
               for (final i in cells) {
                 rr += i ~/ width;
@@ -1213,7 +1217,7 @@ class _BoardPainter extends CustomPainter {
           SpecialKind.lineHorizontal || SpecialKind.lineVertical =>
             const Color(0xffffe28a),
           SpecialKind.bomb => const Color(0xffff8d5a),
-          SpecialKind.copter => const Color(0xff9fe8c0),
+          SpecialKind.copter => const Color(0xffb7f0a3),
           SpecialKind.rainbow => const Color(0xff9fd7ff),
           SpecialKind.none => const Color(0xfffff3c4),
         };
@@ -1234,7 +1238,38 @@ class _BoardPainter extends CustomPainter {
           const Color(0xffffffff).withValues(alpha: alpha),
           BlendMode.modulate,
         );
-      if (img != null) {
+      // Lane-1 special art replaces the tile + procedural marks entirely;
+      // without it the procedural badge/mark fallback stays.
+      final specialKey = switch (piece.special) {
+        SpecialKind.lineHorizontal || SpecialKind.lineVertical =>
+          'special_line',
+        SpecialKind.bomb => 'special_bomb',
+        SpecialKind.copter => 'special_copter',
+        SpecialKind.rainbow => 'special_rainbow',
+        SpecialKind.none => null,
+      };
+      final specialImg = specialKey == null ? null : art[specialKey];
+      if (specialImg != null) {
+        canvas.save();
+        canvas.translate(cx, cy);
+        // The rocket art points right; a column-clearer flies up.
+        if (piece.special == SpecialKind.lineVertical) {
+          canvas.rotate(-math.pi / 2);
+        }
+        canvas.translate(-cx, -cy);
+        canvas.drawImageRect(
+          specialImg,
+          Rect.fromLTWH(
+            0,
+            0,
+            specialImg.width.toDouble(),
+            specialImg.height.toDouble(),
+          ),
+          rect,
+          imagePaint,
+        );
+        canvas.restore();
+      } else if (img != null) {
         canvas.drawImageRect(
           img,
           Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
@@ -1244,7 +1279,7 @@ class _BoardPainter extends CustomPainter {
       } else {
         _drawGem(canvas, rect, piece.kind, alpha);
       }
-      if (piece.special != SpecialKind.none) {
+      if (piece.special != SpecialKind.none && specialImg == null) {
         _drawSpecialBadge(canvas, rect, piece.special, alpha);
         _drawSpecialMark(canvas, rect, piece.special, alpha, now);
       }
@@ -1473,7 +1508,7 @@ class _BoardPainter extends CustomPainter {
       SpecialKind.lineHorizontal || SpecialKind.lineVertical =>
         const Color(0xfffff3c4),
       SpecialKind.bomb => const Color(0xff4a2c2c),
-      SpecialKind.copter => const Color(0xff2c4a3a),
+      SpecialKind.copter => const Color(0xff3d6b2f),
       SpecialKind.rainbow => const Color(0xff7ec8ff),
       SpecialKind.none => null,
     };
@@ -1541,25 +1576,24 @@ class _BoardPainter extends CustomPainter {
             ..color = const Color(0xffffe28a).withValues(alpha: alpha),
         );
       case SpecialKind.copter:
-        // Little spinning rotor mark over the mouse copter tile.
+        // Helicopter blades: two spinning rotor arms over a green disc.
+        canvas.drawCircle(
+          c,
+          s * 0.3,
+          Paint()
+            ..color = const Color(0xff2f4f26).withValues(alpha: 0.8 * alpha),
+        );
         final rotor = Paint()
-          ..color = const Color(0xff2c4a3a).withValues(alpha: 0.9 * alpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = s * 0.07
+          ..color = const Color(0xffd8f0c8).withValues(alpha: 0.95 * alpha)
+          ..strokeWidth = s * 0.06
           ..strokeCap = StrokeCap.round;
-        for (var i = 0; i < 2; i++) {
-          final a = now * 6 + i * math.pi / 2;
+        for (final a in [now * 10, now * 10 + math.pi / 2]) {
           canvas.drawLine(
-            Offset(c.dx - s * 0.22 * math.cos(a), c.dy - s * 0.22 * math.sin(a)),
-            Offset(c.dx + s * 0.22 * math.cos(a), c.dy + s * 0.22 * math.sin(a)),
+            Offset(c.dx - math.cos(a) * s * 0.26, c.dy - math.sin(a) * s * 0.26),
+            Offset(c.dx + math.cos(a) * s * 0.26, c.dy + math.sin(a) * s * 0.26),
             rotor,
           );
         }
-        canvas.drawCircle(
-          c,
-          s * 0.08,
-          Paint()..color = const Color(0xff2c4a3a).withValues(alpha: alpha),
-        );
       case SpecialKind.rainbow:
         // The tile itself rotates; paint a static shimmer ring of three
         // colour segments around it.
