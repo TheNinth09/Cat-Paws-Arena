@@ -100,7 +100,7 @@ class LobbyScreen extends StatelessWidget {
             : Column(
                 children: [
                   _progressStrip(),
-                  // Foreground: the cat sits on its cushion at floor level,
+                  // Foreground: the cat stands at floor level,
                   // not floating mid-room.
                   Expanded(
                     child: Align(
@@ -242,9 +242,7 @@ class LobbyScreen extends StatelessWidget {
                           Flexible(
                             child: Text(
                               next == null
-                                  ? (english
-                                        ? 'ALL ROOMS'
-                                        : 'TOATE CAMERELE')
+                                  ? (english ? 'ALL ROOMS' : 'TOATE CAMERELE')
                                   : english
                                   ? 'NEXT: ${houseRoomDisplayNamesEn[index + 1]} @ ${next.threshold} • ~${((next.threshold - player.trophies) / 30).ceil()} W'
                                   : 'URM.: ${houseRoomDisplayNames[index + 1]} LA ${next.threshold} • ~${((next.threshold - player.trophies) / 30).ceil()} VIC.',
@@ -298,7 +296,7 @@ class LobbyScreen extends StatelessWidget {
     );
   }
 
-  /// The player's cat sitting on its cushion in the middle of the room.
+  /// The player's cat standing in the middle of the room.
   Widget _catScene(BuildContext context, {bool compact = false}) {
     final height = compact ? 170.0 : 205.0;
     final catAsset = switch (player.cat) {
@@ -310,40 +308,15 @@ class LobbyScreen extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          height: height + 46,
-          child: Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              Positioned(
-                bottom: 0,
-                child: arenaImage(
-                  'cat_cushion',
-                  width: min(320, MediaQuery.sizeOf(context).width * .8),
+          height: height + 8,
+          child: catAsset == null
+              ? CatCharacter(player, height: height)
+              : arenaImage(
+                  catAsset,
+                  height: height,
                   fit: BoxFit.contain,
-                  fallback: CustomPaint(
-                    size: Size(
-                      min(320, MediaQuery.sizeOf(context).width * .8),
-                      64,
-                    ),
-                    painter: const _RugPainter(),
-                  ),
+                  fallback: CatCharacter(player, height: height),
                 ),
-              ),
-              // The cat overlaps the cushion's upper half so it reads as
-              // sitting ON it, not hovering beside it.
-              Positioned(
-                bottom: 36,
-                child: catAsset == null
-                    ? CatCharacter(player, height: height)
-                    : arenaImage(
-                        catAsset,
-                        height: height,
-                        fit: BoxFit.contain,
-                        fallback: CatCharacter(player, height: height),
-                      ),
-              ),
-            ],
-          ),
         ),
         const SizedBox(height: 2),
         label(player.cat, size: 24),
@@ -374,10 +347,7 @@ class LobbyScreen extends StatelessWidget {
               ),
             ),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: const Color(0xcc1d3f7a),
                 borderRadius: BorderRadius.circular(999),
@@ -471,7 +441,10 @@ class LobbyScreen extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                         letterSpacing: .4,
                         shadows: [
-                          Shadow(color: Color(0xcc20130e), offset: Offset(0, 1)),
+                          Shadow(
+                            color: Color(0xcc20130e),
+                            offset: Offset(0, 1),
+                          ),
                         ],
                       ),
                     ),
@@ -669,7 +642,8 @@ class _LeaderboardPanelState extends State<_LeaderboardPanel> {
   Widget build(BuildContext context) {
     final entries = <({String name, int trophies, bool you})>[
       for (final room in houseRooms)
-        for (final cat in room.cats) (name: cat.name, trophies: cat.trophies, you: false),
+        for (final cat in room.cats)
+          (name: cat.name, trophies: cat.trophies, you: false),
       (name: p.name, trophies: p.trophies, you: true),
     ]..sort((a, b) => b.trophies.compareTo(a.trophies));
     return Column(
@@ -839,48 +813,6 @@ class _LeaderboardPanelState extends State<_LeaderboardPanel> {
       ),
     );
   }
-}
-
-/// Oval cushion/rug the cat sits on: wooden rim, woven centre and a
-/// stitched edge — procedural fallback for `cat_cushion.png`.
-class _RugPainter extends CustomPainter {
-  const _RugPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final paint = Paint();
-    paint.color = const Color(0xff7c4a34);
-    canvas.drawOval(rect.deflate(3), paint);
-    paint.color = const Color(0xffb5654a);
-    canvas.drawOval(rect.deflate(9), paint);
-    paint.color = const Color(0xffd9a05f);
-    canvas.drawOval(rect.deflate(15), paint);
-    paint
-      ..color = const Color(0x88a86a3c)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawOval(rect.deflate(21), paint);
-    paint.style = PaintingStyle.fill;
-    // Woven diamond motif.
-    paint.color = const Color(0x66a86a3c);
-    for (var i = 0; i < 5; i++) {
-      final cx = size.width * (.2 + i * .15);
-      final cy = size.height * .5;
-      canvas.drawPath(
-        Path()
-          ..moveTo(cx, cy - 7)
-          ..lineTo(cx + 6, cy)
-          ..lineTo(cx, cy + 7)
-          ..lineTo(cx - 6, cy)
-          ..close(),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_RugPainter oldDelegate) => false;
 }
 
 class _PowerPill extends StatelessWidget {

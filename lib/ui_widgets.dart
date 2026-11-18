@@ -579,6 +579,49 @@ class ArenaBottomBar extends StatelessWidget {
       Icons.event,
     ];
 
+    // Per-tab tile colours like the reference bar: each side tab is its own
+    // chunky coloured tile; the selected one gets a gold frame and glow.
+    const tileStyles = [
+      (Color(0xff7a3329), Color(0xffef7a68)), // MAGAZIN
+      (Color(0xff6b4423), Color(0xffcb8b28)), // PISICI
+      (Color(0xff000000), Color(0xff000000)), // LUPTĂ (centre button)
+      (Color(0xff274a73), Color(0xff5f96d4)), // ECHIPĂ
+      (Color(0xff46296b), Color(0xffa259e6)), // EVENIMENTE
+    ];
+
+    Widget tileIcon(int i) {
+      switch (i) {
+        case 0:
+          return CustomPaint(
+            size: const Size(24, 24),
+            painter: _ShopIconPainter(selected: selected == i),
+          );
+        case 1:
+          return CustomPaint(
+            size: const Size(24, 24),
+            painter: _CatsIconPainter(selected: selected == i),
+          );
+        case 3:
+        case 4:
+          return arenaImage(
+            i == 3 ? 'icon_team' : 'icon_events',
+            width: 24,
+            height: 24,
+            fallback: Icon(
+              icons[i],
+              size: 23,
+              color: selected == i ? gold : const Color(0xffd8b48f),
+            ),
+          );
+        default:
+          return Icon(
+            icons[i],
+            size: 23,
+            color: selected == i ? gold : const Color(0xffd8b48f),
+          );
+      }
+    }
+
     Widget navItem(int i) => Expanded(
       child: Semantics(
         button: true,
@@ -590,89 +633,81 @@ class ArenaBottomBar extends StatelessWidget {
             onTap: () => onSelected(i),
             child: SizedBox.expand(
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
+                padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      height: 30,
-                      width: 46,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: selected == i
-                            ? const Color(0x2effd98b)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: i == 0
-                          ? Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                CustomPaint(
-                                  size: const Size(26, 26),
-                                  painter: _ShopIconPainter(
-                                    selected: selected == i,
-                                  ),
-                                ),
-                                if (shopBadge)
-                                  Positioned(
-                                    right: -4,
-                                    top: -4,
-                                    child: Container(
-                                      width: 11,
-                                      height: 11,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xffe2433a),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: const Color(0xff7c4e37),
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          height: 40,
+                          width: 46,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Color.lerp(
+                                  tileStyles[i].$1,
+                                  Colors.white,
+                                  0.16,
+                                )!,
+                                tileStyles[i].$1,
                               ],
-                            )
-                          : i == 1
-                          ? CustomPaint(
-                              size: const Size(26, 26),
-                              painter: _CatsIconPainter(
-                                selected: selected == i,
-                              ),
-                            )
-                          : i == 3 || i == 4
-                          ? arenaImage(
-                              i == 3 ? 'icon_team' : 'icon_events',
-                              width: 26,
-                              height: 26,
-                              fallback: Icon(
-                                icons[i],
-                                size: 25,
-                                color: selected == i
-                                    ? gold
-                                    : const Color(0xffd8b48f),
-                              ),
-                            )
-                          : Icon(
-                              icons[i],
-                              size: 25,
-                              color: selected == i
-                                  ? gold
-                                  : const Color(0xffd8b48f),
                             ),
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(
+                              color: selected == i ? gold : tileStyles[i].$2,
+                              width: selected == i ? 2.4 : 1.6,
+                            ),
+                            boxShadow: selected == i
+                                ? const [
+                                    BoxShadow(
+                                      color: Color(0x88ffc63c),
+                                      blurRadius: 9,
+                                    ),
+                                  ]
+                                : const [
+                                    BoxShadow(
+                                      color: Color(0x5520130e),
+                                      offset: Offset(0, 2),
+                                      blurRadius: 3,
+                                    ),
+                                  ],
+                          ),
+                          child: tileIcon(i),
+                        ),
+                        if (i == 0 && shopBadge)
+                          Positioned(
+                            right: -4,
+                            top: -4,
+                            child: Container(
+                              width: 11,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                color: const Color(0xffe2433a),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xff7c4e37),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     SizedBox(
-                      height: 13,
+                      height: 12,
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
                           labels[i],
                           style: TextStyle(
-                            color: selected == i
-                                ? gold
-                                : const Color(0xffe8c9a0),
+                            color: selected == i ? gold : tileStyles[i].$2,
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 0.3,
@@ -698,7 +733,7 @@ class ArenaBottomBar extends StatelessWidget {
             left: 0,
             right: 0,
             bottom: 0,
-            height: 62,
+            height: 64,
             child: Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(

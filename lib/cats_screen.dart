@@ -775,26 +775,8 @@ class _CatStage extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // The cat sits on its cushion over the room backdrop, like the
-        // reference creator screen — no panel behind it.
-        SizedBox(
-          height: 240,
-          child: Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              Positioned(
-                bottom: 0,
-                child: arenaImage(
-                  'cat_cushion',
-                  width: 300,
-                  fit: BoxFit.contain,
-                  fallback: const SizedBox(width: 300, height: 60),
-                ),
-              ),
-              Positioned(bottom: 26, child: _catHeroArt(player, cat)),
-            ],
-          ),
-        ),
+        // Just the cat over the room backdrop — no cushion, no panel.
+        SizedBox(height: 235, child: Center(child: _catHeroArt(player, cat))),
         const SizedBox(height: 8),
         label(
           cat == 'Custom'

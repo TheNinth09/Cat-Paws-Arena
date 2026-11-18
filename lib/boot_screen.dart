@@ -59,7 +59,6 @@ class _BootState extends State<Boot> {
       'special_rainbow_paw',
       'cat_tzuki',
       'cat_bubble',
-      'cat_cushion',
       'trophy_gold_fish',
       'milestone_chest',
       'paws_daily_5',
@@ -458,4 +457,3 @@ class _BootCharm extends CustomPainter {
   @override
   bool shouldRepaint(_BootCharm old) => false;
 }
-

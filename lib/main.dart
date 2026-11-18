@@ -18,6 +18,7 @@ export 'match_screen.dart' show MatchScreen;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   OnlineServices? online;
   try {
     online = await OnlineServices.start();
