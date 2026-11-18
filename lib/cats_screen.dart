@@ -313,6 +313,7 @@ class _CatsScreenState extends State<CatsScreen> {
   final _random = Random();
   String? _catName;
   AvatarSpec _avatar = const AvatarSpec();
+  late String _viewing = player.cat;
 
   Player get player => widget.player;
 
@@ -485,7 +486,8 @@ class _CatsScreenState extends State<CatsScreen> {
   }
 
   /// Three cat chips above the stage — the two defaults plus the
-  /// custom creation, with a gold ring on the equipped one.
+  /// custom creation. The gold ring marks the one being previewed and a
+  /// green check marks the one equipped in duels.
   Widget _catChips() => Row(
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
@@ -493,39 +495,51 @@ class _CatsScreenState extends State<CatsScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: GestureDetector(
-            onTap: () => change(() {
-              player.cat = cat;
-              player.photo = null;
-            }),
+            onTap: () => setState(() => _viewing = cat),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xfffff3d9),
-                    border: Border.all(
-                      color: player.cat == cat ? gold : ink,
-                      width: player.cat == cat ? 3 : 2,
-                    ),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x5551312d),
-                        offset: Offset(0, 3),
-                        blurRadius: 4,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xfffff3d9),
+                        border: Border.all(
+                          color: _viewing == cat ? gold : ink,
+                          width: _viewing == cat ? 3 : 2,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x5551312d),
+                            offset: Offset(0, 3),
+                            blurRadius: 4,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  clipBehavior: Clip.hardEdge,
-                  child: arenaImage(
-                    cat == 'Custom'
-                        ? 'cat_custom'
-                        : 'cat_${cat.toLowerCase()}',
-                    fit: BoxFit.cover,
-                    fallback: CatAvatar(player, size: 52),
-                  ),
+                      clipBehavior: Clip.hardEdge,
+                      child: arenaImage(
+                        cat == 'Custom'
+                            ? 'cat_custom'
+                            : 'cat_${cat.toLowerCase()}',
+                        fit: BoxFit.cover,
+                        fallback: CatAvatar(player, size: 52),
+                      ),
+                    ),
+                    if (player.cat == cat)
+                      const Positioned(
+                        right: -3,
+                        bottom: -3,
+                        child: Icon(
+                          Icons.check_circle,
+                          color: Color(0xff3f6d22),
+                          size: 20,
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 3),
                 SizedBox(
@@ -535,7 +549,7 @@ class _CatsScreenState extends State<CatsScreen> {
                     child: Text(
                       cat == 'Custom' ? 'CUSTOM' : cat.toUpperCase(),
                       style: TextStyle(
-                        color: player.cat == cat ? ink : const Color(0xff8a6242),
+                        color: _viewing == cat ? ink : const Color(0xff8a6242),
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
                       ),
@@ -558,8 +572,8 @@ class _CatsScreenState extends State<CatsScreen> {
       const SizedBox(height: 4),
       _catChips(),
       const SizedBox(height: 8),
-      _CatStage(player: player, catName: _catName),
-      if (player.cat == 'Custom') ...[
+      _CatStage(player: player, cat: _viewing, catName: _catName),
+      if (_viewing == 'Custom') ...[
         nameRow(),
         _swatchesRow(
           'BLANĂ',
@@ -625,8 +639,13 @@ class _CatsScreenState extends State<CatsScreen> {
             Expanded(
               flex: 3,
               child: ArenaButton(
-                text: 'SALVEAZĂ AVATAR',
-                onPressed: () => change(() {}),
+                text: player.cat == 'Custom'
+                    ? 'SALVEAZĂ AVATAR'
+                    : 'ECHIPEAZĂ ȘI SALVEAZĂ',
+                onPressed: () => change(() {
+                  player.cat = 'Custom';
+                  player.photo = null;
+                }),
                 green: true,
               ),
             ),
@@ -644,7 +663,7 @@ class _CatsScreenState extends State<CatsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                player.cat == 'Tzuki'
+                _viewing == 'Tzuki'
                     ? 'Tzuki • O singură ureche, stânga\nThe Midnight Zoomies'
                     : 'Bubble • Shadow Pounce',
                 textAlign: TextAlign.center,
@@ -657,6 +676,21 @@ class _CatsScreenState extends State<CatsScreen> {
             ],
           ),
         ),
+      if (_viewing != 'Custom') ...[
+        const SizedBox(height: 10),
+        ArenaButton(
+          text: _viewing == player.cat
+              ? 'ECHIPAT'
+              : 'ECHIPEAZĂ PE ${_viewing.toUpperCase()}',
+          onPressed: _viewing == player.cat
+              ? null
+              : () => change(() {
+                  player.cat = _viewing;
+                  player.photo = null;
+                }),
+          green: _viewing != player.cat,
+        ),
+      ],
       const SizedBox(height: 14),
       const SectionHeading('AVATARUL TĂU'),
       panel(
@@ -695,6 +729,7 @@ class _CatsScreenState extends State<CatsScreen> {
                   ? 'ECHIPEAZĂ'
                   : 'MAGAZIN • 300',
               green: player.accessory != item && player.owned.contains(item),
+              dim: !player.owned.contains(item),
               onPressed: () => player.owned.contains(item)
                   ? change(() => player.accessory = item)
                   : widget.onShop(),
@@ -737,17 +772,23 @@ class _CreatorTitle extends StatelessWidget {
 }
 
 class _CatStage extends StatelessWidget {
-  const _CatStage({required this.player, this.catName});
+  const _CatStage({required this.player, required this.cat, this.catName});
   final Player player;
+  final String cat;
   final String? catName;
 
   @override
   Widget build(BuildContext context) {
-    final power = player.cat == 'Tzuki'
+    final power = cat == 'Tzuki'
         ? 0
-        : player.cat == 'Bubble'
+        : cat == 'Bubble'
         ? 1
         : player.power;
+    final (tagText, tagColor) = cat == 'Tzuki'
+        ? ('RARĂ', const Color(0xff8e4fc4))
+        : cat == 'Bubble'
+        ? ('COMUNĂ', const Color(0xff4a8a37))
+        : ('UNICĂ', const Color(0xffcb8b28));
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -788,18 +829,20 @@ class _CatStage extends StatelessWidget {
                     child: sprite('tile_paw', size: 30),
                   ),
                 ),
-                _catHeroArt(player),
+                _catHeroArt(player, cat),
               ],
             ),
           ),
         ),
         const SizedBox(height: 8),
         label(
-          player.cat == 'Custom'
+          cat == 'Custom'
               ? (catName ?? 'PISI').toUpperCase()
-              : player.cat.toUpperCase(),
+              : cat.toUpperCase(),
           size: 24,
         ),
+        const SizedBox(height: 4),
+        _RarityTag(text: tagText, color: tagColor),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -807,7 +850,11 @@ class _CatStage extends StatelessWidget {
           alignment: WrapAlignment.center,
           children: [
             _LoadoutChip(
-              icon: Icons.bolt,
+              art: [
+                'power_zoomies',
+                'power_shadow_pounce',
+                'power_laser_chase',
+              ][power.clamp(0, 2)],
               text: 'PUTERE • ${powerNames[power]}',
             ),
             _LoadoutChip(
@@ -825,8 +872,8 @@ class _CatStage extends StatelessWidget {
 
 /// Hero cat art for the stage: the real PNG sprites for the presets and
 /// the tinted custom art for the created cat — never the painter look.
-Widget _catHeroArt(Player player) {
-  if (player.cat == 'Custom') {
+Widget _catHeroArt(Player player, String cat) {
+  if (cat == 'Custom') {
     return Stack(
       alignment: Alignment.topCenter,
       children: [
@@ -854,15 +901,16 @@ Widget _catHeroArt(Player player) {
     );
   }
   return arenaImage(
-    'cat_${player.cat.toLowerCase()}',
+    'cat_${cat.toLowerCase()}',
     height: 210,
     fallback: CatCharacter(player, height: 215),
   );
 }
 
 class _LoadoutChip extends StatelessWidget {
-  const _LoadoutChip({required this.icon, required this.text});
-  final IconData icon;
+  const _LoadoutChip({this.icon, this.art, required this.text});
+  final IconData? icon;
+  final String? art;
   final String text;
 
   @override
@@ -876,7 +924,15 @@ class _LoadoutChip extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 15, color: gold),
+        if (art != null)
+          arenaImage(
+            art!,
+            width: 18,
+            height: 18,
+            fallback: const Icon(Icons.bolt, size: 15, color: gold),
+          )
+        else
+          Icon(icon, size: 15, color: gold),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
@@ -891,6 +947,35 @@ class _LoadoutChip extends StatelessWidget {
           ),
         ),
       ],
+    ),
+  );
+}
+
+/// Small coloured class/rarity tag under the cat's stage name.
+class _RarityTag extends StatelessWidget {
+  const _RarityTag({required this.text, required this.color});
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: ink, width: 1.6),
+      boxShadow: const [
+        BoxShadow(color: Color(0x5551312d), offset: Offset(0, 2), blurRadius: 3),
+      ],
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 11,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.2,
+      ),
     ),
   );
 }
@@ -1083,10 +1168,11 @@ class _EquipCard extends StatelessWidget {
     required this.onPressed,
     this.selected = false,
     this.green = false,
+    this.dim = false,
   });
   final String art, title, buttonText;
   final VoidCallback? onPressed;
-  final bool selected, green;
+  final bool selected, green, dim;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1107,7 +1193,20 @@ class _EquipCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          sprite(art, size: 58),
+          dim
+              ? Opacity(
+                  opacity: 0.55,
+                  child: ColorFiltered(
+                    colorFilter: const ColorFilter.matrix([
+                      0.2126, 0.7152, 0.0722, 0, 0, //
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: sprite(art, size: 58),
+                  ),
+                )
+              : sprite(art, size: 58),
           const SizedBox(height: 6),
           Text(
             title,

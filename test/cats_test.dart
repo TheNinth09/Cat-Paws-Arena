@@ -301,7 +301,7 @@ void main() {
 
     await tester.tap(find.text('CUSTOM'));
     await tester.pumpAndSettle();
-    expect(player.cat, 'Custom');
+    expect(find.text('BLANĂ'), findsOneWidget);
 
     await tester.tap(find.text('Negru'));
     await tester.pumpAndSettle();
@@ -323,10 +323,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(player.power, 1);
 
+    await tester.tap(find.text('ECHIPEAZĂ ȘI SALVEAZĂ'));
+    await tester.pumpAndSettle();
+    expect(player.cat, 'Custom');
+
     final savedName = prefs.getString(catCustomNameKey);
     expect(savedName, isNotNull);
     expect(catPresetNames, contains(savedName));
-    expect(player.cat, 'Custom');
 
     final restored = Player(prefs);
     expect(restored.cat, 'Custom');
