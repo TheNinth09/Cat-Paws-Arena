@@ -51,11 +51,12 @@ class ProfileScreen extends StatelessWidget {
                   children: [
                     _identityCard(context),
                     const SizedBox(height: 10),
-                    _statsRow(),
+                    _statsGrid(),
                     const SizedBox(height: 12),
                     _section(
                       title: english ? 'ACHIEVEMENTS' : 'REALIZĂRI',
-                      icon: Icons.military_tech_rounded,
+                      iconAsset: 'icon_achievements',
+                      iconFallback: Icons.military_tech_rounded,
                       child: _comingSoon(
                         english
                             ? 'Achievement badges are not tracked yet — the section arrives with a real data source.'
@@ -64,7 +65,8 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     _section(
                       title: 'BANDAJE',
-                      icon: Icons.healing_rounded,
+                      iconAsset: 'icon_bandages',
+                      iconFallback: Icons.healing_rounded,
                       child: _comingSoon(
                         english
                             ? 'No bandage cosmetics exist yet — this space stays empty until they ship.'
@@ -73,12 +75,14 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     _section(
                       title: english ? 'EMOTES' : 'EMOTE-URI',
-                      icon: Icons.emoji_emotions_rounded,
+                      spriteName: 'emote_laugh',
+                      iconFallback: Icons.emoji_emotions_rounded,
                       child: _emotesGrid(),
                     ),
                     _section(
                       title: english ? 'ACCESSORIES' : 'ACCESORII',
-                      icon: Icons.style_rounded,
+                      iconAsset: 'icon_accessories',
+                      iconFallback: Icons.style_rounded,
                       child: _accessoriesGrid(),
                     ),
                     const SizedBox(height: 8),
@@ -220,67 +224,101 @@ class ProfileScreen extends StatelessWidget {
     ),
   );
 
-  /// The stats that exist locally — trophies, paws and owned cosmetics.
-  /// Wins/losses/draws are not tracked anywhere in Player, so they are
-  /// deliberately absent rather than faked.
-  Widget _statsRow() {
-    Widget stat(String label, String value, String iconAsset) => Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xfffffbec),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xffd9b98c), width: 1.4),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            sprite(iconAsset, size: 22),
-            const SizedBox(height: 4),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                value,
-                style: const TextStyle(
-                  color: ink,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+  /// 3x2 grid of the stats that actually exist locally — trophies, paws,
+  /// the current room, owned cosmetics, claimed milestones and the preset
+  /// emote set. Wins/losses/draws are not tracked anywhere in Player, so
+  /// they are deliberately absent rather than fabricated.
+  Widget _statsGrid() {
+    Widget stat(
+      String label,
+      String value, {
+      String? spriteName,
+      String? iconAsset,
+      IconData? fallback,
+    }) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xfffffbec),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xffd9b98c), width: 1.4),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (spriteName != null)
+            sprite(spriteName, size: 22)
+          else
+            arenaImage(
+              iconAsset!,
+              width: 22,
+              height: 22,
+              fallback: Icon(fallback, color: const Color(0xffa97153), size: 20),
             ),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 3),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
               style: const TextStyle(
-                color: Color(0xff8a6242),
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: .6,
+                color: ink,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
               ),
             ),
-          ],
-        ),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xff8a6242),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .6,
+            ),
+          ),
+        ],
       ),
     );
-    return Row(
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: 1.32,
       children: [
         stat(
           english ? 'TROPHIES' : 'TROFEE',
           '${player.trophies}',
-          'icon_trophy',
+          spriteName: 'icon_trophy',
         ),
-        const SizedBox(width: 8),
         stat(
           english ? 'PAWS' : 'LĂBUȚE',
           '${player.coins}',
-          'icon_paw_coin',
+          spriteName: 'icon_paw_coin',
         ),
-        const SizedBox(width: 8),
+        stat(
+          english ? 'ROOM' : 'CAMERĂ',
+          '${player.tier + 1}/${houseRooms.length}',
+          iconAsset: 'icon_achievements',
+          fallback: Icons.home_rounded,
+        ),
         stat(
           english ? 'COSMETICS' : 'COSMETICE',
           '${player.owned.length}',
-          'icon_chest',
+          iconAsset: 'icon_accessories',
+          fallback: Icons.style_rounded,
+        ),
+        stat(
+          english ? 'MILESTONES' : 'JALOANE',
+          '${player.claims.length}',
+          spriteName: 'icon_chest',
+        ),
+        stat(
+          english ? 'EMOTES' : 'EMOTE',
+          '${_emotes.length}',
+          spriteName: 'emote_laugh',
         ),
       ],
     );
@@ -288,7 +326,9 @@ class ProfileScreen extends StatelessWidget {
 
   Widget _section({
     required String title,
-    required IconData icon,
+    String? iconAsset,
+    String? spriteName,
+    required IconData iconFallback,
     required Widget child,
   }) => Container(
     margin: const EdgeInsets.only(bottom: 10),
@@ -304,7 +344,19 @@ class ProfileScreen extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, color: const Color(0xffa97153), size: 20),
+            if (spriteName != null)
+              sprite(spriteName, size: 20)
+            else
+              arenaImage(
+                iconAsset!,
+                width: 20,
+                height: 20,
+                fallback: Icon(
+                  iconFallback,
+                  color: const Color(0xffa97153),
+                  size: 20,
+                ),
+              ),
             const SizedBox(width: 7),
             Text(
               title,

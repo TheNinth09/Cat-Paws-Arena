@@ -28,8 +28,9 @@ Future<void> showFriendRoom(
       services: services,
       player: player,
       onMatch: (duel) {
-        Navigator.of(context).pop();
-        Navigator.of(context).push(
+        // Clear the room dialog AND any pages left on the stack, so the
+        // duel always returns to the lobby root.
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute<void>(
             builder: (_) => VsScreen(
               player: player,
@@ -37,6 +38,7 @@ Future<void> showFriendRoom(
               matchScreen: MatchScreen(player: player, mode: 0, online: duel),
             ),
           ),
+          (route) => route.isFirst,
         );
       },
     ),

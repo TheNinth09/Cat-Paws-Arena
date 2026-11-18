@@ -25,7 +25,7 @@ class HouseTourScreen extends StatelessWidget {
   /// Medallion room art, indexed like [houseRooms] (lane-1 `assets/images/`).
   static const _roomArt = [
     'bg_living_room',
-    'bg_hallway',
+    'bg_main_hall',
     'bg_kitchen',
     'bg_bedroom',
   ];
@@ -170,14 +170,15 @@ class _RoomNode extends StatelessWidget {
       children: [
         Text(
           '${index + 1}. $name',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
+          softWrap: true,
           textAlign: rightSide ? TextAlign.end : TextAlign.start,
           style: TextStyle(
             color: unlocked ? cream : const Color(0xffb7a89a),
             fontSize: 15,
             fontWeight: FontWeight.w900,
             letterSpacing: 0.5,
+            height: 1.15,
             shadows: const [
               Shadow(color: Color(0x77000000), offset: Offset(0, 1)),
             ],
@@ -202,12 +203,14 @@ class _RoomNode extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           state,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
+          softWrap: true,
+          textAlign: rightSide ? TextAlign.end : TextAlign.start,
           style: TextStyle(
             color: unlocked ? const Color(0xffffe0a8) : Colors.white54,
             fontSize: 10.5,
             fontWeight: FontWeight.w800,
+            height: 1.15,
           ),
         ),
       ],

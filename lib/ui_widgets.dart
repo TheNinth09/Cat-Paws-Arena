@@ -296,11 +296,16 @@ class PlayerHud extends StatelessWidget {
     required this.onRoad,
     required this.onShop,
     required this.onMenu,
+    this.trophyBadgeKey,
+    this.coinBadgeKey,
   });
   final Widget avatar;
   final String name;
   final int trophies, coins;
   final VoidCallback onProfile, onRoad, onShop, onMenu;
+
+  /// Optional keys so a victory-flight overlay can find the badge centers.
+  final Key? trophyBadgeKey, coinBadgeKey;
 
   Widget pill(
     String asset,
@@ -456,10 +461,18 @@ class PlayerHud extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: pill('icon_trophy', '$trophies', onRoad)),
+                Expanded(
+                  child: KeyedSubtree(
+                    key: trophyBadgeKey,
+                    child: pill('icon_trophy', '$trophies', onRoad),
+                  ),
+                ),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: pill('icon_paw_coin', '$coins', onShop, plus: true),
+                  child: KeyedSubtree(
+                    key: coinBadgeKey,
+                    child: pill('icon_paw_coin', '$coins', onShop, plus: true),
+                  ),
                 ),
               ],
             ),

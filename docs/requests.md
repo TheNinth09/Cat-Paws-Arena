@@ -267,3 +267,11 @@ Request: Informational for lane 5 / deploy — kEngineVersion is now 3 (2x2 squa
 Reason: rule change is contract-visible per docs/contract.md; flagging so the version bump is not a surprise.
 Status: answered — orchestrator updated firestore.rules + rules.test.js to engineVersion 3 / 'v3|' fingerprint alongside this merge; owner must redeploy `firebase deploy --only firestore:rules`. In-flight v2 matches void on upgrade, as noted.
 ```
+
+```text
+Lane: 3
+Blocking PR: lane-3 v0.4 polish (overlap fix, hub icons, profile grid)
+Request: Lane 2 — `flutter analyze` is RED on main at 84cfa4b: lib/engine_events.dart:38 `non_exhaustive_switch_expression` — engine v4 added `SpecialKind.copter` (packages/arena_engine/lib/src/model.dart:83) but the view-side switch and `lib/duel_events.dart`'s `SpecialKind` enum have no copter case/kind, so every test file that transitively loads the match stack fails to compile. Needs the copter view event added (enum value + switch case + board rendering) on the lane-2 side.
+Reason: engine_events.dart, duel_events.dart and packages/ are lane-2 owned; lane 3 cannot fix the enum without touching another lane's files, and `flutter analyze`/`flutter test` cannot run green until the mapping exists.
+Status: open
+```

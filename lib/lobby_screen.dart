@@ -15,7 +15,7 @@ import 'ui_widgets.dart';
 /// carries the PNGs.
 const _roomBackgrounds = [
   'bg_living_room',
-  'bg_hallway',
+  'bg_main_hall',
   'bg_kitchen',
   'bg_bedroom',
 ];
@@ -100,7 +100,14 @@ class LobbyScreen extends StatelessWidget {
             : Column(
                 children: [
                   _progressStrip(),
-                  Expanded(child: Center(child: _catScene(context))),
+                  // Foreground: the cat sits on its cushion at floor level,
+                  // not floating mid-room.
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: _catScene(context),
+                    ),
+                  ),
                   _controls(context),
                 ],
               );
@@ -315,8 +322,10 @@ class LobbyScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              // The cat overlaps the cushion's upper half so it reads as
+              // sitting ON it, not hovering beside it.
               Positioned(
-                bottom: 26,
+                bottom: 36,
                 child: catAsset == null
                     ? CatCharacter(player, height: height)
                     : arenaImage(
@@ -406,7 +415,13 @@ class LobbyScreen extends StatelessWidget {
   /// leaderboard and the Google link inside settings. Small dark chips so
   /// the scene keeps breathing.
   Widget _hubRow(BuildContext context) {
-    Widget chip(String label, IconData icon, VoidCallback tap, {String? key_}) {
+    Widget chip(
+      String label,
+      String iconAsset,
+      IconData fallback,
+      VoidCallback tap, {
+      String? key_,
+    }) {
       return Material(
         color: const Color(0x9926131e),
         borderRadius: BorderRadius.circular(999),
@@ -415,11 +430,16 @@ class LobbyScreen extends StatelessWidget {
           onTap: tap,
           borderRadius: BorderRadius.circular(999),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: gold, size: 15),
+                arenaImage(
+                  iconAsset,
+                  width: 17,
+                  height: 17,
+                  fallback: Icon(fallback, color: gold, size: 15),
+                ),
                 const SizedBox(width: 5),
                 Text(
                   label,
@@ -445,18 +465,21 @@ class LobbyScreen extends StatelessWidget {
         children: [
           chip(
             english ? 'FRIENDS' : 'PRIETENI',
+            'icon_friends',
             Icons.people_alt_rounded,
             () => showFriendRoom(context, english: english, player: player),
             key_: 'hub-friends',
           ),
           chip(
             english ? 'LEADERBOARD' : 'CLASAMENT',
+            'icon_leaderboard',
             Icons.leaderboard_rounded,
             () => showLeaderboard(context, english: english, player: player),
             key_: 'hub-ranks',
           ),
           chip(
             english ? 'LINK ACCOUNT' : 'CONECTARE CONT',
+            'icon_cloud_account',
             Icons.account_circle_rounded,
             () => showSettings(context, player),
             key_: 'hub-account',
