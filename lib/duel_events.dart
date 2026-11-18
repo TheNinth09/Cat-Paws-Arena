@@ -11,7 +11,14 @@ enum PlayerSlot { first, second }
 
 /// Defined special-piece kinds (contract: `SpecialCreated.kind` is a defined
 /// enum, not arbitrary UI text).
-enum SpecialKind { none, lineHorizontal, lineVertical, bomb, rainbow }
+enum SpecialKind {
+  none,
+  lineHorizontal,
+  lineVertical,
+  bomb,
+  copter,
+  rainbow,
+}
 
 /// Cosmetic obstacle kinds; the engine decides which kind lands where.
 enum ObstacleKind { cardboardBox, slipper, tangledYarn }

@@ -40,6 +40,7 @@ class EngineViewAdapter {
             ? SpecialKind.lineVertical
             : SpecialKind.lineHorizontal,
         engine.SpecialKind.bomb => SpecialKind.bomb,
+        engine.SpecialKind.copter => SpecialKind.copter,
         engine.SpecialKind.rainbow => SpecialKind.rainbow,
       };
 
@@ -89,6 +90,7 @@ class EngineViewAdapter {
       21 => SpecialKind.lineVertical,
       22 => SpecialKind.bomb,
       23 => SpecialKind.rainbow,
+      24 => SpecialKind.copter,
       _ => SpecialKind.none,
     };
     return BoardCell(
