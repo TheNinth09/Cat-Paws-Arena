@@ -126,9 +126,7 @@ class ProfileScreen extends StatelessWidget {
               fontSize: 20,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.4,
-              shadows: [
-                Shadow(color: Color(0x66000000), offset: Offset(0, 2)),
-              ],
+              shadows: [Shadow(color: Color(0x66000000), offset: Offset(0, 2))],
             ),
           ),
         ),
@@ -161,35 +159,35 @@ class ProfileScreen extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xfffff6bd),
-                    Color(0xffe8a01f),
-                    Color(0xffb97a10),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x55ffc63c),
-                    blurRadius: 10,
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const ValueKey('profile-avatar-pick'),
+                onTap: () => _pickAvatarArt(context),
+                customBorder: const CircleBorder(),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0xfffff6bd),
+                        Color(0xffe8a01f),
+                        Color(0xffb97a10),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(color: Color(0x55ffc63c), blurRadius: 10),
+                      BoxShadow(
+                        color: Color(0x44000000),
+                        offset: Offset(0, 3),
+                        blurRadius: 6,
+                      ),
+                    ],
                   ),
-                  BoxShadow(
-                    color: Color(0x44000000),
-                    offset: Offset(0, 3),
-                    blurRadius: 6,
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: AvatarAvatar(
-                  AvatarSpec.fromJsonString(player.avatarSpec),
-                  size: 74,
+                  child: ClipOval(child: playerAvatarArt(player, size: 74)),
                 ),
               ),
             ),
@@ -310,6 +308,81 @@ class ProfileScreen extends StatelessWidget {
     ),
   );
 
+  /// Preset avatar artwork chooser — the three real cat sprites plus the
+  /// procedural avatar, persisted in [Player.avatarArt].
+  void _pickAvatarArt(BuildContext context) => showAppDialog(
+    context,
+    english ? 'CHOOSE AVATAR' : 'ALEGE AVATARUL',
+    Wrap(
+      spacing: 12,
+      runSpacing: 10,
+      alignment: WrapAlignment.center,
+      children: [
+        for (final art in avatarArtChoices) _avatarChoice(context, art),
+        _avatarChoice(context, ''),
+      ],
+    ),
+  );
+
+  Widget _avatarChoice(BuildContext context, String art) {
+    final label = art == 'cat_tzuki'
+        ? 'TZUKI'
+        : art == 'cat_bubble'
+        ? 'BUBBLE'
+        : art == 'cat_custom'
+        ? 'CUSTOM'
+        : (english ? 'DRAWN' : 'DESENAT');
+    final selected = player.avatarArt == art;
+    return InkWell(
+      onTap: () {
+        player.avatarArt = art;
+        player.save();
+        Navigator.of(context).pop();
+      },
+      customBorder: const CircleBorder(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xfffff3d9),
+              border: Border.all(
+                color: selected ? gold : ink,
+                width: selected ? 3 : 2,
+              ),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: art.isEmpty
+                ? AvatarAvatar(
+                    AvatarSpec.fromJsonString(player.avatarSpec),
+                    size: 60,
+                  )
+                : arenaImage(
+                    art,
+                    fit: BoxFit.cover,
+                    fallback: AvatarAvatar(
+                      AvatarSpec.fromJsonString(player.avatarSpec),
+                      size: 60,
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              color: ink,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 3x2 grid of the stats that actually exist locally — trophies, paws,
   /// the current room, owned cosmetics, claimed milestones and the preset
   /// emote set. Wins/losses/draws are not tracked anywhere in Player, so
@@ -338,7 +411,11 @@ class ProfileScreen extends StatelessWidget {
               iconAsset!,
               width: 22,
               height: 22,
-              fallback: Icon(fallback, color: const Color(0xffa97153), size: 20),
+              fallback: Icon(
+                fallback,
+                color: const Color(0xffa97153),
+                size: 20,
+              ),
             ),
           const SizedBox(height: 3),
           FittedBox(
@@ -476,7 +553,11 @@ class ProfileScreen extends StatelessWidget {
     ),
     child: Row(
       children: [
-        const Icon(Icons.hourglass_empty_rounded, color: Color(0xffa08d77), size: 22),
+        const Icon(
+          Icons.hourglass_empty_rounded,
+          color: Color(0xffa08d77),
+          size: 22,
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -555,10 +636,7 @@ class ProfileScreen extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Opacity(
-            opacity: owned ? 1 : .45,
-            child: sprite(id, size: 34),
-          ),
+          Opacity(opacity: owned ? 1 : .45, child: sprite(id, size: 34)),
           const SizedBox(height: 4),
           Text(
             name,

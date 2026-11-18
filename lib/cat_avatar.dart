@@ -954,8 +954,7 @@ class AvatarSpec {
       other.power == power;
 
   @override
-  int get hashCode =>
-      Object.hash(fur, pattern, eyes, ears, accessory, power);
+  int get hashCode => Object.hash(fur, pattern, eyes, ears, accessory, power);
 }
 
 /// Loads the locally stored avatar spec; a missing or corrupt value yields
@@ -980,6 +979,24 @@ Future<void> saveAvatarSpecFor(Player p, AvatarSpec spec) async {
   p.avatarSpec = spec.toJsonString();
   await saveAvatarSpec(p.prefs, spec);
   await p.save();
+}
+
+/// Preset cat artworks offered as the player's avatar in the profile picker
+/// (the three real sprites — never typed or uploaded images).
+const avatarArtChoices = ['cat_tzuki', 'cat_bubble', 'cat_custom'];
+
+/// The player's avatar: the chosen preset cat artwork when [Player.avatarArt]
+/// is set, otherwise the procedural [AvatarSpec] avatar.
+Widget playerAvatarArt(Player p, {double size = 46}) {
+  final spec = AvatarSpec.fromJsonString(p.avatarSpec);
+  if (p.avatarArt.isEmpty) return AvatarAvatar(spec, size: size);
+  return Image.asset(
+    'assets/images/${p.avatarArt}.png',
+    width: size,
+    height: size,
+    fit: BoxFit.cover,
+    errorBuilder: (_, _, _) => AvatarAvatar(spec, size: size),
+  );
 }
 
 // --- avatar geometry (canonical 120x120 space, like the cat head) -----------

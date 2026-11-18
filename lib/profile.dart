@@ -28,12 +28,14 @@ class Player extends ChangeNotifier {
       haptics = d['haptics'] ?? true;
       photo = d['photo'];
       avatarSpec = d['avatarSpec'] ?? '';
+      avatarArt = d['avatarArt'] ?? '';
     }
   }
   final SharedPreferences prefs;
   String name = 'Alex', cat = 'Tzuki', accessory = '', daily = '';
   String? photo;
   String avatarSpec = '';
+  String avatarArt = '';
   int trophies = 0,
       coins = 500,
       fur = 0,
@@ -84,6 +86,7 @@ class Player extends ChangeNotifier {
         'haptics': haptics,
         'photo': photo,
         'avatarSpec': avatarSpec,
+        'avatarArt': avatarArt,
       }),
     );
   }
@@ -120,7 +123,11 @@ class Player extends ChangeNotifier {
   void result(int outcome) {
     const trophyFloors = [0, 300, 800, 1500];
     final floor = trophyFloors.lastWhere((t) => trophies >= t);
-    final delta = outcome > 0 ? 30 : outcome < 0 ? -25 : 0;
+    final delta = outcome > 0
+        ? 30
+        : outcome < 0
+        ? -25
+        : 0;
     trophies = (trophies + delta).clamp(floor, 1000000);
     if (outcome > 0) coins += 150;
     save();

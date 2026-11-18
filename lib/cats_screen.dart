@@ -312,7 +312,6 @@ class CatsScreen extends StatefulWidget {
 class _CatsScreenState extends State<CatsScreen> {
   final _random = Random();
   String? _catName;
-  AvatarSpec _avatar = const AvatarSpec();
   late String _viewing = player.cat;
 
   Player get player => widget.player;
@@ -322,7 +321,6 @@ class _CatsScreenState extends State<CatsScreen> {
     super.initState();
     _catName = loadCustomCatName(player.prefs);
     if (_catName == null) _pickRandomName();
-    _avatar = avatarSpecFor(player);
   }
 
   void change(VoidCallback update) {
@@ -467,24 +465,6 @@ class _CatsScreenState extends State<CatsScreen> {
     ),
   );
 
-  /// Profile avatar card: the user's own creature, separate from the duel
-  /// cats below. Opens the avatar editor.
-  void _editAvatar() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _AvatarEditorSheet(
-        initial: _avatar,
-        owned: player.owned,
-        onSave: (spec) {
-          setState(() => _avatar = spec);
-          saveAvatarSpecFor(player, spec);
-        },
-      ),
-    );
-  }
-
   /// Three cat chips above the stage — the two defaults plus the
   /// custom creation. The gold ring marks the one being previewed and a
   /// green check marks the one equipped in duels.
@@ -564,176 +544,179 @@ class _CatsScreenState extends State<CatsScreen> {
   );
 
   @override
-  Widget build(BuildContext context) => ListView(
-    key: const PageStorageKey('cats-scroll'),
-    padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
     children: [
-      const _CreatorTitle(),
-      const SizedBox(height: 4),
-      _catChips(),
-      const SizedBox(height: 8),
-      _CatStage(player: player, cat: _viewing, catName: _catName),
-      if (_viewing == 'Custom') ...[
-        nameRow(),
-        _swatchesRow(
-          'BLANĂ',
-          catFurColours,
-          const ['Gri', 'Portocaliu', 'Crem', 'Mov', 'Negru', 'Alb'],
-          player.fur,
-          (i) => change(() => player.fur = i),
-        ),
-        _choicesRow(
-          'MODEL',
-          const ['Uniform', 'Tigrat', 'Bicolor', 'Calico', 'Colorpoint'],
-          player.pattern,
-          (i) => change(() => player.pattern = i),
-        ),
-        _swatchesRow(
-          'OCHI',
-          catEyeColours,
-          const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
-          player.eyes,
-          (i) => change(() => player.eyes = i),
-        ),
-        _choicesRow(
-          'URECHI',
-          const ['Două urechi', 'Doar stânga', 'Plisate', 'Smocuri'],
-          player.ears,
-          (i) => change(() => player.ears = i),
-        ),
-        const _PanelTitle('PUTEREA AVATARULUI'),
-        Row(
-          children: [
-            for (var i = 0; i < powers.length; i++)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: _AvatarPowerCard(
-                    asset:
-                        'assets/images/${[
-                          'power_zoomies',
-                          'power_shadow_pounce',
-                          'power_laser_chase',
-                        ][i]}.png',
-                    fallback: powers[i],
-                    title: powerNames[i],
-                    selected: i == player.power,
-                    onTap: () => change(() => player.power = i),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: ArenaButton(
-                text: 'ALEATORIU',
-                onPressed: _randomise,
-                secondary: true,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              flex: 3,
-              child: ArenaButton(
-                text: player.cat == 'Custom'
-                    ? 'SALVEAZĂ AVATAR'
-                    : 'ECHIPEAZĂ ȘI SALVEAZĂ',
-                onPressed: () => change(() {
-                  player.cat = 'Custom';
-                  player.photo = null;
-                }),
-                green: true,
-              ),
-            ),
-          ],
-        ),
-      ] else
-        panel(
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.auto_awesome,
-                color: Color(0xffcb8b28),
-                size: 32,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _viewing == 'Tzuki'
-                    ? 'Tzuki • O singură ureche, stânga\nThe Midnight Zoomies'
-                    : 'Bubble • Shadow Pounce',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: ink,
-                  fontWeight: FontWeight.w800,
-                  height: 1.35,
-                ),
-              ),
-            ],
+      // Cozy library backdrop that matches the creator-screen reference:
+      // the real room art when bundled, with a soft scrim for legibility.
+      arenaImage(
+        'bg_living_room',
+        fit: BoxFit.cover,
+        fallback: const SizedBox.shrink(),
+      ),
+      const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x3320130e), Color(0x0020130e), Color(0x4520130e)],
+            stops: [0, 0.4, 1],
           ),
         ),
-      if (_viewing != 'Custom') ...[
-        const SizedBox(height: 10),
-        ArenaButton(
-          text: _viewing == player.cat
-              ? 'ECHIPAT'
-              : 'ECHIPEAZĂ PE ${_viewing.toUpperCase()}',
-          onPressed: _viewing == player.cat
-              ? null
-              : () => change(() {
-                  player.cat = _viewing;
-                  player.photo = null;
-                }),
-          green: _viewing != player.cat,
-        ),
-      ],
-      const SizedBox(height: 14),
-      const SectionHeading('AVATARUL TĂU'),
-      panel(
-        Row(
-          children: [
-            AvatarAvatar(_avatar, size: 64),
-            const SizedBox(width: 14),
-            Expanded(
-              child: ArenaButton(
-                text: 'EDITEAZĂ',
-                onPressed: _editAvatar,
-                secondary: true,
+      ),
+      ListView(
+        key: const PageStorageKey('cats-scroll'),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        children: [
+          const _CreatorTitle(),
+          const SizedBox(height: 4),
+          _catChips(),
+          const SizedBox(height: 8),
+          _CatStage(player: player, cat: _viewing, catName: _catName),
+          if (_viewing == 'Custom') ...[
+            nameRow(),
+            _swatchesRow(
+              'BLANĂ',
+              catFurColours,
+              const ['Gri', 'Portocaliu', 'Crem', 'Mov', 'Negru', 'Alb'],
+              player.fur,
+              (i) => change(() => player.fur = i),
+            ),
+            _choicesRow(
+              'MODEL',
+              const ['Uniform', 'Tigrat', 'Bicolor', 'Calico', 'Colorpoint'],
+              player.pattern,
+              (i) => change(() => player.pattern = i),
+            ),
+            _swatchesRow(
+              'OCHI',
+              catEyeColours,
+              const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
+              player.eyes,
+              (i) => change(() => player.eyes = i),
+            ),
+            _choicesRow(
+              'URECHI',
+              const ['Două urechi', 'Doar stânga', 'Plisate', 'Smocuri'],
+              player.ears,
+              (i) => change(() => player.ears = i),
+            ),
+            const _PanelTitle('PUTEREA AVATARULUI'),
+            Row(
+              children: [
+                for (var i = 0; i < powers.length; i++)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: _AvatarPowerCard(
+                        asset:
+                            'assets/images/${['power_zoomies', 'power_shadow_pounce', 'power_laser_chase'][i]}.png',
+                        fallback: powers[i],
+                        title: powerNames[i],
+                        selected: i == player.power,
+                        onTap: () => change(() => player.power = i),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: ArenaButton(
+                    text: 'ALEATORIU',
+                    onPressed: _randomise,
+                    secondary: true,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 3,
+                  child: ArenaButton(
+                    text: player.cat == 'Custom'
+                        ? 'SALVEAZĂ AVATAR'
+                        : 'ECHIPEAZĂ ȘI SALVEAZĂ',
+                    onPressed: () => change(() {
+                      player.cat = 'Custom';
+                      player.photo = null;
+                    }),
+                    green: true,
+                  ),
+                ),
+              ],
+            ),
+          ] else
+            panel(
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.auto_awesome,
+                    color: Color(0xffcb8b28),
+                    size: 32,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _viewing == 'Tzuki'
+                        ? 'Tzuki • O singură ureche, stânga\nThe Midnight Zoomies'
+                        : 'Bubble • Shadow Pounce',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: ink,
+                      fontWeight: FontWeight.w800,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-      const SectionHeading('ACCESORII'),
-      ArenaButton(
-        text: 'FĂRĂ ACCESORIU',
-        onPressed: () => change(() => player.accessory = ''),
-      ),
-      const SizedBox(height: 6),
-      AdaptiveCardGrid(
-        minWidth: 135,
-        maxColumns: 2,
-        children: [
-          for (final item in accessories)
-            _EquipCard(
-              art: item,
-              title: itemName(item),
-              selected: player.accessory == item,
-              buttonText: player.accessory == item
+          if (_viewing != 'Custom') ...[
+            const SizedBox(height: 10),
+            ArenaButton(
+              text: _viewing == player.cat
                   ? 'ECHIPAT'
-                  : player.owned.contains(item)
-                  ? 'ECHIPEAZĂ'
-                  : 'MAGAZIN • 300',
-              green: player.accessory != item && player.owned.contains(item),
-              dim: !player.owned.contains(item),
-              onPressed: () => player.owned.contains(item)
-                  ? change(() => player.accessory = item)
-                  : widget.onShop(),
+                  : 'ECHIPEAZĂ PE ${_viewing.toUpperCase()}',
+              onPressed: _viewing == player.cat
+                  ? null
+                  : () => change(() {
+                      player.cat = _viewing;
+                      player.photo = null;
+                    }),
+              green: _viewing != player.cat,
             ),
+          ],
+          const SizedBox(height: 14),
+          const SectionHeading('ACCESORII'),
+          ArenaButton(
+            text: 'FĂRĂ ACCESORIU',
+            onPressed: () => change(() => player.accessory = ''),
+          ),
+          const SizedBox(height: 6),
+          AdaptiveCardGrid(
+            minWidth: 135,
+            maxColumns: 2,
+            children: [
+              for (final item in accessories)
+                _EquipCard(
+                  art: item,
+                  title: itemName(item),
+                  selected: player.accessory == item,
+                  buttonText: player.accessory == item
+                      ? 'ECHIPAT'
+                      : player.owned.contains(item)
+                      ? 'ECHIPEAZĂ'
+                      : 'MAGAZIN • 300',
+                  green:
+                      player.accessory != item && player.owned.contains(item),
+                  dim: !player.owned.contains(item),
+                  onPressed: () => player.owned.contains(item)
+                      ? change(() => player.accessory = item)
+                      : widget.onShop(),
+                ),
+            ],
+          ),
         ],
       ),
     ],
@@ -792,46 +775,24 @@ class _CatStage extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: _stageGradient,
-            border: Border.all(color: ink, width: 2.5),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x6651312d),
-                offset: Offset(0, 5),
-                blurRadius: 8,
+        // The cat sits on its cushion over the room backdrop, like the
+        // reference creator screen — no panel behind it.
+        SizedBox(
+          height: 240,
+          child: Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              Positioned(
+                bottom: 0,
+                child: arenaImage(
+                  'cat_cushion',
+                  width: 300,
+                  fit: BoxFit.contain,
+                  fallback: const SizedBox(width: 300, height: 60),
+                ),
               ),
+              Positioned(bottom: 26, child: _catHeroArt(player, cat)),
             ],
-          ),
-          child: SizedBox(
-            height: 230,
-            width: double.infinity,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned(
-                  top: 6,
-                  left: 14,
-                  child: Opacity(
-                    opacity: 0.25,
-                    child: sprite('tile_paw', size: 30),
-                  ),
-                ),
-                Positioned(
-                  bottom: 4,
-                  right: 14,
-                  child: Opacity(
-                    opacity: 0.25,
-                    child: sprite('tile_paw', size: 30),
-                  ),
-                ),
-                _catHeroArt(player, cat),
-              ],
-            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -879,10 +840,8 @@ Widget _catHeroArt(Player player, String cat) {
       children: [
         ColorFiltered(
           colorFilter: ColorFilter.mode(
-            catFurColours[player.fur.clamp(
-              0,
-              catFurColours.length - 1,
-            )].withValues(alpha: 0.55),
+            catFurColours[player.fur.clamp(0, catFurColours.length - 1)]
+                .withValues(alpha: 0.55),
             BlendMode.modulate,
           ),
           child: _BundledAsset(
@@ -965,7 +924,11 @@ class _RarityTag extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       border: Border.all(color: ink, width: 1.6),
       boxShadow: const [
-        BoxShadow(color: Color(0x5551312d), offset: Offset(0, 2), blurRadius: 3),
+        BoxShadow(
+          color: Color(0x5551312d),
+          offset: Offset(0, 2),
+          blurRadius: 3,
+        ),
       ],
     ),
     child: Text(
@@ -1485,69 +1448,6 @@ class _BundledAssetState extends State<_BundledAsset> {
       : widget.fallback;
 }
 
-class _AvatarCushionPreview extends StatelessWidget {
-  const _AvatarCushionPreview({required this.spec});
-  final AvatarSpec spec;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 230,
-    width: double.infinity,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(26),
-      gradient: _stageGradient,
-      border: Border.all(color: ink, width: 2.5),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x6651312d),
-          offset: Offset(0, 5),
-          blurRadius: 8,
-        ),
-      ],
-    ),
-    child: Stack(
-      alignment: Alignment.bottomCenter,
-      children: [
-        Positioned.fill(
-          child: _BundledAsset(
-            asset: 'assets/images/cat_cushion.png',
-            fit: BoxFit.cover,
-            fallback: const SizedBox.expand(),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 20),
-          child: Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              ColorFiltered(
-                colorFilter: ColorFilter.mode(
-                  catFurColours[spec.fur.clamp(
-                    0,
-                    catFurColours.length - 1,
-                  )].withValues(alpha: 0.55),
-                  BlendMode.modulate,
-                ),
-                child: _BundledAsset(
-                  asset: 'assets/images/cat_custom.png',
-                  height: 150,
-                  fit: BoxFit.contain,
-                  fallback: AvatarAvatar(spec, size: 150),
-                ),
-              ),
-              if (spec.accessory.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: sprite(spec.accessory, size: 58),
-                ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 class _AvatarPowerCard extends StatelessWidget {
   const _AvatarPowerCard({
     required this.asset,
@@ -1603,235 +1503,4 @@ class _AvatarPowerCard extends StatelessWidget {
       ),
     ),
   );
-}
-
-/// Bottom-sheet editor for the player's avatar. Edits a local draft and only
-/// persists through [onSave]; owned accessories are the only ones offered.
-class _AvatarEditorSheet extends StatefulWidget {
-  const _AvatarEditorSheet({
-    required this.initial,
-    required this.owned,
-    required this.onSave,
-  });
-  final AvatarSpec initial;
-  final Set<String> owned;
-  final ValueChanged<AvatarSpec> onSave;
-
-  @override
-  State<_AvatarEditorSheet> createState() => _AvatarEditorSheetState();
-}
-
-class _AvatarEditorSheetState extends State<_AvatarEditorSheet> {
-  late AvatarSpec _spec = widget.initial;
-  final _random = Random();
-
-  List<String> get _ownedAccessories =>
-      accessories.where(widget.owned.contains).toList();
-
-  void _update(AvatarSpec next) => setState(() => _spec = next);
-
-  void _randomise() => setState(() {
-    final ownedAcc = _ownedAccessories;
-    _spec = AvatarSpec(
-      fur: _furIndices[_random.nextInt(_furIndices.length)],
-      pattern: _random.nextInt(catPatternCount),
-      eyes: _random.nextInt(catEyeColours.length),
-      ears: _random.nextInt(catEarCount),
-      accessory: ownedAcc.isEmpty
-          ? ''
-          : ownedAcc[_random.nextInt(ownedAcc.length)],
-      power: avatarPowerIds[_random.nextInt(avatarPowerIds.length)],
-    );
-  });
-
-  /// Fur choices offered to the avatar — natural cat coats only. Indices
-  /// point into [catFurColours]; a saved index outside the list still
-  /// renders, it just is not reselectable here.
-  static const _furIndices = [0, 1, 2, 4, 5];
-  static const _furNames = ['Gri', 'Portocaliu', 'Crem', 'Negru', 'Alb'];
-
-  static const _earLabels = [
-    'Două urechi',
-    'Ureche stângă',
-    'Plisate',
-    'Smocuri',
-    'Bandaj roz',
-  ];
-
-  Widget _powerRow() {
-    final selected = avatarPowerIds.indexOf(_spec.power);
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'PUTEREA AVATARULUI',
-            style: TextStyle(
-              color: Color(0xff6b4a32),
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              for (var i = 0; i < avatarPowerIds.length; i++)
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      left: i == 0 ? 0 : 6,
-                      right: i == avatarPowerIds.length - 1 ? 0 : 6,
-                    ),
-                    child: _AvatarPowerCard(
-                      asset: 'assets/images/${avatarPowerIds[i]}.png',
-                      fallback: 'vfx_${avatarPowerIds[i].substring(6)}',
-                      title: avatarPowerNames[i],
-                      selected: selected == i,
-                      onTap: () =>
-                          _update(_spec.copyWith(power: avatarPowerIds[i])),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _save() {
-    widget.onSave(_spec);
-    Navigator.pop(context);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ownedAcc = _ownedAccessories;
-    final accessoryIndex = _spec.accessory.isEmpty
-        ? 0
-        : ownedAcc.indexOf(_spec.accessory) + 1;
-    final accessoryNames = [
-      'Fără',
-      for (final item in ownedAcc) itemName(item),
-    ];
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
-      ),
-      decoration: const BoxDecoration(
-        color: Color(0xfffff3d9),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 44,
-              height: 5,
-              decoration: BoxDecoration(
-                color: const Color(0x6651312d),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'CREEAZĂ-ȚI PISICA',
-                      style: TextStyle(
-                        color: ink,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: ink),
-                    tooltip: 'Închide',
-                  ),
-                ],
-              ),
-            ),
-            _AvatarCushionPreview(spec: _spec),
-            const SizedBox(height: 4),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                children: [
-                  _swatchesRow(
-                    'BLANA',
-                    [for (final i in _furIndices) catFurColours[i]],
-                    _furNames,
-                    _furIndices.indexOf(_spec.fur),
-                    (i) => _update(_spec.copyWith(fur: _furIndices[i])),
-                  ),
-                  _choicesRow(
-                    'MODEL',
-                    const [
-                      'Uniform',
-                      'Tigrat',
-                      'Bicolor',
-                      'Calico',
-                      'Colorpoint',
-                    ],
-                    _spec.pattern,
-                    (i) => _update(_spec.copyWith(pattern: i)),
-                  ),
-                  _swatchesRow(
-                    'OCHI',
-                    catEyeColours,
-                    const ['Verzi', 'Albaștri', 'Aurii', 'Arămii'],
-                    _spec.eyes,
-                    (i) => _update(_spec.copyWith(eyes: i)),
-                  ),
-                  _choicesRow(
-                    'URECHI',
-                    _earLabels,
-                    _spec.ears.clamp(0, _earLabels.length - 1).toInt(),
-                    (i) => _update(_spec.copyWith(ears: i)),
-                  ),
-                  _powerRow(),
-                  _choicesRow(
-                    'ACCESORII',
-                    accessoryNames,
-                    accessoryIndex.clamp(0, accessoryNames.length - 1),
-                    (i) => _update(
-                      _spec.copyWith(accessory: i == 0 ? '' : ownedAcc[i - 1]),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ArenaButton(
-                          text: 'ALEATORIZEAZĂ',
-                          onPressed: _randomise,
-                          green: true,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ArenaButton(
-                          text: 'SALVEAZĂ AVATAR',
-                          onPressed: _save,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

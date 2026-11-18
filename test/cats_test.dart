@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cat_paws_arena/cat_avatar.dart';
 import 'package:cat_paws_arena/cats_screen.dart';
 import 'package:cat_paws_arena/profile.dart';
+import 'package:cat_paws_arena/profile_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
@@ -521,57 +522,35 @@ void main() {
     }
   });
 
-  testWidgets('avatar editor builds, saves and restores the avatar', (
+  testWidgets('profile avatar picker offers the three cat arts and persists', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    final player = Player(prefs)..owned.add('acc_pirate_bandana');
+    final player = Player(prefs);
     tester.view.physicalSize = const Size(900, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(
-        home: CatsScreen(player: player, onShop: () {}),
-      ),
+      MaterialApp(home: ProfileScreen(player: player)),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('AVATARUL TĂU'), findsOneWidget);
-    await tester.tap(find.text('EDITEAZĂ'));
+    await tester.tap(find.byKey(const ValueKey('profile-avatar-pick')));
     await tester.pumpAndSettle();
-    expect(find.text('CREEAZĂ-ȚI PISICA'), findsOneWidget);
+    for (final label in ['TZUKI', 'BUBBLE', 'CUSTOM', 'DESENAT']) {
+      expect(find.text(label), findsOneWidget);
+    }
 
-    // Owned accessories are offered inside the sheet, unowned ones are not.
-    final sheet = find.byType(BottomSheet);
-    expect(
-      find.descendant(of: sheet, matching: find.text('Bandană Pirat')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: sheet, matching: find.text('Pălărie Vrăjitoare')),
-      findsNothing,
-    );
+    await tester.tap(find.text('BUBBLE'));
+    await tester.pumpAndSettle();
+    expect(player.avatarArt, 'cat_bubble');
+    expect(Player(prefs).avatarArt, 'cat_bubble');
 
-    await tester.tap(find.text('Bandaj roz'));
+    await tester.tap(find.byKey(const ValueKey('profile-avatar-pick')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Shadow Pounce'));
+    await tester.tap(find.text('DESENAT'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SALVEAZĂ AVATAR'));
-    await tester.pumpAndSettle();
-
-    final saved = AvatarSpec.fromJsonString(prefs.getString(avatarSpecKey));
-    expect(saved.ears, 4);
-    expect(saved.power, 'power_shadow_pounce');
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: CatsScreen(player: player, onShop: () {}),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final avatar = tester.widget<AvatarAvatar>(find.byType(AvatarAvatar).first);
-    expect(avatar.spec.ears, 4);
-    expect(find.text('AVATARUL TĂU'), findsOneWidget);
+    expect(player.avatarArt, isEmpty);
   });
 }

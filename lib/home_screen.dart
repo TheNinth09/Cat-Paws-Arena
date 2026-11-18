@@ -51,18 +51,16 @@ class _HomeState extends State<Home> {
 
   /// Trophy badge / lobby progress strip → the house-tour map.
   void openHouseTour() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => HouseTourScreen(player: p),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => HouseTourScreen(player: p)));
   }
 
   /// Avatar / name tap → the dedicated profile page (was a dialog).
   void openProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => ProfileScreen(player: p)),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => ProfileScreen(player: p)));
   }
 
   /// LUPTĂ (or a house cat picked on the tour) → VS screen → duel. Any
@@ -187,10 +185,7 @@ class _HomeState extends State<Home> {
             child: Column(
               children: [
                 PlayerHud(
-                  avatar: AvatarAvatar(
-                    AvatarSpec.fromJsonString(p.avatarSpec),
-                    size: 46,
-                  ),
+                  avatar: playerAvatarArt(p, size: 46),
                   name: p.name,
                   trophies: p.trophies,
                   coins: p.coins,

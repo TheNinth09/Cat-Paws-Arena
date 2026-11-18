@@ -388,11 +388,7 @@ class PlayerHud extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.add,
-                    size: 15,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.add, size: 15, color: Colors.white),
                 ),
               ],
             ],
@@ -442,10 +438,7 @@ class PlayerHud extends StatelessWidget {
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [
-                            Color(0xff9a6b4a),
-                            Color(0xff5c3a26),
-                          ],
+                          colors: [Color(0xff9a6b4a), Color(0xff5c3a26)],
                         ),
                         boxShadow: [
                           BoxShadow(
@@ -640,6 +633,13 @@ class ArenaBottomBar extends StatelessWidget {
                                     ),
                                   ),
                               ],
+                            )
+                          : i == 1
+                          ? CustomPaint(
+                              size: const Size(26, 26),
+                              painter: _CatsIconPainter(
+                                selected: selected == i,
+                              ),
                             )
                           : i == 3 || i == 4
                           ? arenaImage(
@@ -919,6 +919,70 @@ class _ShopIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ShopIconPainter old) => old.selected != selected;
+}
+
+/// Cat-album book with a paw print on the cover — the PISICI tab icon,
+/// styled like the reference creator screen's diary/book button.
+class _CatsIconPainter extends CustomPainter {
+  const _CatsIconPainter({required this.selected});
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final ink = Paint()
+      ..color = selected ? const Color(0xff6b3a12) : const Color(0xff7a5335)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()..style = PaintingStyle.fill;
+
+    // Page block peeking from behind the cover.
+    fill.color = selected ? const Color(0xfffff3d6) : const Color(0xffe8d3ac);
+    final pages = RRect.fromRectAndRadius(
+      Rect.fromLTRB(w * 0.26, h * 0.16, w * 0.86, h * 0.88),
+      Radius.circular(w * 0.08),
+    );
+    canvas.drawRRect(pages, fill);
+    canvas.drawRRect(pages, ink);
+
+    // Cover.
+    fill.color = selected ? const Color(0xffa0622d) : const Color(0xff8a5a3a);
+    final cover = RRect.fromRectAndRadius(
+      Rect.fromLTRB(w * 0.12, h * 0.10, w * 0.72, h * 0.92),
+      Radius.circular(w * 0.10),
+    );
+    canvas.drawRRect(cover, fill);
+    canvas.drawRRect(cover, ink);
+
+    // Spine stitches.
+    for (var y = 0.0; y < 3; y++) {
+      canvas.drawCircle(
+        Offset(w * 0.21, h * (0.28 + y * 0.22)),
+        w * 0.035,
+        Paint()..color = const Color(0xff5c3a26),
+      );
+    }
+
+    // Paw print on the cover.
+    fill.color = selected ? gold : const Color(0xffe8c9a0);
+    final pad = Offset(w * 0.47, h * 0.58);
+    canvas.drawOval(
+      Rect.fromCenter(center: pad, width: w * 0.24, height: h * 0.20),
+      fill,
+    );
+    for (var i = 0; i < 3; i++) {
+      canvas.drawCircle(
+        Offset(w * (0.34 + i * 0.13), h * 0.40 - (i == 1 ? h * 0.05 : 0)),
+        w * 0.06,
+        fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CatsIconPainter old) => old.selected != selected;
 }
 
 class ProductCard extends StatelessWidget {
