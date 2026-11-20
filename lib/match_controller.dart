@@ -1166,7 +1166,7 @@ class ArenaMatchController extends ChangeNotifier {
         record.flag == null &&
         (session.counts || record.forfeitWinner != null);
     if (_rewardsCounted) {
-      player.result(result ?? 0);
+      player.result(result ?? 0, score: playerScore);
     }
     refresh();
   }
@@ -1344,7 +1344,7 @@ class ArenaMatchController extends ChangeNotifier {
     _busy = false;
     result = outcome;
     phase = MatchPhase.finished;
-    player.result(outcome);
+    player.result(outcome, score: playerScore);
     refresh();
   }
 

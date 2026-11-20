@@ -476,7 +476,6 @@ class PlayerHud extends StatelessWidget {
                                 '$coins',
                                 onShop,
                                 key: coinBadgeKey,
-                                plus: true,
                               ),
                             ],
                           ),
@@ -562,8 +561,8 @@ class ArenaBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labels = english
-        ? const ['SHOP', 'CATS', 'BATTLE', 'TEAM', 'EVENTS']
-        : const ['MAGAZIN', 'PISICI', 'LUPTĂ', 'ECHIPĂ', 'EVENIMENTE'];
+        ? const ['SHOP', 'CATS', 'HOME', 'TEAM', 'EVENTS']
+        : const ['MAGAZIN', 'PISICI', 'ACASĂ', 'ECHIPĂ', 'EVENIMENTE'];
     const icons = [
       Icons.storefront,
       Icons.pets,

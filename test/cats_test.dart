@@ -198,13 +198,13 @@ void main() {
     expect(p.buy('expensive', 999), false);
     p.result(-1);
     expect(p.trophies, 0);
-    p.trophies = 290;
+    p.trophies = 990;
     p.result(1);
     expect(p.tier, 1);
-    expect(p.trophies, 320);
+    expect(p.trophies, 1020);
     expect(p.coins, 355);
     p.result(0);
-    expect(p.trophies, 320);
+    expect(p.trophies, 1020);
     await p.save();
     final restored = Player(prefs);
     expect(restored.coins, p.coins);

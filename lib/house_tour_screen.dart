@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'catalog.dart';
 import 'profile.dart';
 import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
 
-/// Trophy road / house tour: a vertical illustrated map of the four house
-/// rooms climbed with trophies, exactly like the ui_turul_casei reference —
-/// golden paw-print path, milestone chests, room medallions (unlocked /
-/// glowing active / locked padlock) and a crown + gold fish on the last
-/// room. Milestones only: no bot nodes on the path. Opened from the HUD
-/// trophy badge and the lobby progress strip.
+/// Trophy road / house tour, Match Masters / Brawl Stars style: one
+/// continuous scrollable road climbed bottom-up. Between rooms sit
+/// claimable milestones (small paw gifts + emote unlocks); finishing a
+/// room grants its accessory + coins. Each room medallion opens a
+/// detail sheet with that room's own background, cats and reward.
 class HouseTourScreen extends StatelessWidget {
   const HouseTourScreen({super.key, required this.player});
 
@@ -20,114 +20,310 @@ class HouseTourScreen extends StatelessWidget {
     Icons.meeting_room_rounded,
     Icons.kitchen_rounded,
     Icons.bed_rounded,
+    Icons.stairs_rounded,
   ];
 
-  /// Medallion room art, indexed like [houseRooms] (lane-1 `assets/images/`).
-  static const _roomArt = [
-    'bg_living_room',
-    'bg_main_hall',
-    'bg_kitchen',
-    'bg_bedroom',
-  ];
-
-  /// Mockup zigzag: rooms 1-2 sit left, rooms 3-4 sit right.
-  static const _sides = [false, false, true, true];
+  /// Zigzag: rooms alternate left/right like the Brawl Stars road.
+  static const _sides = [false, true, false, true, false];
 
   bool get english => player.english;
 
   @override
   Widget build(BuildContext context) {
     final names = english ? houseRoomDisplayNamesEn : houseRoomDisplayNames;
-    final currentIndex = houseRooms.indexOf(
-      houseRoomForTrophies(player.trophies),
-    );
+    final milestones = roadMilestones;
+    // Build the road bottom-up: room0, ms, ms, ms, room1, ms...
+    final nodes = <Widget>[];
+    var m = 0;
+    for (var i = 0; i < houseRooms.length; i++) {
+      if (i > 0) {
+        // milestones belonging to this room's threshold, ascending order
+        while (m < milestones.length &&
+            !milestones[m].room &&
+            milestones[m].trophies < houseRoomThresholds[i]) {
+          nodes.add(
+            _MilestoneChip(player: player, milestone: milestones[m++]),
+          );
+        }
+        // the room-completion milestone rides on the room node itself
+        while (m < milestones.length &&
+            milestones[m].trophies == houseRoomThresholds[i]) {
+          m++;
+        }
+      }
+      nodes.add(
+        _RoomNode(
+          player: player,
+          index: i,
+          name: names[i],
+          icon: _icons[i],
+          art: houseRoomArt[i],
+          rightSide: _sides[i],
+        ),
+      );
+    }
     return Scaffold(
-      backgroundColor: const Color(0xff3a2a33),
-      body: SafeArea(
-        child: RoomBackground(
-          tier: player.tier,
-          dim: true,
-          child: Column(
-            children: [
-              _header(context),
-              Expanded(
-                child: ListView(
-                  key: const PageStorageKey('house-tour-scroll'),
-                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+      backgroundColor: const Color(0xff2e2430),
+      body: AnimatedBuilder(
+        animation: player,
+        builder: (context, _) => Stack(
+          fit: StackFit.expand,
+          children: [
+            arenaImage(
+              'bg_hallway',
+              fit: BoxFit.cover,
+              fallback: Container(color: const Color(0xff4a3542)),
+            ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x9920130e), Color(0x5520130e)],
+                ),
+              ),
+            ),
+            SafeArea(
+              child: ListView(
+                key: const PageStorageKey('house-tour-scroll'),
+                reverse: true,
+                padding: const EdgeInsets.fromLTRB(14, 90, 14, 24),
+                children: nodes,
+              ),
+            ),
+            // Floating header: back arrow + titles, no bar.
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (var i = houseRooms.length - 1; i >= 0; i--) ...[
-                      _RoomNode(
-                        player: player,
-                        index: i,
-                        name: names[i],
-                        icon: _icons[i],
-                        art: _roomArt[i],
-                        isCurrent: i == currentIndex,
-                        rightSide: _sides[i],
+                    IconButton(
+                      key: const ValueKey('house-tour-close'),
+                      tooltip: english ? 'Back' : 'Înapoi',
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: cream,
+                        size: 28,
+                        shadows: [
+                          Shadow(
+                            color: Color(0x99000000),
+                            offset: Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      if (i > 0)
-                        _MilestoneConnector(
-                          reached: player.trophies >= houseRooms[i].threshold,
-                        ),
-                    ],
+                    ),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            english ? 'TROPHY ROAD' : 'DRUMUL TROFEELOR',
+                            style: const TextStyle(
+                              color: cream,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.4,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x99000000),
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              sprite('icon_trophy', size: 15),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${player.trophies} / ${houseRoomThresholds.last}',
+                                style: const TextStyle(
+                                  color: gold,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(
+                                      color: Color(0x99000000),
+                                      offset: Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 48),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
-
-  Widget _header(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-    child: Row(
-      children: [
-        IconButton(
-          key: const ValueKey('house-tour-close'),
-          tooltip: english ? 'Back' : 'Înapoi',
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_rounded, color: cream, size: 26),
-        ),
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                english ? 'HOUSE TOUR' : 'TURUL CASEI',
-                style: const TextStyle(
-                  color: cream,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.4,
-                  shadows: [
-                    Shadow(color: Color(0x66000000), offset: Offset(0, 2)),
-                  ],
-                ),
-              ),
-              Text(
-                english
-                    ? 'TROPHY ROAD • ${player.trophies} trophies'
-                    : 'DRUMUL TROFEELOR • ${player.trophies} trofee',
-                style: const TextStyle(
-                  color: Color(0xffe8c9a0),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 48),
-      ],
-    ),
-  );
 }
 
-/// One milestone on the map: a round room medallion (art inside, padlock
-/// when locked, golden glow when it is the current room) plus the room
-/// name and trophy threshold. The top room carries crown + gold fish.
+/// A claimable road milestone between rooms: a small tile on the path
+/// showing the reward (paws or emote), the trophy threshold and its
+/// state — locked / claimable (glowing) / claimed (check).
+class _MilestoneChip extends StatelessWidget {
+  const _MilestoneChip({required this.player, required this.milestone});
+
+  final Player player;
+  final RoadMilestone milestone;
+
+  @override
+  Widget build(BuildContext context) {
+    final reached = player.trophies >= milestone.trophies;
+    final claimed = player.roadClaims.contains(milestone.trophies);
+    final claimable = reached && !claimed;
+    final isEmote = milestone.emote != null;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // paw trail segment above the chip
+            const SizedBox(height: 8, child: CustomPaint(painter: _PawTrailPainter())),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: claimable
+                    ? () => player.claimRoad(
+                        milestone.trophies,
+                        coinGift: milestone.coins,
+                        emote: milestone.emote,
+                      )
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: claimed
+                          ? const [Color(0xff9a8d7d), Color(0xff6d6156)]
+                          : claimable
+                          ? const [Color(0xffffd75e), Color(0xffe8a01f)]
+                          : const [
+                              Color(0x995f4a38),
+                              Color(0x993f2f26),
+                            ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: claimable
+                          ? const Color(0xfffff3c4)
+                          : const Color(0x55ffe9bd),
+                      width: claimable ? 2 : 1.2,
+                    ),
+                    boxShadow: [
+                      if (claimable)
+                        const BoxShadow(
+                          color: Color(0x88ffc63c),
+                          blurRadius: 14,
+                          spreadRadius: 1,
+                        ),
+                      const BoxShadow(
+                        color: Color(0x55000000),
+                        offset: Offset(0, 3),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (claimed)
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        )
+                      else if (isEmote)
+                        arenaImage(
+                          'btn_emote',
+                          width: 20,
+                          height: 20,
+                          fallback: const Icon(
+                            Icons.emoji_emotions_rounded,
+                            size: 20,
+                            color: Colors.white,
+                          ),
+                        )
+                      else
+                        sprite('icon_paw_coin', size: 20),
+                      const SizedBox(width: 7),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            isEmote
+                                ? (claimed
+                                      ? 'EMOTE'
+                                      : (player.english
+                                            ? 'NEW EMOTE'
+                                            : 'EMOTE NOU'))
+                                : '+${milestone.coins}',
+                            style: TextStyle(
+                              color: claimed
+                                  ? Colors.white
+                                  : claimable
+                                  ? const Color(0xff5d3a2c)
+                                  : const Color(0xccbfa88f),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Text(
+                            '${milestone.trophies} 🏆',
+                            style: TextStyle(
+                              color: claimed
+                                  ? const Color(0xccffffff)
+                                  : claimable
+                                  ? const Color(0x995d3a2c)
+                                  : const Color(0x88bfa88f),
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (!reached) ...[
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.lock_rounded,
+                          color: Color(0x88ffffff),
+                          size: 15,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Room medallion node: big circle with the room's own art, name,
+/// threshold and state; tapping opens the room detail sheet. The room
+/// completion reward (accessory + coins) is claimed from that sheet.
 class _RoomNode extends StatelessWidget {
   const _RoomNode({
     required this.player,
@@ -135,7 +331,6 @@ class _RoomNode extends StatelessWidget {
     required this.name,
     required this.icon,
     required this.art,
-    required this.isCurrent,
     required this.rightSide,
   });
 
@@ -144,24 +339,24 @@ class _RoomNode extends StatelessWidget {
   final String name;
   final IconData icon;
   final String art;
-  final bool isCurrent, rightSide;
+  final bool rightSide;
 
   @override
   Widget build(BuildContext context) {
     final room = houseRooms[index];
-    final unlocked = player.trophies >= room.threshold;
-    final cleared = index + 1 < houseRooms.length
-        ? player.trophies >= houseRooms[index + 1].threshold
-        : player.trophies >= houseRoomThresholds.last;
+    final threshold = room.threshold;
+    final unlocked = player.trophies >= threshold;
+    final isCurrent =
+        houseRoomForTrophies(player.trophies).threshold == threshold;
+    final gear = _roomGearLookup(threshold);
+    final finished = player.roadClaims.contains(threshold);
     final state = !unlocked
         ? (player.english
-              ? 'LOCKED AT ${room.threshold} TROPHIES'
-              : 'BLOCATĂ LA ${room.threshold} TROFEE')
+              ? 'LOCKED AT $threshold TROPHIES'
+              : 'BLOCATĂ LA $threshold TROFEE')
         : isCurrent
         ? (player.english ? 'CURRENT ROOM' : 'CAMERA CURENTĂ')
-        : cleared
-        ? (player.english ? 'CLEARED' : 'CURĂȚATĂ')
-        : (player.english ? 'UNLOCKED' : 'DESCHISĂ');
+        : (player.english ? 'CLEARED' : 'CURĂȚATĂ');
     final texts = Column(
       crossAxisAlignment: rightSide
           ? CrossAxisAlignment.end
@@ -175,27 +370,30 @@ class _RoomNode extends StatelessWidget {
           textAlign: rightSide ? TextAlign.end : TextAlign.start,
           style: TextStyle(
             color: unlocked ? cream : const Color(0xffb7a89a),
-            fontSize: 15,
+            fontSize: 16,
             fontWeight: FontWeight.w900,
             letterSpacing: 0.5,
             height: 1.15,
             shadows: const [
-              Shadow(color: Color(0x77000000), offset: Offset(0, 1)),
+              Shadow(color: Color(0x99000000), offset: Offset(0, 1)),
             ],
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 3),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            sprite('icon_trophy', size: 13),
+            sprite('icon_trophy', size: 14),
             const SizedBox(width: 3),
             Text(
-              '(${room.threshold})',
+              '$threshold',
               style: const TextStyle(
                 color: gold,
-                fontSize: 12.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w900,
+                shadows: [
+                  Shadow(color: Color(0x99000000), offset: Offset(0, 1)),
+                ],
               ),
             ),
           ],
@@ -211,57 +409,94 @@ class _RoomNode extends StatelessWidget {
             fontSize: 10.5,
             fontWeight: FontWeight.w800,
             height: 1.15,
+            shadows: const [
+              Shadow(color: Color(0x99000000), offset: Offset(0, 1)),
+            ],
           ),
         ),
+        if (gear != null && unlocked && !finished)
+          Text(
+            player.english ? 'REWARD INSIDE →' : 'RECOMPENSĂ →',
+            style: const TextStyle(
+              color: Color(0xffffd75e),
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              shadows: [
+                Shadow(color: Color(0x99000000), offset: Offset(0, 1)),
+              ],
+            ),
+          ),
       ],
     );
     return Padding(
       padding: EdgeInsets.only(
         left: rightSide ? 60 : 6,
         right: rightSide ? 6 : 60,
-        top: 4,
-        bottom: 4,
+        top: 10,
+        bottom: 10,
       ),
       child: Align(
         alignment: rightSide ? Alignment.centerRight : Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: rightSide
-              ? [
-                  Flexible(child: texts),
-                  const SizedBox(width: 12),
-                  _medallion(unlocked),
-                ]
-              : [
-                  _medallion(unlocked),
-                  const SizedBox(width: 12),
-                  Flexible(child: texts),
-                ],
+        child: InkWell(
+          borderRadius: BorderRadius.circular(60),
+          onTap: () => _openRoom(context),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: rightSide
+                ? [
+                    Flexible(child: texts),
+                    const SizedBox(width: 12),
+                    _medallion(unlocked, isCurrent),
+                  ]
+                : [
+                    _medallion(unlocked, isCurrent),
+                    const SizedBox(width: 12),
+                    Flexible(child: texts),
+                  ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _medallion(bool unlocked) {
+  String? _roomGearLookup(int threshold) {
+    for (final m in roadMilestones) {
+      if (m.room && m.trophies == threshold) return m.gear;
+    }
+    return null;
+  }
+
+  void _openRoom(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RoomSheet(player: player, index: index),
+    );
+  }
+
+  Widget _medallion(bool unlocked, bool isCurrent) {
     final glow = isCurrent && unlocked;
     return Container(
-      width: 96,
-      height: 96,
+      width: 104,
+      height: 104,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: unlocked ? (isCurrent ? gold : const Color(0xffe0b070)) : const Color(0xff6d5f55),
-          width: isCurrent ? 4 : 3,
+          color: unlocked
+              ? (isCurrent ? gold : const Color(0xffe0b070))
+              : const Color(0xff6d5f55),
+          width: isCurrent ? 4.5 : 3,
         ),
         boxShadow: [
           if (glow)
             const BoxShadow(
               color: Color(0xbbffc63c),
-              blurRadius: 22,
+              blurRadius: 24,
               spreadRadius: 3,
             ),
           const BoxShadow(
-            color: Color(0x66000000),
+            color: Color(0x77000000),
             offset: Offset(0, 4),
             blurRadius: 8,
           ),
@@ -283,24 +518,24 @@ class _RoomNode extends StatelessWidget {
                     ),
               child: arenaImage(
                 art,
-                width: 88,
-                height: 88,
+                width: 96,
+                height: 96,
                 fit: BoxFit.cover,
                 fallback: Container(
-                  width: 88,
-                  height: 88,
+                  width: 96,
+                  height: 96,
                   color: unlocked
                       ? const Color(0xfff0d9b0)
                       : const Color(0xff9a8d80),
-                  child: Icon(icon, color: ink, size: 36),
+                  child: Icon(icon, color: ink, size: 38),
                 ),
               ),
             ),
           ),
           if (!unlocked)
             Container(
-              width: 34,
-              height: 34,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: const Color(0xe6352b28),
                 shape: BoxShape.circle,
@@ -309,41 +544,7 @@ class _RoomNode extends StatelessWidget {
               child: const Icon(
                 Icons.lock_rounded,
                 color: cream,
-                size: 19,
-              ),
-            ),
-          // The top room carries the crown + gold fish trophy.
-          if (index == houseRooms.length - 1) ...[
-            const Positioned(
-              top: -2,
-              child: Icon(
-                Icons.emoji_events_rounded,
-                color: Color(0xffffd75e),
-                size: 26,
-              ),
-            ),
-            Positioned(
-              right: -6,
-              bottom: 2,
-              child: arenaImage(
-                'trophy_gold_fish',
-                width: 40,
-                height: 40,
-                fallback: sprite('icon_golden_fish', size: 40),
-              ),
-            ),
-          ],
-          // Tzuki sits beside the current room like in the reference.
-          if (glow)
-            Positioned(
-              left: -10,
-              bottom: -4,
-              child: arenaImage(
-                'cat_tzuki',
-                width: 42,
-                height: 42,
-                fit: BoxFit.contain,
-                fallback: const Icon(Icons.pets, color: cream, size: 26),
+                size: 20,
               ),
             ),
         ],
@@ -352,50 +553,240 @@ class _RoomNode extends StatelessWidget {
   }
 }
 
-/// Golden paw-print trail + milestone chest between two rooms. The chest
-/// glows once the player has actually reached the next threshold.
-class _MilestoneConnector extends StatelessWidget {
-  const _MilestoneConnector({required this.reached});
-  final bool reached;
+/// Room detail sheet: the room's own background on top, its cats, and
+/// the room-completion reward (accessory + paws) with a claim button.
+class _RoomSheet extends StatelessWidget {
+  const _RoomSheet({required this.player, required this.index});
+
+  final Player player;
+  final int index;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 74,
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        const Positioned.fill(
-          child: CustomPaint(painter: _PawTrailPainter()),
-        ),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Opacity(
-              opacity: reached ? 1 : .55,
-              child: arenaImage(
-                'milestone_chest',
-                width: 44,
-                height: 44,
-                fallback: sprite('icon_chest', size: 44),
-              ),
+  Widget build(BuildContext context) {
+    final english = player.english;
+    final names = english ? houseRoomDisplayNamesEn : houseRoomDisplayNames;
+    final room = houseRooms[index];
+    final unlocked = player.trophies >= room.threshold;
+    RoadMilestone? reward;
+    for (final m in roadMilestones) {
+      if (m.room && m.trophies == room.threshold) reward = m;
+    }
+    final claimed = player.roadClaims.contains(room.threshold);
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xfffff4d8),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 150,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                arenaImage(
+                  houseRoomArt[index],
+                  fit: BoxFit.cover,
+                  fallback: Container(color: const Color(0xffd9b98c)),
+                ),
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x00000000), Color(0xaa2e1c14)],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 14,
+                  bottom: 10,
+                  child: Text(
+                    names[index],
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      shadows: [
+                        Shadow(color: Color(0xbb000000), offset: Offset(0, 2)),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(color: Color(0xbb000000), offset: Offset(0, 1)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            Text(
-              'MILESTONE',
-              style: TextStyle(
-                color: reached ? gold : Colors.white54,
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.6,
-                shadows: const [
-                  Shadow(color: Color(0x88000000), offset: Offset(0, 1)),
-                ],
-              ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  english
+                      ? 'House cats in this room'
+                      : 'Pisicile casei din cameră',
+                  style: const TextStyle(
+                    color: Color(0xff8a6242),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final cat in room.cats)
+                      Chip(
+                        avatar: const Icon(Icons.pets, size: 16),
+                        label: Text(
+                          '${cat.name} • lv ${cat.level}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                        backgroundColor: const Color(0xfff0dfc0),
+                        side: const BorderSide(color: Color(0xffd9b98c)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (reward != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xfffdf0cd),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: gold, width: 1.6),
+                    ),
+                    child: Row(
+                      children: [
+                        sprite(reward.gear!, size: 40),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                english
+                                    ? 'ROOM REWARD'
+                                    : 'RECOMPENSA CAMEREI',
+                                style: const TextStyle(
+                                  color: Color(0xff8a5c3e),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              Text(
+                                '${itemName(reward.gear!)} + ${reward.coins} 🐾',
+                                style: const TextStyle(
+                                  color: ink,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (unlocked && !claimed)
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                player.claimRoad(
+                                  room.threshold,
+                                  coinGift: reward!.coins,
+                                  gear: reward.gear,
+                                );
+                                Navigator.pop(context);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 9,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Color(0xff93d94f),
+                                      Color(0xff4e9c22),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xff2e6b14),
+                                    width: 1.4,
+                                  ),
+                                ),
+                                child: Text(
+                                  english ? 'CLAIM' : 'IA',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Icon(
+                            claimed
+                                ? Icons.check_circle_rounded
+                                : Icons.lock_rounded,
+                            color: claimed
+                                ? const Color(0xff4e9c22)
+                                : const Color(0xff9a8d80),
+                            size: 26,
+                          ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Text(
+                  unlocked
+                      ? (english
+                            ? 'Tap CLAIM to collect the room reward.'
+                            : 'Apasă IA pentru recompensa camerei.')
+                      : (english
+                            ? 'Reach ${room.threshold} trophies to unlock.'
+                            : 'Ajunge la ${room.threshold} trofee pentru a deschide.'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xff8a6a52),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ],
-    ),
-  );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Staggered golden paw prints climbing the screen between milestones.
@@ -405,17 +796,14 @@ class _PawTrailPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = const Color(0xccffc63c);
-    const n = 3;
-    for (var i = 0; i < n; i++) {
-      final t = (i + 0.5) / n;
-      final x = size.width * (0.5 + (i.isEven ? -0.09 : 0.09));
-      final y = size.height * (1 - t);
-      _paw(canvas, Offset(x, y), 7.5, paint);
-    }
+    _paw(canvas, Offset(size.width * 0.5, size.height * 0.5), 5.5, paint);
   }
 
   void _paw(Canvas canvas, Offset c, double r, Paint paint) {
-    canvas.drawOval(Rect.fromCenter(center: c, width: r * 1.7, height: r * 1.4), paint);
+    canvas.drawOval(
+      Rect.fromCenter(center: c, width: r * 1.7, height: r * 1.4),
+      paint,
+    );
     for (final (dx, dy) in [(-1.1, -1.0), (0.0, -1.35), (1.1, -1.0)]) {
       canvas.drawCircle(c + Offset(dx * r, dy * r), r * .48, paint);
     }

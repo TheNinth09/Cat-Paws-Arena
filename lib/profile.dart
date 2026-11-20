@@ -29,6 +29,15 @@ class Player extends ChangeNotifier {
       photo = d['photo'];
       avatarSpec = d['avatarSpec'] ?? '';
       avatarArt = d['avatarArt'] ?? '';
+      gamesPlayed = d['gamesPlayed'] ?? 0;
+      gamesWon = d['gamesWon'] ?? 0;
+      winStreak = d['winStreak'] ?? 0;
+      bestStreak = d['bestStreak'] ?? 0;
+      bestScore = d['bestScore'] ?? 0;
+      roadClaims = Set<int>.from(d['roadClaims'] ?? []);
+      unlockedEmotes = Set<String>.from(
+        d['unlockedEmotes'] ?? const ['hello', 'oops', 'thanks'],
+      );
     }
   }
   final SharedPreferences prefs;
@@ -42,7 +51,12 @@ class Player extends ChangeNotifier {
       eyes = 0,
       ears = 1,
       pattern = 0,
-      power = 0;
+      power = 0,
+      gamesPlayed = 0,
+      gamesWon = 0,
+      winStreak = 0,
+      bestStreak = 0,
+      bestScore = 0;
   bool sfx = true,
       music = true,
       english = false,
@@ -50,16 +64,30 @@ class Player extends ChangeNotifier {
       haptics = true;
   Set<String> owned = {};
   Set<int> claims = {};
-  int get tier => trophies >= 1500
+
+  /// Trophy-road milestones already claimed (threshold values).
+  Set<int> roadClaims = {};
+
+  /// Duel emote wire values the player may send — three defaults, the
+  /// rest unlocked along the trophy road.
+  Set<String> unlockedEmotes = {'hello', 'oops', 'thanks'};
+  int get tier => trophies >= 4000
+      ? 4
+      : trophies >= 3000
       ? 3
-      : trophies >= 800
+      : trophies >= 2000
       ? 2
-      : trophies >= 300
+      : trophies >= 1000
       ? 1
       : 0;
-  int get next => [300, 800, 1500, 2000][tier];
-  String get room =>
-      ['Living', 'Holul Principal', 'Bucătăria', 'Dormitorul Stăpânului'][tier];
+  int get next => [1000, 2000, 3000, 4000, 6000][tier];
+  String get room => [
+    'Living',
+    'Holul Principal',
+    'Bucătăria',
+    'Dormitorul Stăpânului',
+    'Culoarul de Sus',
+  ][tier];
   String get today => DateTime.now().toIso8601String().substring(0, 10);
   Future<void> save() async {
     notifyListeners();
@@ -87,6 +115,13 @@ class Player extends ChangeNotifier {
         'photo': photo,
         'avatarSpec': avatarSpec,
         'avatarArt': avatarArt,
+        'gamesPlayed': gamesPlayed,
+        'gamesWon': gamesWon,
+        'winStreak': winStreak,
+        'bestStreak': bestStreak,
+        'bestScore': bestScore,
+        'roadClaims': roadClaims.toList(),
+        'unlockedEmotes': unlockedEmotes.toList(),
       }),
     );
   }
@@ -120,8 +155,8 @@ class Player extends ChangeNotifier {
     return true;
   }
 
-  void result(int outcome) {
-    const trophyFloors = [0, 300, 800, 1500];
+  void result(int outcome, {int score = 0}) {
+    const trophyFloors = [0, 1000, 2000, 3000, 4000];
     final floor = trophyFloors.lastWhere((t) => trophies >= t);
     final delta = outcome > 0
         ? 30
@@ -129,7 +164,31 @@ class Player extends ChangeNotifier {
         ? -25
         : 0;
     trophies = (trophies + delta).clamp(floor, 1000000);
-    if (outcome > 0) coins += 150;
+    gamesPlayed++;
+    if (outcome > 0) {
+      coins += 150;
+      gamesWon++;
+      winStreak++;
+      if (winStreak > bestStreak) bestStreak = winStreak;
+    } else if (outcome < 0) {
+      winStreak = 0;
+    }
+    if (score > bestScore) bestScore = score;
     save();
+  }
+
+  /// Claim a trophy-road milestone: small paw-coin gifts, emote unlocks
+  /// and one accessory per finished room. Returns false when the
+  /// threshold is not reached or the node was already claimed.
+  bool claimRoad(int threshold, {int coinGift = 0, String? emote, String? gear}) {
+    if (trophies < threshold || roadClaims.contains(threshold)) {
+      return false;
+    }
+    roadClaims.add(threshold);
+    coins += coinGift;
+    if (emote != null) unlockedEmotes.add(emote);
+    if (gear != null) owned.add(gear);
+    save();
+    return true;
   }
 }

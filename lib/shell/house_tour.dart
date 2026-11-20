@@ -31,22 +31,80 @@ class HouseRoom {
   final List<HouseCat> cats;
 }
 
-const houseRoomThresholds = [0, 300, 800, 1500];
+const houseRoomThresholds = [0, 1000, 2000, 3000, 4000];
 
 /// Player-facing room names for the house-tour map, indexed like
 /// [houseRooms]. Romanian is the default; English variants sit alongside.
 const houseRoomDisplayNames = [
   'LIVING',
   'HOLUL PRINCIPAL',
-  'BUCATARIA',
+  'BUCĂTARIA',
   'DORMITORUL',
+  'CULOARUL DE SUS',
 ];
 const houseRoomDisplayNamesEn = [
   'LIVING ROOM',
   'MAIN HALL',
   'KITCHEN',
   'BEDROOM',
+  'UPPER HALLWAY',
 ];
+
+/// Medallion room art per room (`assets/images/`).
+const houseRoomArt = [
+  'bg_living_room',
+  'bg_main_hall',
+  'bg_kitchen',
+  'bg_bedroom',
+  'bg_hallway',
+];
+
+/// One claimable node on the trophy road: a small paw-coin gift, an
+/// emote unlock or — only at each room's threshold — an accessory plus
+/// coins. Claimed via [Player.claimRoad], persisted in `roadClaims`.
+class RoadMilestone {
+  const RoadMilestone({
+    required this.trophies,
+    this.coins = 0,
+    this.emote,
+    this.gear,
+    this.room = false,
+  });
+
+  final int trophies, coins;
+  final String? emote, gear;
+  final bool room;
+}
+
+/// The road between two rooms carries three milestones (+250/+500/+750
+/// trophies); finishing a room grants its accessory + 150 paws.
+const _roadEmotes = {500: 'wow', 1500: 'good_game', 2500: 'purr'};
+const _roomGear = {
+  1000: 'acc_pink_bow',
+  2000: 'acc_witch_hat',
+  3000: 'acc_pirate_bandana',
+  4000: 'acc_ninja_headband',
+};
+
+List<RoadMilestone> get roadMilestones {
+  final list = <RoadMilestone>[];
+  for (var i = 1; i < houseRoomThresholds.length; i++) {
+    final t = houseRoomThresholds[i];
+    list
+      ..add(RoadMilestone(trophies: t - 750, coins: 50))
+      ..add(RoadMilestone(trophies: t - 500, emote: _roadEmotes[t - 500]))
+      ..add(RoadMilestone(trophies: t - 250, coins: 75))
+      ..add(
+        RoadMilestone(
+          trophies: t,
+          coins: 150,
+          gear: _roomGear[t],
+          room: true,
+        ),
+      );
+  }
+  return list;
+}
 
 const houseRooms = [
   HouseRoom(
@@ -90,14 +148,14 @@ const houseRooms = [
   ),
   HouseRoom(
     name: 'Hall',
-    threshold: 300,
+    threshold: 1000,
     cats: [
       HouseCat(
         id: 'hall-nori',
         name: 'Nori',
         room: 1,
         level: 4,
-        trophies: 325,
+        trophies: 1020,
         fur: 3,
         eyes: 0,
         ears: 0,
@@ -108,7 +166,7 @@ const houseRooms = [
         name: 'Kiko',
         room: 1,
         level: 5,
-        trophies: 350,
+        trophies: 1050,
         fur: 0,
         eyes: 1,
         ears: 1,
@@ -119,7 +177,7 @@ const houseRooms = [
         name: 'Biscuit',
         room: 1,
         level: 6,
-        trophies: 375,
+        trophies: 1080,
         fur: 1,
         eyes: 2,
         ears: 0,
@@ -129,14 +187,14 @@ const houseRooms = [
   ),
   HouseRoom(
     name: 'Kitchen',
-    threshold: 800,
+    threshold: 2000,
     cats: [
       HouseCat(
         id: 'kitchen-marmalade',
         name: 'Marmalade',
         room: 2,
         level: 7,
-        trophies: 825,
+        trophies: 2020,
         fur: 2,
         eyes: 0,
         ears: 1,
@@ -147,7 +205,7 @@ const houseRooms = [
         name: 'Tofu',
         room: 2,
         level: 8,
-        trophies: 850,
+        trophies: 2050,
         fur: 3,
         eyes: 1,
         ears: 0,
@@ -158,7 +216,7 @@ const houseRooms = [
         name: 'Crouton',
         room: 2,
         level: 9,
-        trophies: 875,
+        trophies: 2080,
         fur: 0,
         eyes: 2,
         ears: 1,
@@ -168,14 +226,14 @@ const houseRooms = [
   ),
   HouseRoom(
     name: 'Bedroom',
-    threshold: 1500,
+    threshold: 3000,
     cats: [
       HouseCat(
         id: 'bedroom-shadow',
         name: 'Shadow',
         room: 3,
         level: 10,
-        trophies: 1525,
+        trophies: 3020,
         fur: 3,
         eyes: 2,
         ears: 0,
@@ -186,7 +244,7 @@ const houseRooms = [
         name: 'Nimbus',
         room: 3,
         level: 11,
-        trophies: 1550,
+        trophies: 3050,
         fur: 1,
         eyes: 0,
         ears: 1,
@@ -197,11 +255,50 @@ const houseRooms = [
         name: 'Aurora',
         room: 3,
         level: 12,
-        trophies: 1575,
+        trophies: 3080,
         fur: 2,
         eyes: 1,
         ears: 0,
         pattern: 1,
+      ),
+    ],
+  ),
+  HouseRoom(
+    name: 'Hallway',
+    threshold: 4000,
+    cats: [
+      HouseCat(
+        id: 'hallway-fig',
+        name: 'Fig',
+        room: 4,
+        level: 13,
+        trophies: 4020,
+        fur: 0,
+        eyes: 2,
+        ears: 1,
+        pattern: 0,
+      ),
+      HouseCat(
+        id: 'hallway-sage',
+        name: 'Sage',
+        room: 4,
+        level: 14,
+        trophies: 4050,
+        fur: 2,
+        eyes: 1,
+        ears: 0,
+        pattern: 1,
+      ),
+      HouseCat(
+        id: 'hallway-pretzel',
+        name: 'Pretzel',
+        room: 4,
+        level: 15,
+        trophies: 4080,
+        fur: 1,
+        eyes: 0,
+        ears: 1,
+        pattern: 0,
       ),
     ],
   ),

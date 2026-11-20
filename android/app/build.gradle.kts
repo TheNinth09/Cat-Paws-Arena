@@ -23,15 +23,19 @@ val hasReleaseKey = keystorePropertiesFile.exists()
 
 // Google Play requires a recent target API level; never go below API 36.
 val minimumTargetSdk = 36
+// flutter_local_notifications 23 compiles against SDK 37.
+val minimumCompileSdk = 37
 
 android {
     namespace = "games.oneear.catpawsarena"
-    compileSdk = maxOf(flutter.compileSdkVersion, minimumTargetSdk)
+    compileSdk = maxOf(flutter.compileSdkVersion, minimumCompileSdk)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications 23 needs Java 8+ API desugaring.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -72,6 +76,10 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {

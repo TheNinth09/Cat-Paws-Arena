@@ -357,7 +357,9 @@ class _MatchScreenState extends State<MatchScreen>
               childAspectRatio: 0.92,
               children: [
                 for (final item in _emoteItems)
-                  _EmoteCard(
+                  // Only emotes unlocked on the trophy road can be sent.
+                  if (p.unlockedEmotes.contains(item.$3.wire))
+                    _EmoteCard(
                     spriteName: item.$1,
                     caption: item.$2,
                     onTap: () {

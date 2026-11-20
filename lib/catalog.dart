@@ -25,7 +25,7 @@ const powerEffects = [
   'effect_laser_chase',
 ];
 const modeNames = ['1v1 Arena', 'Speed Rush', 'Survival', 'High-Stakes Ranked'];
-const modeThresholds = [0, 300, 800, 1500];
+const modeThresholds = [0, 1000, 2000, 3000];
 const coinBundles = [
   ('500', '8.99', ''),
   ('1,500', '22.99', ''),

@@ -116,7 +116,7 @@ void main() {
           expect(find.byKey(ValueKey('nav-$tab')), findsOneWidget);
         }
         final bar = find.byType(ArenaBottomBar);
-        for (final label in ['SHOP', 'CATS', 'BATTLE', 'TEAM', 'EVENTS']) {
+        for (final label in ['SHOP', 'CATS', 'HOME', 'TEAM', 'EVENTS']) {
           expect(
             find.descendant(of: bar, matching: find.text(label)),
             findsOneWidget,
@@ -214,7 +214,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(HouseTourScreen), findsOneWidget);
-    expect(find.text('HOUSE TOUR'), findsOneWidget);
+    expect(find.text('TROPHY ROAD'), findsOneWidget);
     expect(find.text('2. MAIN HALL'), findsOneWidget);
     for (final parked in [
       'Echipă',
@@ -415,34 +415,29 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('trophy-progress')));
     await tester.pumpAndSettle();
     expect(find.byType(HouseTourScreen), findsOneWidget);
-    expect(find.text('HOUSE TOUR'), findsOneWidget);
+    expect(find.text('TROPHY ROAD'), findsOneWidget);
+    // Claimable milestones sit between the rooms — the first one (+50
+    // paws at 250) is already claimable at 300 trophies. Check the
+    // lock/current labels while the lower rooms are still in view (the
+    // lazy list disposes offscreen elements).
+    expect(find.text('+50'), findsWidgets);
+    expect(find.text('LOCKED AT 1000 TROPHIES'), findsWidgets);
+    expect(find.text('CURRENT ROOM'), findsOneWidget);
+    // Five rooms on the road; the ListView is lazy AND reversed, so a
+    // positive drag delta reveals the medallions that sit higher up.
+    final road = find.byType(Scrollable).first;
     for (final name in [
       '1. LIVING ROOM',
       '2. MAIN HALL',
       '3. KITCHEN',
       '4. BEDROOM',
+      '5. UPPER HALLWAY',
     ]) {
+      await tester.scrollUntilVisible(find.text(name), 150, scrollable: road);
       expect(find.text(name), findsOneWidget);
     }
-    // The path carries milestones only — no bot entries anywhere.
-    for (final cat in [
-      'Puf',
-      'Misu',
-      'Toto',
-      'Nori',
-      'Kiko',
-      'Biscuit',
-      'Marmalade',
-    ]) {
-      expect(find.text(cat), findsNothing);
-    }
-    expect(find.text('MILESTONE'), findsNWidgets(3));
-    expect(find.text('LOCKED AT 800 TROPHIES'), findsOneWidget);
-    expect(find.text('LOCKED AT 1500 TROPHIES'), findsOneWidget);
-    expect(find.text('CURRENT ROOM'), findsOneWidget);
-    expect(find.text('CLEARED'), findsOneWidget);
-    expect(houseRoomForTrophies(299).name, 'Living');
-    expect(houseRoomForTrophies(300).name, 'Hall');
+    expect(houseRoomForTrophies(999).name, 'Living');
+    expect(houseRoomForTrophies(1000).name, 'Hall');
     // Room titles render untruncated in Romanian too (no ellipsis).
     p.english = false;
     await tester.pageBack();
@@ -451,9 +446,11 @@ void main() {
     await tester.pumpAndSettle();
     for (final name in [
       '2. HOLUL PRINCIPAL',
-      '3. BUCATARIA',
+      '3. BUCĂTARIA',
       '4. DORMITORUL',
+      '5. CULOARUL DE SUS',
     ]) {
+      await tester.scrollUntilVisible(find.text(name), 150, scrollable: road);
       expect(find.text(name), findsOneWidget);
     }
     expect(tester.takeException(), isNull);
@@ -544,41 +541,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ProfileScreen), findsOneWidget);
     expect(find.text('PROFILUL MEU'), findsOneWidget);
+    // Three MM-style tabs: PROFIL / EMOTE-URI / TINUTE.
+    for (final tab in ['PROFIL', 'EMOTE-URI', 'TINUTE']) {
+      expect(find.text(tab), findsOneWidget);
+    }
     expect(find.text('TROFEE'), findsOneWidget);
     expect(find.text('LĂBUȚE'), findsOneWidget);
-    expect(find.text('COSMETICE'), findsOneWidget);
     expect(find.text('1234'), findsOneWidget);
-    // Organised sections — the placeholder rows were cleaned up; the
-    // real content sections stay labelled and scroll into view.
-    final profileScroll = find
-        .descendant(
-          of: find.byType(ProfileScreen),
-          matching: find.byType(Scrollable),
-        )
-        .first;
-    for (final section in ['EMOTE-URI', 'ACCESORII']) {
-      await tester.scrollUntilVisible(
-        find.text(section),
-        150,
-        scrollable: profileScroll,
-      );
-      expect(find.text(section), findsOneWidget);
-    }
-    // Emote preset chips are real; owned accessory is marked ECHIPAT/DEȚINUT.
+    // EMOTES tab: unlocked presets in colour + locked "to collect" ones.
+    await tester.tap(find.text('EMOTE-URI'));
+    await tester.pumpAndSettle();
+    expect(find.text('EMOTE-URILE MELE'), findsOneWidget);
+    expect(find.text('EMOTE-URI DE COLECȚIONAT'), findsOneWidget);
     expect(find.text('SALUT'), findsOneWidget);
+    // OUTFITS tab: owned accessory equips on tap; locked ones greyed.
+    await tester.tap(find.text('TINUTE'));
+    await tester.pumpAndSettle();
+    expect(find.text('APASĂ — ECHIPEAZĂ'), findsOneWidget);
     expect(find.text('NEDEȚINUT'), findsWidgets);
-    // Name edit + account link stay reachable from the profile.
-    await tester.scrollUntilVisible(
-      find.text('EDITEAZĂ NUMELE'),
-      200,
-      scrollable: profileScroll,
-    );
+    // Name edit + account link stay reachable on the PROFILE tab.
+    await tester.tap(find.text('PROFIL'));
+    await tester.pumpAndSettle();
     expect(find.text('EDITEAZĂ NUMELE'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('profile-account')),
-      150,
-      scrollable: profileScroll,
-    );
     expect(find.byKey(const ValueKey('profile-account')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -678,7 +662,7 @@ void main() {
       expect(living, contains(pickBattleCat(p, i)!.name));
     }
     expect(pickBattleCat(p, 7), pickBattleCat(p, 7));
-    p.trophies = 350;
+    p.trophies = 1050;
     final names = {for (var i = 0; i < 40; i++) pickBattleCat(p, i)!.name};
     expect(names, containsAll(['Puf', 'Nori', 'Kiko']));
     expect(names, isNot(contains('Marmalade')));
