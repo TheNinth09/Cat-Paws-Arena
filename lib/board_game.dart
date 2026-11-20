@@ -1189,11 +1189,11 @@ class _BoardPainter extends CustomPainter {
         Rect.fromLTWH(x + 1.5, y + 1.5, cell - 3, cell - 3),
         Radius.circular(cell * 0.18),
       );
+      // Uniform dark cells (spec: #24150E @ 0.82) — the warm frame tint
+      // shows through slightly instead of a checkerboard.
       bg.color = i == selected
           ? const Color(0xffffd66d)
-          : ((row + col) % 2 == 0
-                ? const Color(0xff754c52)
-                : const Color(0xff916168));
+          : const Color(0xd124150e);
       canvas.drawRRect(rrect, bg);
     }
 

@@ -496,6 +496,18 @@ class ArenaMatchController extends ChangeNotifier {
     ];
   }
 
+  /// Obstacles queued against the opponent — they land on their board at
+  /// the start of their next turn. The HUD shows the count as the
+  /// sabotage badge under the opponent's score plate.
+  int get outgoingObstacles {
+    if (!isEngine) return 0;
+    return _state?.pendingObstacles[_opponentSlot.index].length ?? 0;
+  }
+
+  /// Seconds on a fresh turn clock (15 in the agreed duel) — the HUD
+  /// progress bar divides [turnSecondsLeft] by this.
+  int get turnSecondsTotal => _state?.config.turnSeconds ?? 15;
+
   /// Accepted player moves so far (tutorial progress).
   int get playerMoves => _playerMoves;
 

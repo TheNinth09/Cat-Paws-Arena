@@ -24,6 +24,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
 
+/// Surrenders through the battle HUD: the gear opens the pause sheet
+/// (keyed RENUNȚĂ), then the confirm dialog carries the same label —
+/// the sheet is gone by then so the text finder is unambiguous.
+/// Long pumps: the shared HUD pulse animation never lets pumpAndSettle
+/// settle, and the sheet entrance needs a few frames.
+Future<void> surrenderFromBattle(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('battle-settings')));
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  await tester.tap(find.byKey(const Key('pause-surrender')));
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  await tester.tap(find.text('RENUNȚĂ'));
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
 void main() {
   testWidgets('runtime bundle contains only sprites and fonts', (tester) async {
     final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
@@ -70,10 +88,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expectCleanArtwork(tester);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('Renunță'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('RENUNȚĂ'));
-    await tester.pump(const Duration(milliseconds: 300));
+    await surrenderFromBattle(tester);
     expect(find.text('ÎNFRÂNGERE'), findsOneWidget);
     // Simplified defeat: only the trophy change — no chest, no score strip.
     expect(find.text('-25 Trofee'), findsOneWidget);
@@ -911,12 +926,12 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
-    // No end-early control: the 30 s timer owns turn boundaries.
+    // No end-early control: the 15 s timer owns turn boundaries.
     expect(find.text('GATA'), findsNothing);
-    // Turn indicator + seconds are visible in the HUD.
-    expect(find.textContaining('Tura 1/'), findsWidgets);
+    // Turn banner, round badge and seconds are visible in the HUD.
+    expect(find.text('1/3'), findsWidgets);
     expect(find.textContaining('s'), findsWidgets);
-    expect(find.textContaining('RÂNDUL TĂU'), findsOneWidget);
+    expect(find.text('TURA TA'), findsOneWidget);
     m.dispose();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -1071,17 +1086,14 @@ void main() {
     // Match screen: the portrait header keeps the name clean — the bot
     // label lives on the details popup (tap the opponent name).
     expect(find.textContaining('BOT'), findsNothing);
-    expect(find.textContaining('Tura 1'), findsWidgets);
+    expect(find.text('1/3'), findsWidgets);
     await tester.tap(find.text('Vulpița').first);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('BOT'), findsWidgets);
     await tester.tapAt(Offset.zero);
     await tester.pump(const Duration(milliseconds: 300));
     // Surrender to the result screen.
-    await tester.tap(find.text('Renunță'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('RENUNȚĂ'));
-    await tester.pump(const Duration(milliseconds: 300));
+    await surrenderFromBattle(tester);
     expect(find.textContaining('BOT'), findsWidgets);
     expect(find.textContaining('Vulpița'), findsWidgets);
     expect(find.textContaining('3 turnuri'), findsOneWidget);
@@ -1168,10 +1180,7 @@ void main() {
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
     final seedBefore = m.seed;
-    await tester.tap(find.text('Renunță'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('RENUNȚĂ'));
-    await tester.pump(const Duration(milliseconds: 300));
+    await surrenderFromBattle(tester);
     expect(m.phase, MatchPhase.finished);
     await tester.ensureVisible(find.text('REVANȘĂ'));
     await tester.pump(const Duration(milliseconds: 100));
@@ -1480,10 +1489,7 @@ void main() {
     expect(find.textContaining('BOT'), findsNothing);
 
     // Surrender: the match is voided, no rewards, no rematch button.
-    await tester.tap(find.text('Renunță'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('RENUNȚĂ'));
-    await tester.pump(const Duration(milliseconds: 300));
+    await surrenderFromBattle(tester);
     expect(m.phase, MatchPhase.finished);
     expect(m.abortReason, OnlineAbort.surrendered);
     expect(find.text('MECI ÎNTRERUPT'), findsOneWidget);

@@ -16,6 +16,7 @@ import 'profile.dart';
 import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
 import 'vs_screen.dart';
+import 'widgets/battle_hud.dart';
 import 'widgets/board_vfx_overlay.dart';
 
 /// Compile-time switch for the frame-time profiling overlay. Build a release
@@ -24,16 +25,6 @@ const kFrameProbeEnabled = bool.fromEnvironment('CPA_FRAME_PROBE');
 
 const _muted = Color(0xffe8c9a0);
 const _faint = Color(0xffd8b48f);
-const _panelGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xd66b4636), Color(0xd64e322b)],
-);
-const _barGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xff8a5a44), Color(0xff54342a)],
-);
 
 /// Preset emotes offered in the duel. Only these wire values ever leave the
 /// device (contract: preset emotes only, never free text). The new
@@ -417,12 +408,6 @@ class _MatchScreenState extends State<MatchScreen>
     if (yes == true) match.forfeit();
   }
 
-  Future<void> pause() async {
-    match.pause(modal: true);
-    await showSettings(context, p);
-    if (mounted) match.pause(modal: false);
-  }
-
   void emotes() => showModalBottomSheet<void>(
     context: context,
     backgroundColor: cream,
@@ -621,56 +606,99 @@ class _MatchScreenState extends State<MatchScreen>
     ],
   );
 
-  /// VS header from the gameplay mockup: circular portraits with power
-  /// meters — the player's ring is green/gold with a yarn icon, the
-  /// opponent's is purple with a paw icon. The active side's ring pulses.
-  /// Emote bubbles sit beside the portraits.
-  Widget _versusHeader() {
+  /// Reference top HUD: portrait columns (name, ringed avatar, score
+  /// plate) flanking the turn banner, the clock and the round badge.
+  /// The active side's ring glows — gold for the player, blue for the
+  /// opponent; the opponent plate carries the sabotage `xN` badge.
+  Widget _battleTopHud() {
+    final yourTurn = match.playerTurn;
     final enginePlaying = match.isEngine && match.phase == MatchPhase.playing;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: _PortraitPlate(
-              avatar: catPortrait(p.cat, size: 50),
-              name: p.name,
-              score: match.playerScore,
-              charge: match.playerCharge,
-              ringColor: const Color(0xff7ed957),
-              accentColor: gold,
-              meterColor: const Color(0xff7ed957),
-              iconSprite: 'tile_yarn',
-              active: match.playerTurn,
-              pulse: fx,
-              emote: emote,
-            ),
-          ),
-          const SizedBox(width: 6),
-          const _VsBadge(size: 40),
-          const SizedBox(width: 6),
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _opponentDetails,
-              child: _PortraitPlate(
-                avatar: _opponentAvatar(50),
-                name: match.botName,
-                score: match.botScore,
-                charge: match.botCharge,
-                ringColor: const Color(0xff9d6bff),
-                accentColor: const Color(0xffc9a6ff),
-                meterColor: const Color(0xff9d6bff),
-                iconSprite: 'icon_paw_coin',
-                active: enginePlaying && !match.playerTurn && !match.isFlagged,
-                pulse: fx,
-                emote: opponentEmote,
+    final seconds = match.isEngine ? match.turnSecondsLeft : match.remaining;
+    final total = match.isEngine ? match.turnSecondsTotal : 90;
+    final round = ((match.turn - 1) ~/ 2 + 1).clamp(1, match.turnsPerPlayer);
+    final roundsUsed = (match.turnsPerPlayer -
+            match.playerTurnsLeft +
+            (yourTurn ? 1 : 0))
+        .clamp(0, match.turnsPerPlayer);
+    return BattleTopHud(
+      playerAvatar: catPortrait(p.cat, size: 52),
+      playerName: p.name,
+      playerScore: match.playerScore,
+      playerActive: enginePlaying ? yourTurn : true,
+      roundsUsed: roundsUsed,
+      roundsTotal: match.turnsPerPlayer,
+      playerIncoming: match.incomingObstacles.length,
+      playerEmote: emote.isEmpty ? null : _EmoteBubble(emote),
+      opponentAvatar: _opponentAvatar(52),
+      opponentName: match.botName,
+      opponentScore: match.botScore,
+      opponentActive: enginePlaying && !yourTurn && !match.isFlagged,
+      opponentIncoming: match.outgoingObstacles,
+      opponentEmote: opponentEmote.isEmpty ? null : _EmoteBubble(opponentEmote),
+      onOpponentTap: _opponentDetails,
+      banner: !match.isEngine
+          ? 'LUPTĂ!'
+          : yourTurn
+          ? 'TURA TA'
+          : 'TURA LUI ${match.botName.toUpperCase()}',
+      seconds: seconds,
+      clockProgress: total > 0 ? seconds / total : 0,
+      round: round,
+      pulse: fx,
+      onSettingsTap: _pauseMenu,
+    );
+  }
+
+  /// Gear menu during the duel: resume, open the shared settings sheet
+  /// (music/SFX/haptics) or surrender the match.
+  Future<void> _pauseMenu() async {
+    match.pause(modal: true);
+    final pick = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: cream,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0x55a97153),
+                  borderRadius: BorderRadius.circular(3),
+                ),
               ),
-            ),
+              const SizedBox(height: 14),
+              ArenaButton(
+                text: 'CONTINUĂ',
+                onPressed: () => Navigator.pop(c, 'resume'),
+              ),
+              const SizedBox(height: 8),
+              ArenaButton(
+                text: 'SETĂRI',
+                onPressed: () => Navigator.pop(c, 'settings'),
+              ),
+              const SizedBox(height: 8),
+              ArenaButton(
+                key: const Key('pause-surrender'),
+                text: 'RENUNȚĂ',
+                onPressed: () => Navigator.pop(c, 'surrender'),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
+    if (!mounted) return;
+    if (pick == 'settings') await showSettings(context, p);
+    if (!mounted) return;
+    match.pause(modal: false);
+    if (pick == 'surrender') surrender();
   }
 
   /// Small popup with the opponent's match-provided details — never
@@ -724,63 +752,27 @@ class _MatchScreenState extends State<MatchScreen>
     );
   }
 
-  /// Turn strip: whose turn it is, seconds left and queued obstacles.
-  /// The turn ends when the 30 s clock expires (the controller writes the
-  /// EndTurnMove) — there is no end-early button.
-  Widget _turnStrip() {
-    final incoming = match.incomingObstacles;
-    final yourTurn = match.playerTurn;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0x66ffffff),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0x33ffc63c)),
+  /// Bottom action bar strictly under the board: the 3D power button
+  /// (~70%) with the equipped power icon, charge bar and ACTIVEAZĂ! at
+  /// 100%, beside the 3D turquoise EMOTE button (~30%).
+  Widget _bottomActionBar() {
+    final idx = PowerKind.values.indexOf(match.playerPower).clamp(0, 2);
+    final charge = match.playerCharge;
+    return BattleBottomActionBar(
+      powerIcon: powerIcons[idx],
+      powerFallback: _PowerBadge(
+        charge: charge / 100,
+        full: charge >= 100,
+        spriteName: powers[idx],
+        pulse: fx,
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: yourTurn
-                        ? 'RÂNDUL TĂU'
-                        : '${match.botName.toUpperCase()} MUTĂ',
-                    style: TextStyle(
-                      color: yourTurn ? const Color(0xff3f7d33) : ink,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  TextSpan(
-                    text:
-                        '  •  ${match.turnSecondsLeft}s'
-                        '${incoming.isEmpty ? '' : '  •  ${incoming.length} cutie vin'}',
-                    style: const TextStyle(
-                      color: ink,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  if (match.bonusSeconds > 0)
-                    TextSpan(
-                      text: '  +${match.bonusSeconds}s',
-                      style: const TextStyle(
-                        color: Color(0xff3f7d33),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                ],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
+      powerLabel: const ['ZOOMIES', 'POUNCE', 'LASER'][idx],
+      charge: charge,
+      canFire:
+          charge >= 100 && match.playerTurn && match.acceptingInput,
+      onPower: () => match.firePower(match.playerPower),
+      onEmote: emotes,
+      pulse: fx,
     );
   }
 
@@ -806,100 +798,47 @@ class _MatchScreenState extends State<MatchScreen>
       'Când bara de putere e plină, atinge-o ca s-o declanșezi!',
     ];
     final text = texts[match.playerMoves.clamp(0, texts.length - 1)];
-    return Positioned(
-      left: 10,
-      right: 10,
-      bottom: 8,
-      child: IgnorePointer(
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: const Color(0xee3a2418),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: gold, width: 1.3),
-            ),
-            child: Text(
-              text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: cream,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                height: 1.25,
-              ),
-            ),
+    // In-flow coach mark between the HUD and the board — it never sits
+    // over the 7×7 cells and never eats a button.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xee3a2418),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: gold, width: 1.3),
+        ),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: cream,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            height: 1.25,
           ),
         ),
       ),
     );
   }
 
-  /// Battle HUD: top bar (RENUNȚĂ / turn clock / settings), the VS header
-  /// with both power meters, the turn strip (whose turn + end early) and
-  /// the wooden board with the preset-emote cat button.
+  /// Battle scene from the mockup: the reference top HUD (portraits,
+  /// turn banner, clock, round badge), the luminous-framed 7×7 board
+  /// and the bottom action bar — nothing sits over the board's cells.
   Widget battle() => Column(
     children: [
-      _battleBar(),
-      const SizedBox(height: 4),
-      _versusHeader(),
-      const SizedBox(height: 2),
-      _turnStrip(),
+      _battleTopHud(),
+      if (match.tutorialActive) _tutorialOverlay(),
       if (match.canClaimForfeit) ...[
         const SizedBox(height: 4),
         _forfeitBanner(),
       ],
-      const SizedBox(height: 4),
+      const SizedBox(height: 8),
       Expanded(child: _board()),
-      const SizedBox(height: 4),
-      _powerDeck(),
+      const SizedBox(height: 8),
+      _bottomActionBar(),
     ],
-  );
-
-  Widget _battleBar() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-    decoration: BoxDecoration(
-      gradient: _barGradient,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: const Color(0x66ffc63c), width: 1.2),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x55000000),
-          offset: Offset(0, 3),
-          blurRadius: 8,
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        _MiniButton(
-          icon: Icons.volunteer_activism,
-          text: 'Renunță',
-          danger: true,
-          onTap: surrender,
-        ),
-        Expanded(
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: match.isEngine
-                  ? _TurnPill(
-                      turn: match.turn,
-                      turnsPerPlayer: match.turnsPerPlayer,
-                      seconds: match.turnSecondsLeft,
-                    )
-                  : _TimerPill(seconds: match.remaining),
-            ),
-          ),
-        ),
-        _CircleButton(
-          size: 40,
-          tooltip: 'Setări',
-          onTap: pause,
-          child: const Icon(Icons.settings, color: cream, size: 21),
-        ),
-      ],
-    ),
   );
 
   Widget _board() {
@@ -907,21 +846,33 @@ class _MatchScreenState extends State<MatchScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final side = constraints.biggest.shortestSide;
+        // Luminous frame: gold while the player holds the turn, blue
+        // while the opponent does.
+        final yours = match.playerTurn || !match.isEngine;
+        final frame = yours ? gold : const Color(0xff7ec8ff);
         return Center(
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
             width: side,
             height: side,
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xffa06a45), Color(0xff63432f)],
+                colors: yours
+                    ? const [Color(0xffb57f2e), Color(0xff7a4f1e)]
+                    : const [Color(0xff5f83b8), Color(0xff35507a)],
               ),
-              border: Border.all(color: ink, width: 2.5),
-              boxShadow: const [
+              border: Border.all(color: frame, width: 2.5),
+              boxShadow: [
                 BoxShadow(
+                  color: frame.withValues(alpha: 0.45),
+                  blurRadius: 14,
+                  spreadRadius: 1,
+                ),
+                const BoxShadow(
                   color: Color(0x66000000),
                   offset: Offset(0, 5),
                   blurRadius: 10,
@@ -951,7 +902,6 @@ class _MatchScreenState extends State<MatchScreen>
                   Positioned.fill(
                     child: BoardVfxOverlay(controller: _vfx),
                   ),
-                  _tutorialOverlay(),
                 ],
               ),
             ),
@@ -960,193 +910,6 @@ class _MatchScreenState extends State<MatchScreen>
       },
     );
   }
-
-  /// Bottom control row under the board: the compact power button (~68%)
-  /// with the equipped power icon, its charge bar and a clear label,
-  /// next to the dedicated 3D emote button (~29%) — outside the 7×7 grid.
-  Widget _powerDeck() {
-    final idx = PowerKind.values.indexOf(match.playerPower);
-    final charge = match.playerCharge;
-    final full = charge >= 100;
-    final canFire = full && match.playerTurn && match.acceptingInput;
-    return AnimatedBuilder(
-      animation: fx,
-      builder: (context, _) => Row(
-        children: [
-          Expanded(
-            flex: 68,
-            child: GestureDetector(
-              key: const Key('power-meter'),
-              behavior: HitTestBehavior.opaque,
-              onTap: canFire
-                  ? () => match.firePower(match.playerPower)
-                  : null,
-              child: Container(
-                height: 52,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  gradient: _panelGradient,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: full ? gold : const Color(0x66ffc63c),
-                    width: full ? 1.8 : 1.2,
-                  ),
-                  boxShadow: [
-                    const BoxShadow(
-                      color: Color(0x44000000),
-                      offset: Offset(0, 3),
-                      blurRadius: 8,
-                    ),
-                    if (full)
-                      BoxShadow(
-                        color: const Color(0xffffc63c).withValues(
-                          alpha: 0.3 + 0.3 * fx.value,
-                        ),
-                        blurRadius: 10 + 10 * fx.value,
-                        spreadRadius: 1,
-                      ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(9),
-                      child: arenaImage(
-                        powerIcons[idx],
-                        width: 36,
-                        height: 36,
-                        fallback: _PowerBadge(
-                          charge: charge / 100,
-                          full: full,
-                          spriteName: powers[idx],
-                          pulse: fx,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              full
-                                  ? '${_shortPowerName(idx)} • ACTIVEAZĂ!'
-                                  : _shortPowerName(idx),
-                              maxLines: 1,
-                              style: TextStyle(
-                                color: full
-                                    ? const Color(0xffb9e07a)
-                                    : gold,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.4,
-                                shadows: const [
-                                  Shadow(
-                                    color: Color(0x66000000),
-                                    offset: Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
-                            child: LinearProgressIndicator(
-                              value: (charge / 100).clamp(0.0, 1.0),
-                              minHeight: 8,
-                              backgroundColor: const Color(0x55ffffff),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                full ? gold : const Color(0xff7ed957),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(flex: 29, child: _emoteDeckButton()),
-        ],
-      ),
-    );
-  }
-
-  /// Short power name for the compact deck label.
-  String _shortPowerName(int idx) =>
-      const ['ZOOMIES', 'POUNCE', 'LASER'][idx.clamp(0, 2)];
-
-  /// The dedicated 3D emote button, fully outside the board.
-  Widget _emoteDeckButton() => GestureDetector(
-    key: const Key('emote-button'),
-    behavior: HitTestBehavior.opaque,
-    onTap: emotes,
-    child: Container(
-      height: 52,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xff8fb4e8), Color(0xff3f6db0)],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xffd9ecff), width: 1.6),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x55000000),
-            offset: Offset(0, 4),
-            blurRadius: 8,
-          ),
-          BoxShadow(
-            color: Color(0x4400cfff),
-            offset: Offset(0, -2),
-            blurRadius: 4,
-          ),
-        ],
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              height: 24,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  arenaImage('btn_emote', width: 22, height: 22),
-                  const Text(
-                    '💬',
-                    style: TextStyle(fontSize: 15),
-                  ),
-                ],
-              ),
-            ),
-            const Text(
-              'EMOTE',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.6,
-                shadows: [
-                  Shadow(color: Color(0x88000000), offset: Offset(0, 1)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 
   /// Full-bleed result scene like the reference win/lose pages: room art
   /// behind, warm tint for victory / cool tint for defeat, big cartoon
@@ -1490,321 +1253,6 @@ class _MatchScreenState extends State<MatchScreen>
   );
 }
 
-class _VsBadge extends StatelessWidget {
-  const _VsBadge({this.size = 64});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xfffff3c4), gold, Color(0xffe8961f)],
-      ),
-      border: Border.all(color: ink, width: 3),
-      boxShadow: const [
-        BoxShadow(color: Color(0x66ffc63c), blurRadius: 18),
-        BoxShadow(
-          color: Color(0x553c241a),
-          offset: Offset(0, 4),
-          blurRadius: 6,
-        ),
-      ],
-    ),
-    child: Stack(
-      children: [
-        Positioned(
-          top: size * 0.07,
-          left: size * 0.18,
-          right: size * 0.18,
-          height: size * 0.3,
-          child: const IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x80ffffff), Color(0x00ffffff)],
-                ),
-              ),
-            ),
-          ),
-        ),
-        Center(
-          child: Text(
-            'VS',
-            style: TextStyle(
-              color: ink,
-              fontSize: size * 0.34,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1,
-              height: 1,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _TimerPill extends StatelessWidget {
-  const _TimerPill({required this.seconds});
-  final int seconds;
-
-  @override
-  Widget build(BuildContext context) {
-    final urgent = seconds <= 10;
-    final m = seconds ~/ 60;
-    final s = (seconds % 60).toString().padLeft(2, '0');
-    final color = urgent ? const Color(0xffff9d8f) : gold;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xff33231d),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: urgent ? const Color(0xffff8d7e) : gold,
-          width: 1.4,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x44000000),
-            offset: Offset(0, 2),
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.timer, size: 15, color: color),
-          const SizedBox(width: 6),
-          Text(
-            '$m:$s',
-            style: TextStyle(
-              color: color,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-              shadows: const [
-                Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Turn indicator for the engine duel: turn number out of each player's
-/// allotment plus the seconds left on the turn clock.
-class _TurnPill extends StatelessWidget {
-  const _TurnPill({
-    required this.turn,
-    required this.turnsPerPlayer,
-    required this.seconds,
-  });
-  final int turn;
-  final int turnsPerPlayer;
-  final int seconds;
-
-  @override
-  Widget build(BuildContext context) {
-    // The bar turns red only inside the ticked final stretch (4 s).
-    final urgent = seconds <= 4;
-    final color = urgent ? const Color(0xffff9d8f) : gold;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xff33231d),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: urgent ? const Color(0xffff8d7e) : gold,
-          width: 1.4,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x44000000),
-            offset: Offset(0, 2),
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.schedule, size: 15, color: gold),
-          const SizedBox(width: 6),
-          Text(
-            'Tura $turn/${turnsPerPlayer * 2} • ${seconds}s',
-            style: TextStyle(
-              color: color,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              shadows: const [
-                Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Circular portrait plate from the gameplay mockup: ringed avatar, power
-/// meter with a kind icon, name and score. [active] pulses the ring.
-class _PortraitPlate extends StatelessWidget {
-  const _PortraitPlate({
-    required this.avatar,
-    required this.name,
-
-    required this.score,
-    required this.charge,
-    required this.ringColor,
-    required this.accentColor,
-    required this.meterColor,
-    required this.iconSprite,
-    required this.active,
-    required this.pulse,
-    this.emote = '',
-  });
-
-  final Widget avatar;
-  final String name;
-  final int score;
-  final int charge;
-  final Color ringColor;
-  final Color accentColor;
-  final Color meterColor;
-  final String iconSprite;
-  final bool active;
-  final Animation<double> pulse;
-
-  /// Sprite name of the emote bubble shown under the plate ('' hides it).
-  final String emote;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedBuilder(
-          animation: pulse,
-          builder: (context, _) {
-            final glow = active ? 1 + 0.06 * pulse.value : 1.0;
-            return Transform.scale(
-              scale: glow,
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: active ? accentColor : ringColor,
-                    width: active ? 3.4 : 2.8,
-                  ),
-                  boxShadow: active
-                      ? [
-                          BoxShadow(
-                            color: meterColor.withValues(alpha: 0.55),
-                            blurRadius: 10 + 4 * pulse.value,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: gold, width: 1.2),
-                  ),
-                  child: ClipOval(child: avatar),
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 3),
-        SizedBox(
-          height: 16,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              sprite(iconSprite, size: 15),
-              const SizedBox(width: 4),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: (charge / 100).clamp(0.0, 1.0),
-                    minHeight: 8,
-                    backgroundColor: const Color(0x55ffffff),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      charge >= 100 ? accentColor : meterColor,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 1),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                name,
-                maxLines: 1,
-                style: const TextStyle(
-                  color: cream,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w900,
-                  shadows: [
-                    Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-                  ],
-                ),
-              ),
-
-            ],
-          ),
-        ),
-        Text(
-          '$score',
-          style: TextStyle(
-            color: gold,
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-            shadows: const [
-              Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-            ],
-          ),
-        ),
-        ]),
-        if (emote.isNotEmpty)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: -30,
-            child: IgnorePointer(
-              child: Center(child: _EmoteBubble(emote)),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// House-cat difficulty chip on the VS screen.
 class _LevelChip extends StatelessWidget {
   const _LevelChip({
     required this.label,
@@ -1841,126 +1289,6 @@ class _LevelChip extends StatelessWidget {
   );
 }
 
-class _MiniButton extends StatelessWidget {
-  const _MiniButton({
-    required this.text,
-    required this.onTap,
-    this.icon,
-    this.danger = false,
-  });
-  final String text;
-  final VoidCallback onTap;
-  final IconData? icon;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: danger
-                ? const [
-                    Color(0xffffa58f),
-                    Color(0xffe0655a),
-                    Color(0xffb8402f),
-                  ]
-                : const [Color(0xff96684c), Color(0xff75503a)],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: danger ? const Color(0xff7c2d22) : const Color(0x59ffe9bd),
-            width: 1.4,
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x44000000),
-              offset: Offset(0, 2),
-              blurRadius: 4,
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 16, color: cream),
-              const SizedBox(width: 5),
-            ],
-            Text(
-              text,
-              style: const TextStyle(
-                color: cream,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w900,
-                shadows: [
-                  Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _CircleButton extends StatelessWidget {
-  const _CircleButton({
-    required this.size,
-    required this.onTap,
-    required this.child,
-    this.tooltip,
-  });
-  final double size;
-  final VoidCallback onTap;
-  final Widget child;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final button = Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(size / 2),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xff96684c), Color(0xff64402f)],
-            ),
-            border: Border.all(color: const Color(0x59ffe9bd), width: 1.4),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x44000000),
-                offset: Offset(0, 2),
-                blurRadius: 5,
-              ),
-            ],
-          ),
-          child: Center(child: child),
-        ),
-      ),
-    );
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
-  }
-}
-
-/// The power badge inside the battle power control: the chosen power's
-/// sprite on a dark disc, ringed by a charge arc that turns gold at 100%
-/// and pulses while the meter is full.
 class _PowerBadge extends StatelessWidget {
   const _PowerBadge({
     required this.charge,
