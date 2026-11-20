@@ -55,6 +55,20 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     _syncNotifications();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Warm the page-art cache once so the first tab switch does not stall
+    // on a multi-megabyte decode mid-fade.
+    for (final name in _pageBgs) {
+      precacheImage(AssetImage('assets/images/$name.png'), context);
+    }
+    precacheImage(
+      const AssetImage('assets/images/bg_arena_battle.png'),
+      context,
+    );
+  }
+
   void _syncNotifications() =>
       unawaited(GameNotifications.sync(() => p.notifications));
 

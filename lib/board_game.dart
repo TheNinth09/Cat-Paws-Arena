@@ -205,8 +205,12 @@ class BoardViewState extends State<BoardView>
       for (final name in candidates) {
         try {
           final data = await rootBundle.load('$dir$name.png');
+          // Decode near the on-screen size: tiles render at most ~100
+          // logical px (~300 physical on 3x panels), so the full-res art
+          // only burns decode time and GPU memory.
           final codec = await ui.instantiateImageCodec(
             data.buffer.asUint8List(),
+            targetWidth: 320,
           );
           final frame = await codec.getNextFrame();
           _art[canonical] = frame.image;
@@ -1253,12 +1257,21 @@ class _BoardPainter extends CustomPainter {
           SpecialKind.rainbow => const Color(0xff9fd7ff),
           SpecialKind.none => const Color(0xfffff3c4),
         };
+        final glowR = s * 0.6 * (1 + 0.07 * math.sin(now * 5));
         canvas.drawCircle(
           rect.center,
-          s * 0.6 * (1 + 0.07 * math.sin(now * 5)),
+          glowR,
           Paint()
-            ..color = glow.withValues(alpha: 0.55 * alpha)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+            // Radial-gradient halo costs one fill; the old MaskFilter blur
+            // forced a software blur pass per special per frame.
+            ..shader = RadialGradient(
+              colors: [
+                glow.withValues(alpha: 0.55 * alpha),
+                glow.withValues(alpha: 0),
+              ],
+            ).createShader(
+              Rect.fromCircle(center: rect.center, radius: glowR),
+            ),
         );
       }
       final img = piece.kind < _tileNames.length
@@ -1396,26 +1409,34 @@ class _BoardPainter extends CustomPainter {
     switch (f.kind) {
       case _FxKind.beamH:
         final h = cell * 0.34 * (1 - t * 0.5);
+        final rect = Rect.fromLTWH(ox, cy - h / 2, f.width * cell, h);
         canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(ox, cy - h / 2, f.width * cell, h),
-            Radius.circular(h / 2),
-          ),
+          RRect.fromRectAndRadius(rect, Radius.circular(h / 2)),
           Paint()
-            ..color = const Color(0xfffff3c4).withValues(alpha: (1 - t) * 0.9)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                const Color(0xfffff3c4).withValues(alpha: 0),
+                const Color(0xfffff3c4).withValues(alpha: (1 - t) * 0.9),
+                const Color(0xfffff3c4).withValues(alpha: 0),
+              ],
+            ).createShader(rect),
         );
         return;
       case _FxKind.beamV:
         final w = cell * 0.34 * (1 - t * 0.5);
+        final rect = Rect.fromLTWH(cx - w / 2, oy, w, f.width * cell);
         canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(cx - w / 2, oy, w, f.width * cell),
-            Radius.circular(w / 2),
-          ),
+          RRect.fromRectAndRadius(rect, Radius.circular(w / 2)),
           Paint()
-            ..color = const Color(0xfffff3c4).withValues(alpha: (1 - t) * 0.9)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+            ..shader = LinearGradient(
+              colors: [
+                const Color(0xfffff3c4).withValues(alpha: 0),
+                const Color(0xfffff3c4).withValues(alpha: (1 - t) * 0.9),
+                const Color(0xfffff3c4).withValues(alpha: 0),
+              ],
+            ).createShader(rect),
         );
         return;
       case _FxKind.blast:
@@ -1425,8 +1446,15 @@ class _BoardPainter extends CustomPainter {
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1 + 4 * (1 - t)
-            ..color = const Color(0xffffb64d).withValues(alpha: (1 - t) * 0.9)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+            ..color = const Color(0xffffb64d).withValues(alpha: (1 - t) * 0.9),
+        );
+        canvas.drawCircle(
+          Offset(cx, cy),
+          cell * (0.4 + 1.7 * t) * 0.9,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3 + 6 * (1 - t)
+            ..color = const Color(0xffffd98b).withValues(alpha: (1 - t) * 0.3),
         );
         canvas.drawCircle(
           Offset(cx, cy),

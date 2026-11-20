@@ -416,21 +416,24 @@ class _MatchScreenState extends State<MatchScreen>
                   ),
                 ),
               ],
-              SafeArea(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 540),
-                    child: switch (match.phase) {
-                      // Searching and result are the same full-bleed scenes
-                      // as the VS page — one continuous page, no HUD swap.
-                      MatchPhase.searching => versus(),
-                      MatchPhase.finished => result(),
-                      MatchPhase.playing => Padding(
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 540),
+                  child: switch (match.phase) {
+                    // Searching and result are the same full-bleed scenes
+                    // as the VS page — one continuous page, no HUD swap.
+                    // Both manage their own inner SafeArea so their art can
+                    // climb behind the system bars instead of leaving brown
+                    // scaffold bands at the top and bottom.
+                    MatchPhase.searching => versus(),
+                    MatchPhase.finished => result(),
+                    MatchPhase.playing => SafeArea(
+                      child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
                         child: battle(),
                       ),
-                    },
-                  ),
+                    ),
+                  },
                 ),
               ),
                 if (_momentPower != null)
@@ -2258,13 +2261,17 @@ class _MomentPainter extends CustomPainter {
           ..color = const Color(0xffff3b30).withValues(alpha: 0.5)
           ..strokeWidth = r * 0.008;
         canvas.drawLine(Offset(dotX, 0), Offset(dotX, size.height), beam);
-        final dot = Paint()
-          ..color = const Color(0xffff5040).withValues(alpha: 0.95)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+        final dotC = Offset(dotX, size.height * (0.3 + 0.4 * sweep));
         canvas.drawCircle(
-          Offset(dotX, size.height * (0.3 + 0.4 * sweep)),
+          dotC,
           r * 0.05,
-          dot,
+          Paint()
+            ..shader = RadialGradient(
+              colors: [
+                const Color(0xffff5040).withValues(alpha: 0.95),
+                const Color(0xffff5040).withValues(alpha: 0),
+              ],
+            ).createShader(Rect.fromCircle(center: dotC, radius: r * 0.05)),
         );
     }
   }

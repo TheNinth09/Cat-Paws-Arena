@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'online/online_config.dart';
@@ -19,6 +21,15 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  // Ask Android for the panel's highest refresh mode — without this many
+  // phones pin Flutter to 60 Hz and the game reads as stuttery.
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      await FlutterDisplayMode.setHighRefreshRate();
+    } on Object {
+      // Unsupported or virtualized displays: keep the default mode.
+    }
+  }
   OnlineServices? online;
   try {
     online = await OnlineServices.start();
