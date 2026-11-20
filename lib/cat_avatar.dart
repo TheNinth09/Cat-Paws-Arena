@@ -1179,13 +1179,13 @@ class _HaloCrownPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     _scaleTo(canvas, size, 120, 120);
     final cy = centered ? 52.0 : 6.0;
-    final glow = Paint()
-      ..color = const Color(0x88ffe27a)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawOval(
-      Rect.fromCenter(center: Offset(60, cy + 8), width: 74, height: 20),
-      glow,
-    );
+    // Soft halo from two stacked alpha fills — cheap, no MaskFilter blur.
+    for (final (w, a) in [(78.0, 0x33), (58.0, 0x55)]) {
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(60, cy + 8), width: w, height: 20),
+        Paint()..color = Color.fromARGB(a, 0xff, 0xe2, 0x7a),
+      );
+    }
     final band = Path()
       ..moveTo(34, cy + 10)
       ..quadraticBezierTo(60, cy + 20, 86, cy + 10)
@@ -1257,12 +1257,13 @@ class _SupremeCrownPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     _scaleTo(canvas, size, 120, 120);
     final cy = centered ? 46.0 : 0.0;
-    canvas.drawOval(
-      Rect.fromCenter(center: Offset(60, cy + 10), width: 90, height: 26),
-      Paint()
-        ..color = const Color(0x66ffc63c)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-    );
+    // Same cheap halo trick as the light crown — no MaskFilter blur.
+    for (final (w, a) in [(94.0, 0x2e), (70.0, 0x50)]) {
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(60, cy + 10), width: w, height: 26),
+        Paint()..color = Color.fromARGB(a, 0xff, 0xc6, 0x3c),
+      );
+    }
     final metal = Paint()..color = gold;
     final line = Paint()
       ..color = ink

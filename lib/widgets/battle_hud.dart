@@ -207,29 +207,54 @@ class BattleTopHud extends StatelessWidget {
         const SizedBox(height: 2),
         AnimatedBuilder(
           animation: pulse,
-          builder: (context, _) {
+          builder: (context, child) {
             final ring = active ? activeColor : passiveRing;
             return Transform.scale(
               scale: active ? 1 + 0.05 * pulse.value : 1.0,
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xff2e1d12),
-                  border: Border.all(color: ring, width: active ? 3.2 : 2.4),
-                  boxShadow: [
-                    BoxShadow(
-                      color: ring.withValues(
-                        alpha: active ? 0.45 + 0.3 * pulse.value : 0.25,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Cheap glow: one radial-gradient fill per frame instead
+                  // of a gaussian BoxShadow blur at 60fps.
+                  Container(
+                    width: 78,
+                    height: 78,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        stops: const [0.55, 1.0],
+                        colors: [
+                          ring.withValues(
+                            alpha: active ? 0.4 + 0.3 * pulse.value : 0.18,
+                          ),
+                          ring.withValues(alpha: 0),
+                        ],
                       ),
-                      blurRadius: active ? 12 + 6 * pulse.value : 6,
                     ),
-                  ],
-                ),
-                child: ClipOval(child: SizedBox(width: 52, height: 52, child: avatar)),
+                  ),
+                  child!,
+                ],
               ),
             );
           },
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xff2e1d12),
+              border: Border.all(
+                color: active ? activeColor : passiveRing,
+                width: active ? 3.2 : 2.4,
+              ),
+            ),
+            // The multi-layer cat portrait rasterizes once — only the
+            // outer transform/halo layers animate each pulse frame.
+            child: RepaintBoundary(
+              child: ClipOval(
+                child: SizedBox(width: 52, height: 52, child: avatar),
+              ),
+            ),
+          ),
         ),
         const SizedBox(height: 4),
         _ScorePlate(score: score, boxes: boxes),
@@ -521,14 +546,16 @@ class BattleBottomActionBar extends StatelessWidget {
                       width: full ? 2 : 1.6,
                     ),
                     boxShadow: [
+                      // Solid rim pulse — a spread-radius fill is a cheap
+                      // glow, unlike an animated gaussian blur at 60fps.
                       BoxShadow(
                         color: full
                             ? const Color(0xffffc63c).withValues(
-                                alpha: 0.35 + 0.3 * pulse.value,
+                                alpha: 0.3 + 0.3 * pulse.value,
                               )
                             : const Color(0x55000000),
-                        blurRadius: full ? 12 + 8 * pulse.value : 6,
-                        spreadRadius: full ? 1 : 0,
+                        blurRadius: full ? 0 : 6,
+                        spreadRadius: full ? 1.5 + 1.5 * pulse.value : 0,
                       ),
                       const BoxShadow(
                         color: Color(0x883a1c08),

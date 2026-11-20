@@ -551,8 +551,18 @@ class ArenaMatchController extends ChangeNotifier {
   String? get stateHashForTest =>
       _state == null ? null : engine.stateHash(_state!);
 
+  bool _refreshQueued = false;
+
+  /// Coalesces bursts into at most one notification per event-loop turn.
+  /// Cascade floods call [refresh] many times back-to-back; batching them
+  /// keeps the full-page rebuild to one per frame instead of dozens.
   void refresh() {
-    if (!_disposed) notifyListeners();
+    if (_disposed || _refreshQueued) return;
+    _refreshQueued = true;
+    scheduleMicrotask(() {
+      _refreshQueued = false;
+      if (!_disposed) notifyListeners();
+    });
   }
 
   void pause({bool? background, bool? modal}) {

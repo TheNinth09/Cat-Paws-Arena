@@ -887,8 +887,9 @@ class _MatchScreenState extends State<MatchScreen>
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(13),
-              child: Stack(
-                children: [
+              child: RepaintBoundary(
+                child: Stack(
+                  children: [
                   Positioned.fill(
                     child: BoardView(
                       key: _boardKey,
@@ -908,7 +909,8 @@ class _MatchScreenState extends State<MatchScreen>
                   Positioned.fill(
                     child: BoardVfxOverlay(controller: _vfx),
                   ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

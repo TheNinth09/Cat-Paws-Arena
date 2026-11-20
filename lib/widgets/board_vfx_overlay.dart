@@ -53,11 +53,14 @@ class BoardVfxController extends ChangeNotifier {
   }
 
   void tick() {
-    if (_events.isNotEmpty || shakeIntensity > 0.01) {
-      shakeIntensity *= 0.82;
-      if (shakeIntensity < 0.05) shakeIntensity = 0.0;
-      notifyListeners();
-    }
+    final wasActive = _events.isNotEmpty || shakeIntensity > 0.01;
+    _events.removeWhere((e) => e.progress(DateTime.now()) >= 1.0);
+    shakeIntensity *= 0.82;
+    if (shakeIntensity < 0.05) shakeIntensity = 0.0;
+    final stillActive = _events.isNotEmpty || shakeIntensity > 0.01;
+    // Notify while effects run and exactly once when they drain, so the
+    // overlay can stop its ticker instead of repainting forever.
+    if (wasActive || stillActive) notifyListeners();
   }
 }
 
@@ -89,11 +92,26 @@ class _BoardVfxOverlayState extends State<BoardVfxOverlay>
     )..addListener(() {
         widget.controller.tick();
       });
-    _ticker.repeat();
+    // The ticker only runs while effects are active — idle frames must
+    // not repaint the board overlay.
+    widget.controller.addListener(_syncTicker);
+    _syncTicker();
+  }
+
+  void _syncTicker() {
+    final busy =
+        widget.controller.activeEvents.isNotEmpty ||
+        widget.controller.shakeIntensity > 0.01;
+    if (busy && !_ticker.isAnimating) {
+      _ticker.repeat();
+    } else if (!busy && _ticker.isAnimating) {
+      _ticker.stop();
+    }
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_syncTicker);
     _ticker.dispose();
     super.dispose();
   }
