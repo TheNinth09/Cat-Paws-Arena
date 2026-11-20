@@ -108,6 +108,11 @@ int findSpecial(MatchState s, PlayerSlot player, int code) {
   final cells = s.boardOf(player).cells;
   for (var i = 0; i < cells.length; i++) {
     if (basePieceCode(cells[i]) == code) return i;
+    if (code >= kFirstSpecial &&
+        isSpecialCode(cells[i]) &&
+        specialKindBaseOf(cells[i]) == code) {
+      return i;
+    }
   }
   return -1;
 }
@@ -138,7 +143,7 @@ Set<int> expectedBlast(List<int> scratch, int w, int h, int pos, int base) {
     if (isPieceCode(scratch[j])) cells.add(j);
   }
 
-  switch (base) {
+  switch (base >= kFirstSpecial ? specialKindBaseOf(base) : base) {
     case kLineRow:
       for (var cc = 0; cc < w; cc++) {
         addIfPiece(r * w + cc);
@@ -343,18 +348,53 @@ void main() {
     expect(specialAt, isNonNegative, reason: 'special must exist pre-fire');
     final board = state.boardOf(PlayerSlot.first);
 
-    // Tap detonation fires the special in place — a special never merges
-    // with a plain piece, so the blast is computed at its own cell.
+    // A special fires when swapped onto a piece of the colour it was
+    // made from. Rebuild the state with a matching piece planted next to
+    // the special (rainbow instead keeps the real piece colour — it
+    // clears whatever colour it touches), then swap.
     final w = board.width, h = board.height;
     final scratch = List<int>.of(board.cells);
-    final specialNow = specialAt;
     final base = basePieceCode(scratch[specialAt]);
+    final nb = neighbourPiece(board, specialAt);
+    expect(nb, isNonNegative, reason: 'special needs an adjacent piece');
+    final plantColour =
+        specialKindBaseOf(base) == kRainbow
+            ? basePieceCode(scratch[nb])
+            : specialColourOf(base);
+    final cells = List<int>.of(scratch)..[nb] = plantColour;
+    final swapped = stateWith(
+      firstCells: cells,
+      secondCells: state.boardOf(PlayerSlot.second).cells,
+      width: w,
+      height: h,
+      colourCount: config.colourCount,
+      turnsPerPlayer: config.turnsPerPlayer,
+      turn: state.turn,
+      turnMoves: state.turnMoves,
+      active: state.activePlayer,
+      turnsRemaining: List<int>.of(state.turnsRemaining),
+      scores: List<int>.of(state.scores),
+      charge: List<int>.of(state.powerCharge),
+      rngState: List<int>.of(state.rngState),
+      pending: [
+        for (final q in state.pendingObstacles) List<ObstacleKind>.of(q),
+      ],
+      rainbowRule: config.rainbowRule,
+      firstPower: config.powerFor(PlayerSlot.first),
+      secondPower: config.powerFor(PlayerSlot.second),
+    );
 
+    // The special slides onto the planted cell and detonates there —
+    // the expected blast is computed on the post-swap scratch.
+    final specialNow = nb;
+    final post = List<int>.of(scratch);
+    post[nb] = scratch[specialAt];
+    post[specialAt] = plantColour;
     final res = mustApply(
-      state,
+      swapped,
       SwapMove(
         firstCell: (row: specialAt ~/ w, col: specialAt % w),
-        secondCell: (row: specialAt ~/ w, col: specialAt % w),
+        secondCell: (row: nb ~/ w, col: nb % w),
       ),
     );
     final fired = res.value.events.whereType<SpecialFired>().firstWhere(
@@ -363,28 +403,25 @@ void main() {
     );
 
     Set<int> expected;
-    if (base == kRainbow) {
+    if (specialKindBaseOf(base) == kRainbow) {
       expected = <int>{};
       if (config.rainbowRule == RainbowRule.clearOneColour) {
-        // Tap fire draws a random colour from the shared rng stream.
-        final rng = GameRandom.fromState(
-          state.rngState[PlayerSlot.first.index],
-        );
-        final target = rng.nextInt(config.colourCount);
-        if (target >= 0) {
-          for (var j = 0; j < scratch.length; j++) {
-            if (isColourCode(scratch[j]) && basePieceCode(scratch[j]) == target) {
-              expected.add(j);
-            }
+        // The planted colour piece determines the cleared colour.
+        for (var j = 0; j < post.length; j++) {
+          if (isColourCode(post[j]) &&
+              basePieceCode(post[j]) == plantColour) {
+            expected.add(j);
           }
         }
         expected.add(specialNow);
       } else {
         // Replicate the deterministic partial Fisher-Yates pick.
-        final rng = GameRandom.fromState(state.rngState[PlayerSlot.first.index]);
+        final rng = GameRandom.fromState(
+          swapped.rngState[PlayerSlot.first.index],
+        );
         final eligible = <int>[
-          for (var j = 0; j < scratch.length; j++)
-            if (isPieceCode(scratch[j])) j,
+          for (var j = 0; j < post.length; j++)
+            if (isPieceCode(post[j])) j,
         ];
         final take = eligible.length < kRainbowRemoveCount
             ? eligible.length
@@ -398,23 +435,23 @@ void main() {
         }
         expected.add(specialNow);
       }
-    } else if (base == kCopter) {
+    } else if (specialKindBaseOf(base) == kCopter) {
       // Priority target: a box if any exist, else a random colour piece
       // (same rng stream the engine uses); the copter is consumed.
       expected = <int>{};
       final rng = GameRandom.fromState(
-        state.rngState[PlayerSlot.first.index],
+        swapped.rngState[PlayerSlot.first.index],
       );
       final boxes = <int>[
-        for (var j = 0; j < scratch.length; j++)
-          if (isBoxCode(scratch[j])) j,
+        for (var j = 0; j < post.length; j++)
+          if (isBoxCode(post[j])) j,
       ];
       if (boxes.isNotEmpty) {
         expected.add(boxes[rng.nextInt(boxes.length)]);
       } else {
         final colours = <int>[
-          for (var j = 0; j < scratch.length; j++)
-            if (j != specialNow && isColourCode(scratch[j])) j,
+          for (var j = 0; j < post.length; j++)
+            if (j != specialNow && isColourCode(post[j])) j,
         ];
         if (colours.isNotEmpty) {
           expected.add(colours[rng.nextInt(colours.length)]);
@@ -422,7 +459,7 @@ void main() {
       }
       expected.add(specialNow);
     } else {
-      expected = expectedBlast(scratch, w, h, specialNow, base);
+      expected = expectedBlast(post, w, h, specialNow, base);
     }
 
     expect(
@@ -450,8 +487,10 @@ void main() {
 
   test('a fired copter strikes one target and is consumed', () {
     const w = 7, h = 7;
-    final copterAt = idx(3, 3);
-    final cells = fixture(overrides: {copterAt: kCopter});
+    final copterAt = idx(3, 3), nb = idx(3, 4);
+    // Bare kCopter is a colour-0 copter: it fires when swapped onto a
+    // colour-0 piece planted next to it.
+    final cells = fixture(overrides: {copterAt: kCopter, nb: 0});
     final state = stateWith(firstCells: cells);
     final board = state.boardOf(PlayerSlot.first);
     final scratch = List<int>.of(board.cells);
@@ -460,7 +499,7 @@ void main() {
       state,
       SwapMove(
         firstCell: (row: copterAt ~/ w, col: copterAt % w),
-        secondCell: (row: copterAt ~/ w, col: copterAt % w),
+        secondCell: (row: nb ~/ w, col: nb % w),
       ),
     );
     final fired = res.value.events.whereType<SpecialFired>().firstWhere(
@@ -468,21 +507,24 @@ void main() {
       orElse: () => throw StateError('no SpecialFired event'),
     );
     // No boxes on the fixture board: the copter strikes one colour piece
-    // (deterministic rng pick) and is consumed itself.
+    // (deterministic rng pick) and is consumed itself at its new cell.
+    final post = List<int>.of(scratch)
+      ..[nb] = scratch[copterAt]
+      ..[copterAt] = 0;
     final rng = GameRandom.fromState(state.rngState[PlayerSlot.first.index]);
     final colours = <int>[
-      for (var j = 0; j < scratch.length; j++)
-        if (j != copterAt && isColourCode(scratch[j])) j,
+      for (var j = 0; j < post.length; j++)
+        if (j != nb && isColourCode(post[j])) j,
     ];
-    final expected = <int>{colours[rng.nextInt(colours.length)], copterAt};
+    final expected = <int>{colours[rng.nextInt(colours.length)], nb};
     expect(fired.cells, posListOf(w, expected));
     expect(fired.points, expected.length * kPointsPerPiece);
   });
 
   test('a fired bomb clears a 3x3 area', () {
     const w = 7, h = 7;
-    final bombAt = idx(3, 3);
-    final cells = fixture(overrides: {bombAt: kBomb});
+    final bombAt = idx(3, 3), nb = idx(3, 4);
+    final cells = fixture(overrides: {bombAt: kBomb, nb: 0});
     final state = stateWith(firstCells: cells);
     final board = state.boardOf(PlayerSlot.first);
     final scratch = List<int>.of(board.cells);
@@ -491,14 +533,17 @@ void main() {
       state,
       SwapMove(
         firstCell: (row: bombAt ~/ w, col: bombAt % w),
-        secondCell: (row: bombAt ~/ w, col: bombAt % w),
+        secondCell: (row: nb ~/ w, col: nb % w),
       ),
     );
     final fired = res.value.events.whereType<SpecialFired>().firstWhere(
       (e) => e.kind == SpecialKind.bomb,
       orElse: () => throw StateError('no SpecialFired event'),
     );
-    expect(fired.cells, posListOf(w, expectedBlast(scratch, w, h, bombAt, kBomb)));
+    final post = List<int>.of(scratch)
+      ..[nb] = scratch[bombAt]
+      ..[bombAt] = 0;
+    expect(fired.cells, posListOf(w, expectedBlast(post, w, h, nb, kBomb)));
     expect(fired.points, greaterThan(0));
   });
 

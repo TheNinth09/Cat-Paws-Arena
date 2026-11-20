@@ -93,18 +93,22 @@ class EngineViewAdapter {
           ? const BoardCell(obstacle: ObstacleKind.tangledYarn)
           : const BoardCell();
     }
-    final special = switch (base) {
-      20 => SpecialKind.lineHorizontal,
-      21 => SpecialKind.lineVertical,
-      22 => SpecialKind.bomb,
-      23 => SpecialKind.rainbow,
-      24 => SpecialKind.copter,
+    // Special codes pack kind+colour: kind = (base-20) ~/ 8, colour =
+    // (base-20) % 8. The piece carries its colour so the painter can
+    // badge it — players combine specials with pieces of that colour.
+    final kindIdx = base >= 20 ? (base - 20) ~/ 8 : -1;
+    final special = switch (kindIdx) {
+      0 => SpecialKind.lineHorizontal,
+      1 => SpecialKind.lineVertical,
+      2 => SpecialKind.bomb,
+      3 => SpecialKind.copter,
+      4 => SpecialKind.rainbow,
       _ => SpecialKind.none,
     };
     return BoardCell(
       piece: BoardPiece(
         id: _nextId++,
-        kind: base >= 20 ? 0 : base,
+        kind: base >= 20 ? (base - 20) % 8 : base,
         special: special,
       ),
       obstacle: yarn ? ObstacleKind.tangledYarn : null,

@@ -17,24 +17,44 @@ const int kCellBox = -2;
 /// Number of regular colour codes (`0..kPieceColours - 1`).
 const int kPieceColours = 6;
 
+/// Special pieces carry the colour they were made from in their low bits:
+/// `code = kindBase + colour` with [kSpecialStride] slots per kind so all
+/// six colours fit. The rainbow keeps colour slot 0.
+const int kSpecialStride = 8;
+
 /// Line piece that clears its row when fired.
 const int kLineRow = 20;
 
 /// Line piece that clears its column when fired.
-const int kLineColumn = 21;
+const int kLineColumn = 28;
 
 /// Bomb piece that clears a 3x3 area when fired.
-const int kBomb = 22;
-
-/// Rainbow piece; effect depends on [MatchConfig.rainbowRule].
-const int kRainbow = 23;
+const int kBomb = 36;
 
 /// Copter piece: flies to the highest-priority target when fired —
 /// a box if one is on the board, otherwise a random colour piece.
-const int kCopter = 24;
+const int kCopter = 44;
+
+/// Rainbow piece; effect depends on [MatchConfig.rainbowRule].
+const int kRainbow = 52;
 
 /// First special-piece code. Codes below this are regular colours.
 const int kFirstSpecial = kLineRow;
+
+/// Encodes a special piece of [kindBase] made from [colour].
+int specialCode(int kindBase, int colour) => kindBase + colour;
+
+/// The kind base ([kLineRow], [kLineColumn], [kBomb], [kCopter] or
+/// [kRainbow]) of a special [code]. Call only when [isSpecialCode].
+int specialKindBaseOf(int code) =>
+    kFirstSpecial +
+    ((basePieceCode(code) - kFirstSpecial) ~/ kSpecialStride) *
+        kSpecialStride;
+
+/// The colour a special [code] was made from (0–5). Call only when
+/// [isSpecialCode].
+int specialColourOf(int code) =>
+    (basePieceCode(code) - kFirstSpecial) % kSpecialStride;
 
 /// Added to a piece code when yarn locks it in place.
 const int kYarnOffset = 64;
@@ -318,18 +338,22 @@ bool swappablePair(MutableBoard board, int a, int b) {
 
 /// Whether swapping [a] and [b] is productive under the Royal Kingdom
 /// rules: two specials always combine, a rainbow swapped onto a colour
-/// clears that colour, a special never merges with a plain piece (it
-/// fires by tap, combo or rainbow instead), and every other pair is
-/// only productive when the swap forms a colour match.
+/// clears that colour, a non-rainbow special fires when swapped onto a
+/// piece of the colour it was made from, a special never merges with any
+/// other plain piece, and every other pair is only productive when the
+/// swap forms a colour match.
 bool productiveSwap(MutableBoard board, int a, int b) {
   final ca = board.cells[a];
   final cb = board.cells[b];
-  if (isSpecialCode(ca) && isSpecialCode(cb)) return true;
-  if ((basePieceCode(ca) == kRainbow && isColourCode(cb)) ||
-      (basePieceCode(cb) == kRainbow && isColourCode(ca))) {
-    return true;
+  final aSpec = isSpecialCode(ca), bSpec = isSpecialCode(cb);
+  if (aSpec && bSpec) return true;
+  if (aSpec || bSpec) {
+    final s = aSpec ? ca : cb;
+    final other = aSpec ? cb : ca;
+    if (specialKindBaseOf(s) == kRainbow) return isColourCode(other);
+    return isColourCode(other) &&
+        specialColourOf(s) == basePieceCode(other);
   }
-  if (isSpecialCode(ca) || isSpecialCode(cb)) return false;
   board.cells[a] = cb;
   board.cells[b] = ca;
   final found = scanMatches(board).isNotEmpty;

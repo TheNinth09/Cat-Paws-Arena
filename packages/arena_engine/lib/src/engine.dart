@@ -72,12 +72,6 @@ EngineResult<List<Move>> legalMoves(MatchState state) {
   final moves = <Move>[
     for (final (a, b) in pairs)
       SwapMove(firstCell: pos(a), secondCell: pos(b)),
-    // Tap detonations: every unlocked special fires via a self-swap.
-    for (var i = 0; i < board.cells.length; i++)
-      if (isPieceCode(board.cells[i]) &&
-          !isYarnedCode(board.cells[i]) &&
-          isSpecialCode(board.cells[i]))
-        SwapMove(firstCell: pos(i), secondCell: pos(i)),
   ];
   if (state.canFirePower(slot)) {
     moves.add(PowerMove(power: state.config.powerFor(slot)));
@@ -132,15 +126,7 @@ EngineResult<MoveResult> _applySwap(
   final work = _Work.fromState(state);
   final board = work.boards[slot.index];
   if (a == b) {
-    // Tap detonation: tapping a special piece fires it in place.
-    if (!isSpecialCode(board.cells[a])) {
-      return _invalidMove('swap cells must differ');
-    }
-    work.turnMoves++;
-    _fireSwapSpecials(work, slot, a, a);
-    _resolveMatches(work, slot);
-    _ensureLegalMove(work, slot);
-    return _result(work, hashBefore);
+    return _invalidMove('swap cells must differ');
   }
   if (!board.adjacent(a, b)) return _invalidMove('swap cells not adjacent');
   if (!swappablePair(board, a, b)) {
@@ -149,16 +135,30 @@ EngineResult<MoveResult> _applySwap(
 
   final ca = board.cells[a];
   final cb = board.cells[b];
-  final bothSpecial = isSpecialCode(ca) && isSpecialCode(cb);
-  // A special never merges with a plain piece: it fires by tap, by a
-  // special+special combo, or — for the rainbow paw — by touching the
-  // colour it should clear. Any other special+normal swap is rejected.
+  final aSpec = isSpecialCode(ca), bSpec = isSpecialCode(cb);
+  final bothSpecial = aSpec && bSpec;
+  bool isRainbow(int code) =>
+      isSpecialCode(code) && specialKindBaseOf(code) == kRainbow;
+  // A special never merges with a plain piece: it fires through a
+  // special+special combo, through the rainbow paw touching the colour it
+  // should clear, or when it is swapped onto a piece of the colour it was
+  // made from. Any other special+normal swap is rejected.
   final rainbowOnColour =
-      (basePieceCode(ca) == kRainbow && isColourCode(cb)) ||
-      (basePieceCode(cb) == kRainbow && isColourCode(ca));
+      (isRainbow(ca) && isColourCode(cb)) ||
+      (isRainbow(cb) && isColourCode(ca));
+  final specialOnColour =
+      !bothSpecial &&
+      !rainbowOnColour &&
+      ((aSpec &&
+              isColourCode(cb) &&
+              specialColourOf(ca) == basePieceCode(cb)) ||
+          (bSpec &&
+              isColourCode(ca) &&
+              specialColourOf(cb) == basePieceCode(ca)));
   if (!bothSpecial &&
       !rainbowOnColour &&
-      (isSpecialCode(ca) || isSpecialCode(cb))) {
+      !specialOnColour &&
+      (aSpec || bSpec)) {
     final first = a < b ? a : b;
     final second = a < b ? b : a;
     return EngineOk(
@@ -177,7 +177,7 @@ EngineResult<MoveResult> _applySwap(
       ),
     );
   }
-  final fires = bothSpecial || rainbowOnColour;
+  final fires = bothSpecial || rainbowOnColour || specialOnColour;
 
   // Simulate the swap to test productivity.
   board.cells[a] = cb;
@@ -219,7 +219,7 @@ EngineResult<MoveResult> _applySwap(
 
   if (bothSpecial) {
     _fireCombo(work, slot, first, second);
-  } else if (rainbowOnColour) {
+  } else if (rainbowOnColour || specialOnColour) {
     _fireSwapSpecials(work, slot, first, second);
   }
   _resolveMatches(work, slot);
@@ -591,7 +591,7 @@ Set<int> _specialEffectCells({
     }
   }
 
-  switch (base) {
+  switch (specialKindBaseOf(base)) {
     case kLineRow:
       collectRow(r);
     case kLineColumn:
@@ -663,7 +663,7 @@ Set<int> _specialEffectCells({
   return cells;
 }
 
-SpecialKind _specialKindOf(int base) => switch (base) {
+SpecialKind _specialKindOf(int base) => switch (specialKindBaseOf(base)) {
   kLineRow || kLineColumn => SpecialKind.line,
   kBomb => SpecialKind.bomb,
   kCopter => SpecialKind.copter,
@@ -802,12 +802,15 @@ void _fireCombo(_Work work, PlayerSlot slot, int first, int second) {
     ];
     cells.addAll(converted);
     for (final j in converted) {
-      final base = switch (other) {
-        SpecialKind.line => j.isEven ? kLineRow : kLineColumn,
-        SpecialKind.bomb => kBomb,
-        SpecialKind.copter => kCopter,
-        _ => kLineRow,
-      };
+      final base = specialCode(
+        switch (other) {
+          SpecialKind.line => j.isEven ? kLineRow : kLineColumn,
+          SpecialKind.bomb => kBomb,
+          SpecialKind.copter => kCopter,
+          _ => kLineRow,
+        },
+        target,
+      );
       cells.addAll(
         _specialEffectCells(
           work: work,
@@ -939,21 +942,21 @@ void _resolveMatches(_Work work, PlayerSlot slot) {
       LineOrientation? orient;
       if (g.isSquare) {
         anchor = _bombAnchor(g, board);
-        code = kCopter;
+        code = specialCode(kCopter, g.colour);
       } else if (g.isBent) {
         anchor = _bombAnchor(g, board);
-        code = kBomb;
+        code = specialCode(kBomb, g.colour);
       } else if (g.cells.length >= 5) {
         anchor = g.cells.first;
-        code = kRainbow;
+        code = specialCode(kRainbow, 0);
       } else if (g.cells.length == 4) {
         anchor = g.cells.first;
         // A horizontal run rewards a column clearer and vice versa.
         if (g.isStraightHorizontal) {
-          code = kLineColumn;
+          code = specialCode(kLineColumn, g.colour);
           orient = LineOrientation.column;
         } else {
-          code = kLineRow;
+          code = specialCode(kLineRow, g.colour);
           orient = LineOrientation.row;
         }
       } else {
@@ -1098,13 +1101,16 @@ void _powerZoomies(_Work work, PlayerSlot slot, GameRandom rng) {
   final converted = <int>[];
   for (var k = 0; k < 2 && colours.isNotEmpty; k++) {
     final j = colours.removeAt(rng.nextInt(colours.length));
-    board.cells[j] = specialBases[rng.nextInt(specialBases.length)];
+    board.cells[j] = specialCode(
+      specialBases[rng.nextInt(specialBases.length)],
+      basePieceCode(board.cells[j]),
+    );
     converted.add(j);
     work.events.add(
       SpecialCreated(
         player: slot,
         kind: _specialKindOf(basePieceCode(board.cells[j])),
-        orientation: switch (basePieceCode(board.cells[j])) {
+        orientation: switch (specialKindBaseOf(board.cells[j])) {
           kLineRow => LineOrientation.row,
           kLineColumn => LineOrientation.column,
           _ => null,

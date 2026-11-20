@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:arena_engine/arena_engine.dart' as engine;
+import 'package:arena_engine/src/board.dart' as board;
 import 'package:cat_paws_arena/board_game.dart';
 import 'package:cat_paws_arena/duel_audio.dart';
 import 'package:cat_paws_arena/duel_events.dart';
@@ -1535,27 +1536,40 @@ void main() {
       expect(next.boards[0].cells, next.boards[1].cells);
     });
 
-    test('tapping a special detonates it in place', () {
+    test('tapping a special does not detonate it', () {
       final cells = checker();
-      cells[24] = 24; // kCopter in the centre
+      cells[24] = board.kCopter; // kCopter in the centre
       final st = stateWithCells(cells);
       final res = engine.applyMove(
         st,
         engine.SwapMove(firstCell: pos(24), secondCell: pos(24)),
+      );
+      expect(res, isA<engine.EngineFailure<engine.MoveResult>>());
+      expect(st.boardOf(engine.PlayerSlot.first).cells[24], board.kCopter);
+    });
+
+    test('a special fires when swapped onto a piece of its colour', () {
+      final cells = checker();
+      cells[24] = board.kCopter; // colour-0 copter
+      cells[25] = 0; // matching colour piece next to it
+      final st = stateWithCells(cells);
+      final res = engine.applyMove(
+        st,
+        engine.SwapMove(firstCell: pos(24), secondCell: pos(25)),
       );
       expect(res, isA<engine.EngineOk<engine.MoveResult>>());
       final out = (res as engine.EngineOk<engine.MoveResult>).value;
       expect(
         out.events.whereType<engine.SpecialFired>().isNotEmpty,
         isTrue,
-        reason: 'a same-cell tap must fire the special in place',
+        reason: 'a same-colour swap must fire the special',
       );
       expect(out.state.scores[0], greaterThan(0));
     });
 
-    test('special + normal swap without a match is rejected', () {
+    test('special + off-colour swap without a match is rejected', () {
       final cells = checker();
-      cells[0] = 22; // kBomb next to a normal piece, no match formed
+      cells[0] = board.kBomb; // colour-0 bomb next to a colour-1 piece
       final st = stateWithCells(cells);
       final res = engine.applyMove(
         st,
@@ -1568,8 +1582,8 @@ void main() {
 
     test('rocket + rocket combo clears a full cross', () {
       final cells = checker();
-      cells[16] = 20; // kLineRow
-      cells[17] = 21; // kLineColumn
+      cells[16] = board.kLineRow;
+      cells[17] = board.kLineColumn;
       final st = stateWithCells(cells);
       final res = engine.applyMove(
         st,
@@ -1585,8 +1599,8 @@ void main() {
 
     test('rainbow + rainbow clears the whole board', () {
       final cells = checker();
-      cells[24] = 23; // kRainbow
-      cells[25] = 23; // kRainbow
+      cells[24] = board.kRainbow;
+      cells[25] = board.kRainbow;
       final st = stateWithCells(cells);
       final res = engine.applyMove(
         st,
@@ -1628,11 +1642,12 @@ void main() {
 
     test('firing a special queues sabotage boxes for the opponent', () {
       final cells = checker();
-      cells[24] = 22; // kBomb tapped in place
+      cells[24] = board.kBomb; // colour-0 bomb
+      cells[25] = 0; // matching colour piece fires it
       final st = stateWithCells(cells);
       final res = engine.applyMove(
         st,
-        engine.SwapMove(firstCell: pos(24), secondCell: pos(24)),
+        engine.SwapMove(firstCell: pos(24), secondCell: pos(25)),
       );
       final out = (res as engine.EngineOk<engine.MoveResult>).value;
       final queued = out.events.whereType<engine.ObstacleQueued>().toList();

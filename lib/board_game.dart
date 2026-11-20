@@ -835,12 +835,6 @@ class BoardViewState extends State<BoardView>
       picker(target ~/ width);
       return;
     }
-    // Tap detonation: tapping a special piece fires it in place.
-    if ((_cells[target].piece?.special ?? SpecialKind.none) !=
-        SpecialKind.none) {
-      _attempt(target, target);
-      return;
-    }
     final sel = _selected;
     if (sel != null && _adjacent(sel, target) && sel != target) {
       _attempt(sel, target);
@@ -1248,14 +1242,13 @@ class _BoardPainter extends CustomPainter {
       }
       canvas.translate(-cx, -cy);
       if (piece.special != SpecialKind.none) {
-        // Pulsing glow behind the special tile.
+        // Pulsing glow behind the special tile, tinted by the colour it
+        // was made from — that colour is what it combines with. Rainbow
+        // keeps the neutral icy halo.
         final glow = switch (piece.special) {
-          SpecialKind.lineHorizontal || SpecialKind.lineVertical =>
-            const Color(0xffffe28a),
-          SpecialKind.bomb => const Color(0xffff8d5a),
-          SpecialKind.copter => const Color(0xffb7f0a3),
           SpecialKind.rainbow => const Color(0xff9fd7ff),
-          SpecialKind.none => const Color(0xfffff3c4),
+          _ when piece.kind < _gemColors.length => _gemColors[piece.kind],
+          _ => const Color(0xfffff3c4),
         };
         final glowR = s * 0.6 * (1 + 0.07 * math.sin(now * 5));
         canvas.drawCircle(
@@ -1327,6 +1320,28 @@ class _BoardPainter extends CustomPainter {
       if (piece.special != SpecialKind.none && specialImg == null) {
         _drawSpecialBadge(canvas, rect, piece.special, alpha);
         _drawSpecialMark(canvas, rect, piece.special, alpha, now);
+      }
+      // Colour chip on non-rainbow specials: the colour it was made from
+      // is the colour it combines with.
+      if (piece.special != SpecialKind.none &&
+          piece.special != SpecialKind.rainbow &&
+          piece.kind < _gemColors.length) {
+        final d = s * 0.22;
+        final c = Offset(
+          rect.right - d * 0.42,
+          rect.bottom - d * 0.42,
+        );
+        canvas.drawCircle(
+          c,
+          d * 0.52,
+          Paint()..color = const Color(0xff20130e).withValues(alpha: alpha),
+        );
+        canvas.drawCircle(
+          c,
+          d * 0.38,
+          Paint()
+            ..color = _gemColors[piece.kind].withValues(alpha: alpha),
+        );
       }
       canvas.restore();
     }
