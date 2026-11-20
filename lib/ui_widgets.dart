@@ -323,12 +323,12 @@ class PlayerHud extends StatelessWidget {
         onTap: tap,
         borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              sprite(asset, size: 15),
-              const SizedBox(width: 3),
+              sprite(asset, size: 17),
+              const SizedBox(width: 4),
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
@@ -337,7 +337,7 @@ class PlayerHud extends StatelessWidget {
                     style: const TextStyle(
                       color: cream,
                       fontWeight: FontWeight.w900,
-                      fontSize: 12.5,
+                      fontSize: 14,
                       shadows: [
                         Shadow(
                           color: Color(0x66000000),
@@ -392,7 +392,7 @@ class PlayerHud extends StatelessWidget {
               onTap: onProfile,
               borderRadius: BorderRadius.circular(16),
               child: Container(
-                padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
+                padding: const EdgeInsets.fromLTRB(5, 5, 14, 5),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topCenter,
@@ -416,8 +416,8 @@ class PlayerHud extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 46,
-                      height: 46,
+                      width: 52,
+                      height: 52,
                       padding: const EdgeInsets.all(2.5),
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
@@ -436,13 +436,13 @@ class PlayerHud extends StatelessWidget {
                         child: avatar,
                       ),
                     ),
-                    const SizedBox(width: 7),
+                    const SizedBox(width: 9),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 90),
+                          constraints: const BoxConstraints(maxWidth: 112),
                           child: Text(
                             name,
                             maxLines: 1,
@@ -450,7 +450,7 @@ class PlayerHud extends StatelessWidget {
                             style: const TextStyle(
                               color: cream,
                               fontWeight: FontWeight.w900,
-                              fontSize: 12,
+                              fontSize: 13.5,
                               shadows: [
                                 Shadow(
                                   color: Color(0x66000000),
@@ -460,9 +460,9 @@ class PlayerHud extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 1),
+                        const SizedBox(height: 2),
                         SizedBox(
-                          width: 96,
+                          width: 132,
                           child: Row(
                             children: [
                               _stat(
@@ -588,14 +588,19 @@ class ArenaBottomBar extends StatelessWidget {
             painter: _CatsIconPainter(selected: active),
           );
         case 2:
-          return sprite('btn_play_paw', size: 42);
+          return CustomPaint(
+            size: const Size(40, 40),
+            painter: const _PawIconPainter(),
+          );
         case 3:
+          return CustomPaint(
+            size: const Size(30, 30),
+            painter: _ShieldIconPainter(selected: active),
+          );
         case 4:
-          return arenaImage(
-            i == 3 ? 'icon_team' : 'icon_events',
-            width: 30,
-            height: 30,
-            fallback: Icon(icons[i], size: 27, color: iconColor),
+          return CustomPaint(
+            size: const Size(30, 30),
+            painter: _ScrollIconPainter(selected: active),
           );
         default:
           return Icon(icons[i], size: 21, color: iconColor);
@@ -841,6 +846,47 @@ class _NavButtonState extends State<_NavButton> {
     );
   }
 }
+/// Press feedback shared by the glossy menu/settings rows: scales the
+/// tile down while pressed and fires a selection haptic — the same
+/// tactile feel as the bottom-bar buttons.
+class TactilePress extends StatefulWidget {
+  const TactilePress({
+    super.key,
+    required this.onTap,
+    required this.child,
+    this.haptics = true,
+  });
+  final VoidCallback onTap;
+  final Widget child;
+  final bool haptics;
+
+  @override
+  State<TactilePress> createState() => _TactilePressState();
+}
+
+class _TactilePressState extends State<TactilePress> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) => AnimatedScale(
+    scale: _down ? 0.96 : 1,
+    duration: const Duration(milliseconds: 90),
+    curve: Curves.easeOut,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: widget.onTap,
+        onHighlightChanged: (v) {
+          if (v && widget.haptics) HapticFeedback.selectionClick();
+          if (mounted) setState(() => _down = v);
+        },
+        child: widget.child,
+      ),
+    ),
+  );
+}
+
 /// Storefront glyph for the shop tab: scalloped striped awning over a
 /// little stall. Drawn from shapes so it stays crisp at any size.
 class _ShopIconPainter extends CustomPainter {
@@ -975,6 +1021,174 @@ class _CatsIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CatsIconPainter old) => old.selected != selected;
+}
+
+/// Golden paw for the centre ACASĂ tile — the same paw shape as the
+/// painted reference button: chunky pad, four toes, warm 3D shading.
+class _PawIconPainter extends CustomPainter {
+  const _PawIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final shadow = Paint()..color = const Color(0x552e1c14);
+    final base = Paint()..color = const Color(0xffb85e14);
+    final top = Paint()..color = const Color(0xffe88f2f);
+    final shine = Paint()..color = const Color(0x99fff3d6);
+
+    void paw(Offset c, double s, Paint p) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: c + Offset(0, h * 0.06 * s),
+          width: w * 0.46 * s,
+          height: h * 0.38 * s,
+        ),
+        p,
+      );
+      for (final (dx, dy) in [
+        (-0.27, -0.20),
+        (-0.10, -0.30),
+        (0.10, -0.30),
+        (0.27, -0.20),
+      ]) {
+        canvas.drawCircle(c + Offset(dx * w * s, dy * h * s), w * 0.085 * s, p);
+      }
+    }
+
+    final c = Offset(w * 0.5, h * 0.52);
+    paw(c + Offset(0, h * 0.035), 1.06, shadow);
+    paw(c, 1.0, base);
+    paw(c - Offset(0, h * 0.03), 0.9, top);
+    // Glossy crescent on the pad.
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: c + Offset(-w * 0.07, h * 0.015),
+        width: w * 0.17,
+        height: h * 0.09,
+      ),
+      shine,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PawIconPainter old) => false;
+}
+
+/// Shield with a paw emblem for ECHIPĂ — painted like the stall/book
+/// icons so the whole bar shares one tactile language.
+class _ShieldIconPainter extends CustomPainter {
+  const _ShieldIconPainter({required this.selected});
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final ink = Paint()
+      ..color = selected ? const Color(0xff6b3a12) : const Color(0xff7a5335)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()..style = PaintingStyle.fill;
+
+    // Shield silhouette: peaked top, tapered to a bottom point.
+    final shield = Path()
+      ..moveTo(w * 0.50, h * 0.06)
+      ..lineTo(w * 0.86, h * 0.20)
+      ..lineTo(w * 0.86, h * 0.52)
+      ..quadraticBezierTo(w * 0.86, h * 0.78, w * 0.50, h * 0.95)
+      ..quadraticBezierTo(w * 0.14, h * 0.78, w * 0.14, h * 0.52)
+      ..lineTo(w * 0.14, h * 0.20)
+      ..close();
+    fill.color = selected ? const Color(0xffc75b39) : const Color(0xffa05f46);
+    canvas.drawPath(shield, fill);
+    canvas.drawPath(shield, ink);
+
+    // Inner plate.
+    final inner = Path()
+      ..moveTo(w * 0.50, h * 0.17)
+      ..lineTo(w * 0.75, h * 0.27)
+      ..lineTo(w * 0.75, h * 0.52)
+      ..quadraticBezierTo(w * 0.75, h * 0.71, w * 0.50, h * 0.84)
+      ..quadraticBezierTo(w * 0.25, h * 0.71, w * 0.25, h * 0.52)
+      ..lineTo(w * 0.25, h * 0.27)
+      ..close();
+    fill.color = selected ? const Color(0xffffe9b0) : const Color(0xffe6c493);
+    canvas.drawPath(inner, fill);
+    canvas.drawPath(inner, ink);
+
+    // Paw emblem.
+    fill.color = selected ? const Color(0xff8a4b1e) : const Color(0xff9c7044);
+    final pad = Offset(w * 0.5, h * 0.55);
+    canvas.drawOval(
+      Rect.fromCenter(center: pad, width: w * 0.20, height: h * 0.16),
+      fill,
+    );
+    for (var i = 0; i < 3; i++) {
+      canvas.drawCircle(
+        Offset(w * (0.40 + i * 0.10), h * (0.44 - (i == 1 ? 0.045 : 0))),
+        w * 0.045,
+        fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ShieldIconPainter old) => old.selected != selected;
+}
+
+/// Rolled parchment with a star for EVENIMENTE — the scroll from the
+/// reference bar, drawn in the same ink/fill style as the neighbours.
+class _ScrollIconPainter extends CustomPainter {
+  const _ScrollIconPainter({required this.selected});
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final ink = Paint()
+      ..color = selected ? const Color(0xff6b3a12) : const Color(0xff7a5335)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()..style = PaintingStyle.fill;
+
+    // Parchment body.
+    fill.color = selected ? const Color(0xffffe9b0) : const Color(0xffe6c493);
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTRB(w * 0.18, h * 0.22, w * 0.82, h * 0.82),
+      Radius.circular(w * 0.09),
+    );
+    canvas.drawRRect(body, fill);
+    canvas.drawRRect(body, ink);
+
+    // Roll caps top and bottom.
+    fill.color = selected ? const Color(0xffc98a3e) : const Color(0xffa97a4e);
+    for (final y in [h * 0.22, h * 0.82]) {
+      final cap = RRect.fromRectAndRadius(
+        Rect.fromLTRB(w * 0.10, y - h * 0.075, w * 0.90, y + h * 0.075),
+        Radius.circular(h * 0.07),
+      );
+      canvas.drawRRect(cap, fill);
+      canvas.drawRRect(cap, ink);
+    }
+
+    // Star glyph on the parchment.
+    fill.color = selected ? const Color(0xffe8a01f) : const Color(0xffc08a63);
+    final cx = w * 0.5, cy = h * 0.52, r1 = w * 0.15, r2 = w * 0.06;
+    final star = Path();
+    for (var i = 0; i < 10; i++) {
+      final a = -1.5708 + i * 0.6283;
+      final r = i.isEven ? r1 : r2;
+      final p = Offset(cx + r * cos(a), cy + r * sin(a));
+      i == 0 ? star.moveTo(p.dx, p.dy) : star.lineTo(p.dx, p.dy);
+    }
+    star.close();
+    canvas.drawPath(star, fill);
+    canvas.drawPath(star, ink);
+  }
+
+  @override
+  bool shouldRepaint(_ScrollIconPainter old) => old.selected != selected;
 }
 
 class ProductCard extends StatelessWidget {

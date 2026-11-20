@@ -1035,17 +1035,24 @@ class _SettingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 6),
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => onChanged(!value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+    child: TactilePress(
+      onTap: () => onChanged(!value),
+      child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xfffff9e8),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xfffffdf2), Color(0xfff3e4c4)],
+            ),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xffe0c294), width: 1.2),
+            border: Border.all(color: const Color(0xffc9a06a), width: 1.4),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0xffc9a06a),
+                offset: Offset(0, 2.5),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -1086,7 +1093,6 @@ class _SettingRow extends StatelessWidget {
               _GlossySwitch(value: value, onChanged: onChanged),
             ],
           ),
-        ),
       ),
     ),
   );

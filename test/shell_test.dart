@@ -763,6 +763,7 @@ void main() {
     expect(find.text('Delete account'), findsOneWidget);
     expect(find.text('Join room'), findsOneWidget);
     expect(find.text('Cod cameră'), findsOneWidget);
+    await tester.ensureVisible(find.text('Link Google account'));
     await tester.tap(find.text('Link Google account'));
     await tester.pumpAndSettle();
     await passParentGate(tester);

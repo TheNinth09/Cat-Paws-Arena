@@ -214,21 +214,30 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     };
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => menuAction(id),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+      child: TactilePress(
+        haptics: p.haptics,
+        onTap: () => menuAction(id),
+        child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xdd8a5c3e), Color(0xdd5d3a2c)],
+                colors: [Color(0xffa06b47), Color(0xff6b4634)],
               ),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0x55ffe9bd), width: 1.2),
+              border: Border.all(color: const Color(0xff3c241a), width: 1.6),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0xff3c241a),
+                  offset: Offset(0, 3),
+                ),
+                BoxShadow(
+                  color: Color(0x33ffe9bd),
+                  offset: Offset(0, -1),
+                  blurRadius: 2,
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -236,12 +245,20 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 34,
-                      height: 34,
+                      width: 36,
+                      height: 36,
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
-                        color: const Color(0x553c241a),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xff5d3a2c), Color(0xff3c241a)],
+                        ),
                         borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0x88ffc63c),
+                          width: 1.2,
+                        ),
                       ),
                       child: asset != null
                           ? arenaImage(
@@ -288,7 +305,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               ],
             ),
           ),
-        ),
       ),
     );
   }

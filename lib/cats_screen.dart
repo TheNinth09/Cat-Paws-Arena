@@ -684,11 +684,6 @@ class _CatsScreenState extends State<CatsScreen> {
           ],
           const SizedBox(height: 14),
           const SectionHeading('ACCESORII'),
-          ArenaButton(
-            text: 'FĂRĂ ACCESORIU',
-            onPressed: () => change(() => player.accessory = ''),
-          ),
-          const SizedBox(height: 6),
           AdaptiveCardGrid(
             minWidth: 135,
             maxColumns: 2,
@@ -702,12 +697,13 @@ class _CatsScreenState extends State<CatsScreen> {
                       ? 'ECHIPAT'
                       : player.owned.contains(item)
                       ? 'ECHIPEAZĂ'
-                      : 'MAGAZIN • 300',
+                      : 'MAGAZIN',
                   green:
                       player.accessory != item && player.owned.contains(item),
                   dim: !player.owned.contains(item),
                   onPressed: () => player.owned.contains(item)
-                      ? change(() => player.accessory = item)
+                      ? change(() => player.accessory =
+                          player.accessory == item ? '' : item)
                       : widget.onShop(),
                 ),
             ],
