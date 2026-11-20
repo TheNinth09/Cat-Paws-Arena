@@ -501,13 +501,13 @@ class _CatsScreenState extends State<CatsScreen> {
                         ],
                       ),
                       clipBehavior: Clip.hardEdge,
-                      child: arenaImage(
-                        cat == 'Custom'
-                            ? 'cat_custom'
-                            : 'cat_${cat.toLowerCase()}',
-                        fit: BoxFit.cover,
-                        fallback: CatAvatar(player, size: 52),
-                      ),
+                      child: cat == 'Custom'
+                          ? CatSpecAvatar(catSpecForPlayer(player), size: 52)
+                          : arenaImage(
+                              'cat_${cat.toLowerCase()}',
+                              fit: BoxFit.cover,
+                              fallback: CatAvatar(player, size: 52),
+                            ),
                     ),
                     if (player.cat == cat)
                       const Positioned(
@@ -804,33 +804,12 @@ class _CatStage extends StatelessWidget {
   }
 }
 
-/// Hero cat art for the stage: the real PNG sprites for the presets and
-/// the tinted custom art for the created cat — never the painter look.
+/// Hero cat art for the stage: the real PNG sprites for the presets. The
+/// created cat renders through the layer system so every editor choice —
+/// fur, pattern, eyes, ears and accessory — changes the cat on screen.
 Widget _catHeroArt(Player player, String cat) {
   if (cat == 'Custom') {
-    return Stack(
-      alignment: Alignment.topCenter,
-      children: [
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            catFurColours[player.fur.clamp(0, catFurColours.length - 1)]
-                .withValues(alpha: 0.55),
-            BlendMode.modulate,
-          ),
-          child: _BundledAsset(
-            asset: 'assets/images/cat_custom.png',
-            height: 210,
-            fit: BoxFit.contain,
-            fallback: CatCharacter(player, height: 215),
-          ),
-        ),
-        if (player.accessory.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: sprite(player.accessory, size: 64),
-          ),
-      ],
-    );
+    return CatCharacter(player, height: 215);
   }
   return arenaImage(
     'cat_${cat.toLowerCase()}',
@@ -1139,10 +1118,10 @@ class _EquipCard extends StatelessWidget {
                       0.2126, 0.7152, 0.0722, 0, 0,
                       0, 0, 0, 1, 0,
                     ]),
-                    child: sprite(art, size: 58),
+                    child: accessoryArt(art, size: 58),
                   ),
                 )
-              : sprite(art, size: 58),
+              : accessoryArt(art, size: 58),
           const SizedBox(height: 6),
           Text(
             title,
@@ -1383,13 +1362,11 @@ class _BundledAsset extends StatefulWidget {
     required this.fallback,
     this.width,
     this.height,
-    this.fit = BoxFit.contain,
   });
 
   final String asset;
   final Widget fallback;
   final double? width, height;
-  final BoxFit fit;
 
   @override
   State<_BundledAsset> createState() => _BundledAssetState();
@@ -1415,7 +1392,7 @@ class _BundledAssetState extends State<_BundledAsset> {
           widget.asset,
           width: widget.width,
           height: widget.height,
-          fit: widget.fit,
+          fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => widget.fallback,
         )
       : widget.fallback;

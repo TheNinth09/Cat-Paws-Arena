@@ -205,11 +205,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _statsGrid(),
       const SizedBox(height: 12),
       ArenaButton(
-        text: english ? 'EDIT NAME' : 'EDITEAZĂ NUMELE',
-        secondary: true,
-        onPressed: () => showPlayerProfile(context, player),
-      ),
-      ArenaButton(
         key: const ValueKey('profile-account'),
         text: english ? 'LINK ACCOUNT' : 'CONECTARE CONT',
         secondary: true,
@@ -357,6 +352,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
+              key: const ValueKey('profile-edit'),
               onTap: () => showPlayerProfile(context, player),
               customBorder: const CircleBorder(),
               child: Container(
@@ -391,8 +387,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ),
   );
 
-  /// Preset avatar artwork chooser — the three real cat sprites plus the
-  /// procedural avatar, persisted in [Player.avatarArt].
+  /// Avatar chooser — the three preset cat artworks plus PISICA MEA,
+  /// which renders the player's own customized cat (it stays in sync with
+  /// the PISICI editor). Persisted in [Player.avatarArt].
   void _pickAvatarArt(BuildContext context) => showAppDialog(
     context,
     english ? 'CHOOSE AVATAR' : 'ALEGE AVATARUL',
@@ -402,7 +399,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       alignment: WrapAlignment.center,
       children: [
         for (final art in avatarArtChoices) _avatarChoice(context, art),
-        _avatarChoice(context, ''),
       ],
     ),
   );
@@ -414,7 +410,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? 'BUBBLE'
         : art == 'cat_custom'
         ? 'CUSTOM'
-        : (english ? 'DRAWN' : 'DESENAT');
+        : (english ? 'MY CAT' : 'PISICA MEA');
     final selected = player.avatarArt == art;
     return InkWell(
       onTap: () {
@@ -438,11 +434,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             clipBehavior: Clip.hardEdge,
-            child: art.isEmpty
-                ? AvatarAvatar(
-                    AvatarSpec.fromJsonString(player.avatarSpec),
-                    size: 60,
-                  )
+            child: art == 'my_cat'
+                ? CatSpecAvatar(catSpecForPlayer(player), size: 60)
                 : arenaImage(
                     art,
                     fit: BoxFit.cover,
@@ -743,7 +736,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Opacity(opacity: owned ? 1 : .4, child: sprite(id, size: 34)),
+            Opacity(
+              opacity: owned ? 1 : .4,
+              child: accessoryArt(id, size: 34),
+            ),
             const SizedBox(height: 4),
             Text(
               name,

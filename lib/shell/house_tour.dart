@@ -76,7 +76,7 @@ class RoadMilestone {
   final bool room;
 }
 
-/// The road between two rooms carries three milestones (+250/+500/+750
+/// The road between two rooms carries seven milestones (every 125
 /// trophies); finishing a room grants its accessory + 150 paws.
 const _roadEmotes = {500: 'wow', 1500: 'good_game', 2500: 'purr'};
 const _roomGear = {
@@ -86,22 +86,34 @@ const _roomGear = {
   4000: 'acc_ninja_headband',
 };
 
+/// Coin rewards for the seven intermediate stops, in ascending trophy
+/// order. The stop at t-500 is an emote when one is defined for that
+/// threshold, otherwise it pays its listed coin reward.
+const _roadCoins = [25, 35, 50, 55, 65, 80, 90];
+const _roadOffsets = [875, 750, 625, 500, 375, 250, 125];
+
 List<RoadMilestone> get roadMilestones {
   final list = <RoadMilestone>[];
   for (var i = 1; i < houseRoomThresholds.length; i++) {
     final t = houseRoomThresholds[i];
-    list
-      ..add(RoadMilestone(trophies: t - 750, coins: 50))
-      ..add(RoadMilestone(trophies: t - 500, emote: _roadEmotes[t - 500]))
-      ..add(RoadMilestone(trophies: t - 250, coins: 75))
-      ..add(
+    for (var j = 0; j < _roadOffsets.length; j++) {
+      final trophies = t - _roadOffsets[j];
+      list.add(
         RoadMilestone(
-          trophies: t,
-          coins: 150,
-          gear: _roomGear[t],
-          room: true,
+          trophies: trophies,
+          coins: _roadCoins[j],
+          emote: _roadEmotes[trophies],
         ),
       );
+    }
+    list.add(
+      RoadMilestone(
+        trophies: t,
+        coins: 150,
+        gear: _roomGear[t],
+        room: true,
+      ),
+    );
   }
   return list;
 }

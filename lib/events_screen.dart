@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'profile.dart';
+import 'catalog.dart';
 import 'shell/friend_room.dart';
 import 'ui_widgets.dart';
 
@@ -26,7 +27,14 @@ class _EventsScreenState extends State<EventsScreen> {
   bool get english => player.english;
 
   @override
-  Widget build(BuildContext context) => ListView(
+  Widget build(BuildContext context) => player.trophies < eventsUnlockTrophies
+      ? LockedTabPanel(
+          title: english ? 'EVENTS' : 'EVENIMENTELE',
+          threshold: eventsUnlockTrophies,
+          trophies: player.trophies,
+          english: english,
+        )
+      : ListView(
     key: const PageStorageKey('events-scroll'),
     padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
     children: [

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'catalog.dart';
 import 'profile.dart';
+import 'cat_avatar.dart';
 import 'ui_widgets.dart';
 
 /// Offline helpers shared by the Team and Events screens. Everything here is
@@ -25,7 +26,7 @@ Widget unlockGateCard({
     Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        sprite(art, size: 76),
+        accessoryArt(art, size: 76),
         const SizedBox(height: 8),
         label(title, size: 24, color: ink),
         const SizedBox(height: 6),

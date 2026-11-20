@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'catalog.dart';
+import 'cat_avatar.dart';
 import 'profile.dart';
 import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
@@ -650,7 +651,7 @@ class _RoomSheet extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        sprite(reward.gear!, size: 40),
+                        accessoryArt(reward.gear!, size: 40),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -878,7 +879,7 @@ class _RoomRoute extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           if (m.gear != null) ...[
-            sprite(m.gear!, size: 24),
+            accessoryArt(m.gear!, size: 24),
             const SizedBox(width: 6),
           ],
           Expanded(

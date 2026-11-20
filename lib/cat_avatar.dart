@@ -697,6 +697,149 @@ class _BodyPatternPainter extends CustomPainter {
 // Widgets
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Procedural accessories — drawn in the cat's canonical 120×120 head space so
+// they sit exactly on the face. [centered] repositions the shape for
+// standalone display (shop cards, pickers) where there is no head behind it.
+// ---------------------------------------------------------------------------
+
+class _GlassesPainter extends CustomPainter {
+  const _GlassesPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    // The eyes sit at y≈65 — near-centred already for standalone cards.
+    const dy = 0.0;
+    final rim = Paint()
+      ..color = const Color(0xff2b2620)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5;
+    final lens = Paint()..color = const Color(0x30ffffff);
+    for (final x in [35.0, 81.0]) {
+      final r = Rect.fromCircle(center: Offset(x, 65 + dy), radius: 16);
+      canvas.drawOval(r, lens);
+      canvas.drawOval(r, rim);
+    }
+    canvas.drawLine(Offset(51, 61 + dy), Offset(65, 61 + dy), rim);
+    canvas.drawLine(Offset(19, 62 + dy), Offset(9, 54 + dy), rim);
+    canvas.drawLine(Offset(97, 62 + dy), Offset(107, 54 + dy), rim);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_GlassesPainter old) => old.centered != centered;
+}
+
+class _BowtiePainter extends CustomPainter {
+  const _BowtiePainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 60.0 : 106.0;
+    final cloth = Paint()..color = const Color(0xffd84343);
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    for (final dir in [-1.0, 1.0]) {
+      final wing = Path()
+        ..moveTo(62 + 6 * dir, cy - 7)
+        ..lineTo(62 + 28 * dir, cy - 16)
+        ..lineTo(62 + 28 * dir, cy + 12)
+        ..lineTo(62 + 6 * dir, cy + 7)
+        ..close();
+      canvas.drawPath(wing, cloth);
+      canvas.drawPath(wing, line);
+    }
+    final knot = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(62, cy), width: 15, height: 15),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(knot, cloth);
+    canvas.drawRRect(knot, line);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BowtiePainter old) => old.centered != centered;
+}
+
+class _FlowerPainter extends CustomPainter {
+  const _FlowerPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final c = centered ? const Offset(60, 60) : const Offset(24, 14);
+    final petal = Paint()..color = const Color(0xfff7f3ea);
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    for (var i = 0; i < 6; i++) {
+      final a = i * pi / 3;
+      final p = Offset(c.dx + 9 * cos(a), c.dy + 9 * sin(a));
+      canvas.drawCircle(p, 7, petal);
+      canvas.drawCircle(p, 7, line);
+    }
+    final heart = Paint()..color = gold;
+    canvas.drawCircle(c, 6, heart);
+    canvas.drawCircle(c, 6, line);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_FlowerPainter old) => old.centered != centered;
+}
+
+/// Procedural accessory painters by sprite id. Anything not listed here is
+/// a real PNG in `assets/generated/` and renders through [sprite].
+CustomPainter? _proceduralAccessory(String name, {bool centered = false}) =>
+    switch (name) {
+      'acc_glasses' => _GlassesPainter(centered: centered),
+      'acc_bowtie' => _BowtiePainter(centered: centered),
+      'acc_flower' => _FlowerPainter(centered: centered),
+      _ => null,
+    };
+
+/// Renders any accessory id: procedural ids paint in the cat's 120×120
+/// head space, PNG ids load from `assets/generated/`. Pass
+/// `centered: false` when overlaying the accessory on the cat head and
+/// `true` for standalone cards.
+Widget accessoryArt(
+  String name, {
+  double size = 40,
+  bool centered = true,
+}) {
+  final painter = _proceduralAccessory(name, centered: centered);
+  if (painter != null) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: painter),
+    );
+  }
+  return sprite(name, size: size);
+}
+
+/// Accessory overlay aligned on the cat head (120×120 canonical space):
+/// PNG accessories float top-centre as before, procedural ones paint
+/// full-size so glasses/bowtie/flower land exactly on the face.
+Widget catAccessoryOverlay(String name, {required double size}) {
+  if (_proceduralAccessory(name) != null) {
+    return accessoryArt(name, size: size, centered: false);
+  }
+  return Align(
+    alignment: Alignment.topCenter,
+    child: sprite(name, size: size * .7),
+  );
+}
+
 /// Renders a [CatSpec] from its independent layers. Set [onlyLayers] to
 /// render a subset (used by tests and previews); set [showAccessory] false
 /// to hide the sprite overlay.
@@ -722,10 +865,7 @@ class CatSpecAvatar extends StatelessWidget {
       children: [
         CustomPaint(painter: CatLayersPainter(spec, onlyLayers: onlyLayers)),
         if (showAccessory && spec.accessory.isNotEmpty)
-          Align(
-            alignment: Alignment.topCenter,
-            child: sprite(spec.accessory, size: size * .7),
-          ),
+          catAccessoryOverlay(spec.accessory, size: size),
       ],
     ),
   );
@@ -759,10 +899,7 @@ class CatAvatar extends StatelessWidget {
             showAccessory: false,
           ),
         if (player.accessory.isNotEmpty)
-          Align(
-            alignment: Alignment.topCenter,
-            child: sprite(player.accessory, size: size * .7),
-          ),
+          catAccessoryOverlay(player.accessory, size: size),
       ],
     ),
   );
@@ -982,13 +1119,19 @@ Future<void> saveAvatarSpecFor(Player p, AvatarSpec spec) async {
 }
 
 /// Preset cat artworks offered as the player's avatar in the profile picker
-/// (the three real sprites — never typed or uploaded images).
-const avatarArtChoices = ['cat_tzuki', 'cat_bubble', 'cat_custom'];
+/// (the three real sprites — never typed or uploaded images) plus
+/// `'my_cat'`, which renders the player's own customized cat live.
+const avatarArtChoices = ['cat_tzuki', 'cat_bubble', 'cat_custom', 'my_cat'];
 
-/// The player's avatar: the chosen preset cat artwork when [Player.avatarArt]
-/// is set, otherwise the procedural [AvatarSpec] avatar.
+/// The player's avatar: `'my_cat'` paints the player's own cat from the
+/// shared spec (fur/pattern/eyes/ears/accessory — it updates when the cat
+/// is edited), the `cat_x` presets resolve to the round portraits, and an
+/// empty choice shows the equipped cat's portrait.
 Widget playerAvatarArt(Player p, {double size = 46}) {
   final spec = AvatarSpec.fromJsonString(p.avatarSpec);
+  if (p.avatarArt == 'my_cat') {
+    return CatSpecAvatar(catSpecForPlayer(p), size: size);
+  }
   if (p.avatarArt.isEmpty) return catPortrait(p.cat, size: size);
   // 'cat_x' choices resolve to the round avatar_x portraits.
   final art = p.avatarArt.startsWith('cat_')
@@ -1164,10 +1307,25 @@ class AvatarAvatar extends StatelessWidget {
       children: [
         CustomPaint(painter: AvatarPainter(spec)),
         if (showAccessory && spec.accessory.isNotEmpty)
-          Align(
-            alignment: Alignment.topCenter,
-            child: sprite(spec.accessory, size: size * .7),
-          ),
+          _proceduralAccessory(spec.accessory) != null
+              ? Transform.translate(
+                  offset: Offset(
+                    size * (1 - 0.86) * 62 / 120,
+                    size * (108 - 122 * 0.86) / 120,
+                  ),
+                  child: Transform.scale(
+                    scale: 0.86,
+                    child: accessoryArt(
+                      spec.accessory,
+                      size: size,
+                      centered: false,
+                    ),
+                  ),
+                )
+              : Align(
+                  alignment: Alignment.topCenter,
+                  child: sprite(spec.accessory, size: size * .7),
+                ),
       ],
     ),
   );

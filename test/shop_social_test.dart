@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cat_paws_arena/events_screen.dart';
+import 'package:cat_paws_arena/catalog.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/shop_screen.dart';
 import 'package:cat_paws_arena/team_screen.dart';
@@ -169,7 +170,8 @@ void main() {
     tester,
   ) async {
     final player = await _player(tester)
-      ..english = true;
+      ..english = true
+      ..trophies = teamUnlockTrophies;
     final unavailable = <String>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -192,7 +194,8 @@ void main() {
     tester,
   ) async {
     final player = await _player(tester)
-      ..english = true;
+      ..english = true
+      ..trophies = eventsUnlockTrophies;
     final unavailable = <String>[];
     await tester.pumpWidget(
       MaterialApp(

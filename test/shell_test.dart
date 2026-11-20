@@ -215,6 +215,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HouseTourScreen), findsOneWidget);
     expect(find.text('TROPHY ROAD'), findsOneWidget);
+    // The road is lazy — scroll down until the second room medallion shows.
+    await tester.scrollUntilVisible(
+      find.text('2. MAIN HALL'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('2. MAIN HALL'), findsOneWidget);
     for (final parked in [
       'Echipă',
@@ -241,10 +247,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     // The avatar opens the profile page; the name editor lives behind the
-    // EDITEAZĂ NUMELE entry there.
+    // pencil button on the identity card there.
     expect(find.byType(ProfileScreen), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('EDITEAZĂ NUMELE'),
+      find.byKey(const ValueKey('profile-edit')),
       200,
       scrollable: find
           .descendant(
@@ -253,7 +259,7 @@ void main() {
           )
           .first,
     );
-    await tester.tap(find.text('EDITEAZĂ NUMELE'));
+    await tester.tap(find.byKey(const ValueKey('profile-edit')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find
@@ -559,10 +565,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('APASĂ — ECHIPEAZĂ'), findsOneWidget);
     expect(find.text('NEDEȚINUT'), findsWidgets);
-    // Name edit + account link stay reachable on the PROFILE tab.
+    // The pencil edit + account link stay reachable on the PROFILE tab.
     await tester.tap(find.text('PROFIL'));
     await tester.pumpAndSettle();
-    expect(find.text('EDITEAZĂ NUMELE'), findsOneWidget);
+    expect(find.byKey(const ValueKey('profile-edit')), findsOneWidget);
     expect(find.byKey(const ValueKey('profile-account')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -3,12 +3,18 @@ const accessories = [
   'acc_witch_hat',
   'acc_pink_bow',
   'acc_ninja_headband',
+  'acc_glasses',
+  'acc_bowtie',
+  'acc_flower',
 ];
 const accessoryNames = [
   'Bandană Pirat',
   'Pălărie Vrăjitoare',
   'Fundiță Roz',
   'Bentiță Ninja',
+  'Ochelari Rotunzi',
+  'Papion Roșu',
+  'Floare la Ureche',
 ];
 const powers = ['vfx_zoomies', 'vfx_shadow_pounce', 'vfx_laser_chase'];
 const powerNames = ['The Midnight Zoomies', 'Shadow Pounce', 'Laser Chase'];
@@ -26,6 +32,12 @@ const powerEffects = [
 ];
 const modeNames = ['1v1 Arena', 'Speed Rush', 'Survival', 'High-Stakes Ranked'];
 const modeThresholds = [0, 1000, 2000, 3000];
+
+/// Trophy gates for the bottom-nav tabs: ECHIPĂ unlocks at 500 trophies,
+/// EVENIMENTE at 1000. Below the gate the tab shows a lock badge and the
+/// page explains the requirement instead of its content.
+const teamUnlockTrophies = 500;
+const eventsUnlockTrophies = 1000;
 const coinBundles = [
   ('500', '8.99', ''),
   ('1,500', '22.99', ''),

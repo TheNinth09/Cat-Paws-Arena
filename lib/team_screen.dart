@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'profile.dart';
+import 'catalog.dart';
 import 'ui_widgets.dart';
 
 class TeamScreen extends StatelessWidget {
@@ -15,6 +16,14 @@ class TeamScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final english = player.english;
+    if (player.trophies < teamUnlockTrophies) {
+      return LockedTabPanel(
+        title: english ? 'TEAM' : 'ECHIPA',
+        threshold: teamUnlockTrophies,
+        trophies: player.trophies,
+        english: english,
+      );
+    }
     return ListView(
       key: const PageStorageKey('team-scroll'),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),

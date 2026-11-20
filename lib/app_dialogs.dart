@@ -316,14 +316,16 @@ class _ProfileEditorState extends State<_ProfileEditor> {
         borderSide: BorderSide(color: color, width: width),
       );
 
-  /// The three cartoon portraits plus the photo slot — one row of round
-  /// chips under the big preview. Picking a chip clears a custom photo.
-  Widget _avatarChip(String cat) {
+  /// The preset portraits + the own-cat option + the photo slot — one row
+  /// of round chips under the big preview. Picking a chip sets
+  /// [Player.avatarArt] (the avatar only — it never changes the duel cat)
+  /// and clears a custom photo.
+  Widget _avatarChip(String art) {
     final p = widget.player;
-    final active = p.photo == null && p.cat == cat;
+    final active = p.photo == null && p.avatarArt == art;
     return GestureDetector(
       onTap: () {
-        p.cat = cat;
+        p.avatarArt = art;
         p.photo = null;
         p.save();
       },
@@ -345,7 +347,11 @@ class _ProfileEditorState extends State<_ProfileEditor> {
               ),
           ],
         ),
-        child: ClipOval(child: catPortrait(cat, size: 50)),
+        child: ClipOval(
+          child: art == 'my_cat'
+              ? CatSpecAvatar(catSpecForPlayer(p), size: 50)
+              : catPortrait(art.substring(4), size: 50),
+        ),
       ),
     );
   }
@@ -387,12 +393,12 @@ class _ProfileEditorState extends State<_ProfileEditor> {
             ),
           ),
           const SizedBox(height: 14),
-          // Quick selector: the three cartoon portraits + a photo slot.
+          // Quick selector: preset portraits + own cat + a photo slot.
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              for (final cat in ['Tzuki', 'Bubble', 'Custom']) ...[
-                _avatarChip(cat),
+              for (final art in avatarArtChoices) ...[
+                _avatarChip(art),
                 const SizedBox(width: 10),
               ],
               GestureDetector(

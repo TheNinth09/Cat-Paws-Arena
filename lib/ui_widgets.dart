@@ -549,11 +549,15 @@ class ArenaBottomBar extends StatelessWidget {
     this.english = false,
     this.shopBadge = false,
     this.haptics = true,
+    this.lockedTabs = const {},
   });
   final int selected;
   final ValueChanged<int> onSelected;
   final bool english;
   final bool shopBadge;
+
+  /// Tab indices gated behind trophies — they show a small lock badge.
+  final Set<int> lockedTabs;
 
   /// Whether tap haptics fire — bound to the player's Vibrații setting.
   final bool haptics;
@@ -649,6 +653,7 @@ class ArenaBottomBar extends StatelessWidget {
                       centre: i == 2,
                       active: selected == i,
                       badge: i == 0 && shopBadge,
+                      locked: lockedTabs.contains(i),
                       haptics: haptics,
                       onTap: () => onSelected(i),
                       child: tileIcon(i),
@@ -676,6 +681,7 @@ class _NavButton extends StatefulWidget {
     this.centre = false,
     this.active = false,
     this.badge = false,
+    this.locked = false,
     this.haptics = true,
   });
 
@@ -683,7 +689,7 @@ class _NavButton extends StatefulWidget {
   final bool haptics;
   final VoidCallback onTap;
   final Widget child;
-  final bool centre, active, badge;
+  final bool centre, active, badge, locked;
 
   @override
   State<_NavButton> createState() => _NavButtonState();
@@ -824,6 +830,22 @@ class _NavButtonState extends State<_NavButton> {
                             ),
                           ),
                         ),
+                      if (widget.locked)
+                        const Positioned(
+                          right: -3,
+                          top: -4,
+                          child: Icon(
+                            Icons.lock_rounded,
+                            size: 15,
+                            color: cream,
+                            shadows: [
+                              Shadow(
+                                color: Color(0xcc000000),
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -835,6 +857,85 @@ class _NavButtonState extends State<_NavButton> {
     );
   }
 }
+/// Locked-tab panel: shown in place of a page's content while the
+/// player's trophies sit below the tab's unlock threshold.
+class LockedTabPanel extends StatelessWidget {
+  const LockedTabPanel({
+    super.key,
+    required this.title,
+    required this.threshold,
+    required this.trophies,
+    required this.english,
+  });
+  final String title;
+  final int threshold, trophies;
+  final bool english;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: panel(
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xff5f4a38),
+              border: Border.all(color: gold, width: 2),
+            ),
+            child: const Icon(Icons.lock_rounded, color: gold, size: 30),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            english
+                ? '$title UNLOCKS AT $threshold TROPHIES'
+                : '$title SE DEBLOCHEAZĂ LA $threshold TROFEE',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: ink,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: (trophies / threshold).clamp(0, 1),
+              minHeight: 10,
+              backgroundColor: const Color(0xffe2d4b8),
+              valueColor: const AlwaysStoppedAnimation(Color(0xffcb8b28)),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$trophies / $threshold 🏆',
+            style: const TextStyle(
+              color: Color(0xff6b4a32),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            english
+                ? 'Win duels to earn trophies.'
+                : 'Câștigă dueluri ca să strângi trofee.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xff8a6242),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Press feedback shared by the glossy menu/settings rows: scales the
 /// tile down while pressed and fires a selection haptic — the same
 /// tactile feel as the bottom-bar buttons.

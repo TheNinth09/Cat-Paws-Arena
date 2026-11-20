@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'cat_avatar.dart';
 import 'catalog.dart';
 import 'profile.dart';
 import 'shell/cosmetic_offers.dart';
@@ -218,7 +219,7 @@ class _ShopScreenState extends State<ShopScreen> {
             _CoinCard(
               key: const ValueKey('paw-offer-bundle'),
               title: 'PACHET COMPLET',
-              subtitle: 'Toate cele 4 accesorii',
+              subtitle: 'Toate cele ${accessories.length} accesorii',
               art: accessories[0],
               extraArt: accessories[2],
               price: 8500,
@@ -591,12 +592,12 @@ class _CoinCard extends StatelessWidget {
           children: [
             SizedBox(height: badge.isNotEmpty ? 14 : 10),
             if (extraArt == null)
-              sprite(art, size: 56)
+              accessoryArt(art, size: 56)
             else
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Flexible(child: sprite(art, size: 44)),
+                  Flexible(child: accessoryArt(art, size: 44)),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 3),
                     child: Text(
@@ -608,7 +609,7 @@ class _CoinCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Flexible(child: sprite(extraArt!, size: 44)),
+                  Flexible(child: accessoryArt(extraArt!, size: 44)),
                 ],
               ),
             const SizedBox(height: 4),
@@ -841,13 +842,13 @@ class ShopOfferCard extends StatelessWidget {
           SizedBox(height: compact ? 6 : 10),
           if (extraArt == null)
             asset == null
-                ? sprite(art, size: compact ? 58 : 80)
+                ? accessoryArt(art, size: compact ? 58 : 80)
                 : _offerImage(asset!, art, compact ? 58 : 80)
           else
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Flexible(child: sprite(art, size: 56)),
+                Flexible(child: accessoryArt(art, size: 56)),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4),
                   child: Text(
@@ -859,7 +860,7 @@ class ShopOfferCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Flexible(child: sprite(extraArt!, size: 56)),
+                Flexible(child: accessoryArt(extraArt!, size: 56)),
               ],
             ),
           const Spacer(),

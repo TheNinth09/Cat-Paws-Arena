@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'app_dialogs.dart';
 import 'cat_avatar.dart';
+import 'catalog.dart';
 import 'cats_screen.dart';
 import 'duel_audio.dart';
 import 'events_screen.dart';
@@ -469,6 +470,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       english: p.english,
                       shopBadge: p.dailyReady,
                       haptics: p.haptics,
+                      lockedTabs: {
+                        if (p.trophies < teamUnlockTrophies) 3,
+                        if (p.trophies < eventsUnlockTrophies) 4,
+                      },
                     ),
                   ],
                 ),
