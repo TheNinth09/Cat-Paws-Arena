@@ -8,9 +8,10 @@ import 'package:arena_engine/arena_engine.dart' as engine;
 /// * `1` — greedy: best immediate score gain.
 /// * `2` — greedy plus charge, special creation and obstacles sent.
 ///
-/// Timed turns allow unlimited swaps, so the bot budgets itself and hands
-/// the turn back with [engine.EndTurnMove] once its move budget is spent.
-/// Deterministic per [seed] so a match replays identically.
+/// Timed turns allow unlimited swaps, so the controller paces the bot —
+/// it keeps playing until the clock nearly runs out instead of ending on
+/// a fixed move budget. Deterministic per [seed] so a match replays
+/// identically.
 class HouseBot {
   HouseBot({required this.level, required int seed})
     : _rng = Random(seed);
@@ -18,13 +19,6 @@ class HouseBot {
   /// 0, 1 or 2.
   final int level;
   final Random _rng;
-
-  /// Swaps/powers played per turn before the bot ends it.
-  int get _budget => switch (level) {
-    <= 0 => 4,
-    1 => 7,
-    _ => 9,
-  };
 
   engine.Move choose(engine.MatchState state) {
     final legal = engine.legalMoves(state);
@@ -37,7 +31,7 @@ class HouseBot {
       for (final m in legal.value)
         if (m is! engine.EndTurnMove) m,
     ];
-    if (playable.isEmpty || state.turnMoves >= _budget) {
+    if (playable.isEmpty) {
       return const engine.EndTurnMove();
     }
     if (level <= 0) {

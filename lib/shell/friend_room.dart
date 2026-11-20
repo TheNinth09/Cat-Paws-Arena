@@ -8,7 +8,6 @@ import '../match_screen.dart';
 import '../online/online_backend.dart';
 import '../profile.dart';
 import '../ui_widgets.dart';
-import '../vs_screen.dart';
 import 'online_play.dart';
 
 Future<void> showFriendRoom(
@@ -28,15 +27,13 @@ Future<void> showFriendRoom(
       services: services,
       player: player,
       onMatch: (duel) {
-        // Clear the room dialog AND any pages left on the stack, so the
-        // duel always returns to the lobby root.
+        // Straight into the match's own searching page — one pre-match
+        // screen, no separate "preparing the arena" step. The room dialog
+        // and any pages left on the stack are cleared so the duel always
+        // returns to the lobby root.
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute<void>(
-            builder: (_) => VsScreen(
-              player: player,
-              opponent: VsOpponent.online(player, duel.opponent),
-              matchScreen: MatchScreen(player: player, mode: 0, online: duel),
-            ),
+            builder: (_) => MatchScreen(player: player, mode: 0, online: duel),
           ),
           (route) => route.isFirst,
         );

@@ -17,7 +17,6 @@ import 'shell/house_tour.dart';
 import 'shop_screen.dart';
 import 'team_screen.dart';
 import 'ui_widgets.dart';
-import 'vs_screen.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key, required this.player});
@@ -64,21 +63,18 @@ class _HomeState extends State<Home> {
     ).push(MaterialPageRoute<void>(builder: (_) => ProfileScreen(player: p)));
   }
 
-  /// LUPTĂ (or a house cat picked on the tour) → VS screen → duel. Any
-  /// pushed routes left on the stack (house tour, profile, dialogs) are
-  /// removed, so returning from the match always lands on the lobby root —
-  /// never on a stray translucent page.
+  /// LUPTĂ (or a house cat picked on the tour) → straight into the
+  /// searching page inside the duel (a single pre-match screen — no
+  /// separate "preparing the arena" step). Any pushed routes left on the
+  /// stack (house tour, profile, dialogs) are removed, so returning from
+  /// the match always lands on the lobby root.
   void startBattle(HouseCat? cat) {
     final trophiesBefore = p.trophies;
     final coinsBefore = p.coins;
     Navigator.of(context)
         .pushAndRemoveUntil(
           MaterialPageRoute<void>(
-            builder: (vsContext) => VsScreen(
-              player: p,
-              opponent: VsOpponent.houseCat(p, cat),
-              matchScreen: MatchScreen(player: p, mode: 0, opponent: cat),
-            ),
+            builder: (_) => MatchScreen(player: p, mode: 0, opponent: cat),
           ),
           (route) => route.isFirst,
         )

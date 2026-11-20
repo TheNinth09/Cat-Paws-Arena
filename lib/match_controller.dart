@@ -271,8 +271,28 @@ class ArenaMatchController extends ChangeNotifier {
   /// Paces the house bot's moves inside its turn.
   Timer? _botTimer;
 
-  /// Delay between house-bot moves; tests shrink it to zero.
-  Duration botMoveDelay = const Duration(milliseconds: 750);
+  /// Delay between house-bot moves. Null = paced by bot level so the bot
+  /// uses most of its turn (easy thinks slowly, hard snaps); tests set it
+  /// to zero for instant play.
+  Duration? botMoveDelay;
+
+  /// Per-level move pacing inside the bot's 15 s turn: the opponent's
+  /// turn now visibly lasts — no more budget end after ~5 s.
+  Duration get _botPace => switch (botLevel) {
+    <= 0 => const Duration(milliseconds: 2300),
+    1 => const Duration(milliseconds: 1600),
+    _ => const Duration(milliseconds: 1150),
+  };
+
+  /// Seconds of bonus turn time granted per created special (capped per
+  /// move) — the timed-turn version of Match Masters' extra move.
+  int bonusSeconds = 0;
+  Timer? _bonusTimer;
+
+  /// Bot moves committed on the current turn — a hard safety cap so the
+  /// bot always banks its turn even if the clock is stuck (and so a
+  /// zero-delay bot in tests can't chain timers forever inside one pump).
+  int _botMovesThisTurn = 0;
 
   // --- online duel state --------------------------------------------------
 
@@ -414,6 +434,27 @@ class ArenaMatchController extends ChangeNotifier {
     }
     return _state!.activePlayer == _localSlot;
   }
+
+  /// Input gate for the board's gesture layer: like [acceptingInput] but
+  /// ignores the animation lock. A swipe that lands while the previous
+  /// move still animates is buffered (offline) and applied when the board
+  /// goes idle — chaining moves feels instant instead of eating taps.
+  bool get myTurnInput {
+    if (phase != MatchPhase.playing || paused) return false;
+    if (!isEngine) return true;
+    if (_state == null || _state!.isFinished || isFlagged) return false;
+    if (isOnline) {
+      final s = online!.session;
+      return s.isMyTurn && _onlineCursor == s.movesApplied;
+    }
+    return _state!.activePlayer == _localSlot;
+  }
+
+  /// One buffered swap while the board is mid-animation (cell indices).
+  int? _queuedA, _queuedB;
+
+  /// Buffered power tap while the board is mid-animation.
+  PowerKind? _queuedPower;
 
   /// True while the remote opponent holds the turn or their moves are
   /// still animating (online duels only).
@@ -636,6 +677,7 @@ class ArenaMatchController extends ChangeNotifier {
     if (key == _turnKey) return;
     _turnKey = key;
     _turnTicksLeft = s.config.turnSeconds * 2;
+    _botMovesThisTurn = 0;
   }
 
   Future<void> _loadTutorialFlag() async {
@@ -658,8 +700,16 @@ class ArenaMatchController extends ChangeNotifier {
 
   // --- moves ---------------------------------------------------------------
 
-  /// Player attempted an adjacent swap (flat cell indices).
+  /// Player attempted an adjacent swap (flat cell indices). While the
+  /// board still animates an earlier move the attempt is buffered (one
+  /// deep, latest wins) and replayed on idle instead of being dropped.
   void tryMove(int a, int b) {
+    if (!myTurnInput) return;
+    if (_busy && !isOnline) {
+      _queuedA = a;
+      _queuedB = b;
+      return;
+    }
     if (!acceptingInput) return;
     if (isEngine) {
       final w = _state!.config.boardWidth;
@@ -691,6 +741,11 @@ class ArenaMatchController extends ChangeNotifier {
   /// The engine validates the power against the match config; a tap while
   /// the meter is not full is rejected inside `applyMove`.
   void firePower(PowerKind power) {
+    if (!myTurnInput) return;
+    if (_busy && !isOnline) {
+      _queuedPower = power;
+      return;
+    }
     if (!acceptingInput) return;
     if (isEngine) {
       _applyEngine(
@@ -726,6 +781,24 @@ class ArenaMatchController extends ChangeNotifier {
     if (!acceptingInput) return;
     if (!isEngine) return;
     _applyEngine(const engine.EndTurnMove(), isPlayerMove: true);
+  }
+
+  /// Test seam: ends whichever side's turn is currently active, exactly
+  /// as the turn clock does when it expires — the bot's turn included.
+  /// Widget tests use it to drive a full match without waiting out each
+  /// side's timed turn in fake async.
+  void debugEndActiveTurn() {
+    final s = _state;
+    if (s == null ||
+        s.isFinished ||
+        phase != MatchPhase.playing ||
+        isOnline) {
+      return;
+    }
+    _applyEngine(
+      const engine.EndTurnMove(),
+      isPlayerMove: s.activePlayer == _localSlot,
+    );
   }
 
   void _applyEngine(engine.Move move, {required bool isPlayerMove}) {
@@ -768,6 +841,21 @@ class ArenaMatchController extends ChangeNotifier {
     _state = mr.state;
     _trackTurn();
     final events = _adapter!.adaptMove(mr, before: prev);
+    // Extra-move bonus (Match Masters style): every special this move
+    // created banks +2 s on the active turn's clock — cascades cap at +4 s.
+    final specials = events.whereType<SpecialCreated>().length;
+    if (specials > 0) {
+      final bonus = specials.clamp(0, 2) * 4;
+      _turnTicksLeft += bonus;
+      bonusSeconds = bonus ~/ 2;
+      _bonusTimer?.cancel();
+      _bonusTimer = Timer(const Duration(milliseconds: 1600), () {
+        if (!_disposed) {
+          bonusSeconds = 0;
+          refresh();
+        }
+      });
+    }
     final accepted = mr.hashAfter != mr.hashBefore;
     if (isPlayerMove && accepted) {
       _playerMoves++;
@@ -784,8 +872,8 @@ class ArenaMatchController extends ChangeNotifier {
     if (!isOnline) _maybeBotTurn();
   }
 
-  /// Paces the house bot through its turn: one move per [botMoveDelay]
-  /// until it ends the turn (or the turn clock expires). Re-armed after
+  /// Paces the house bot through its turn: one move per [_botPace] until
+  /// the clock nearly runs out, then it banks the turn. Re-armed after
   /// every committed move and after a pause/resume.
   void _maybeBotTurn() {
     _botTimer?.cancel();
@@ -798,7 +886,7 @@ class ArenaMatchController extends ChangeNotifier {
         paused) {
       return;
     }
-    _botTimer = Timer(botMoveDelay, () {
+    _botTimer = Timer(botMoveDelay ?? _botPace, () {
       _botTimer = null;
       if (_disposed) return;
       final cur = _state;
@@ -811,7 +899,18 @@ class ArenaMatchController extends ChangeNotifier {
         // Resume re-arms via pause(); nothing to do meanwhile.
         return;
       }
-      _applyEngine(_bot!.choose(cur), isPlayerMove: false);
+      // Near the end of its turn the bot banks the turn cleanly instead
+      // of letting the clock auto-expire mid-animation. The 40-move cap
+      // is unreachable at human pacing (~13 s of moves) but guarantees
+      // the bot's timer chain always terminates when the clock stalls.
+      final engine.Move move;
+      if (_botMovesThisTurn >= 40 || turnSecondsLeft <= 3) {
+        move = const engine.EndTurnMove();
+      } else {
+        move = _bot!.choose(cur);
+        _botMovesThisTurn++;
+      }
+      _applyEngine(move, isPlayerMove: false);
       // _commitEngineMove re-arms the next step, or the turn flips back.
     });
   }
@@ -982,6 +1081,23 @@ class ArenaMatchController extends ChangeNotifier {
     _pollTimer?.cancel();
     _turnClock?.cancel();
     _botTimer?.cancel();
+    _bonusTimer?.cancel();
+    _busy = false;
+    phase = MatchPhase.finished;
+    refresh();
+  }
+
+  /// Leaves the pre-match search before a move was ever played: cancels
+  /// the pending start/poll timers and goes inert — the screen pops the
+  /// route itself, so no result or reward is shown.
+  void leaveSearch() {
+    if (_disposed || phase != MatchPhase.searching) return;
+    _search?.cancel();
+    _pollTimer?.cancel();
+    _clock?.cancel();
+    _turnClock?.cancel();
+    _botTimer?.cancel();
+    _bonusTimer?.cancel();
     _busy = false;
     phase = MatchPhase.finished;
     refresh();
@@ -1108,6 +1224,7 @@ class ArenaMatchController extends ChangeNotifier {
     _pollTimer?.cancel();
     _turnClock?.cancel();
     _botTimer?.cancel();
+    _bonusTimer?.cancel();
     _busy = false;
     result = outcome;
     phase = MatchPhase.finished;
@@ -1119,6 +1236,23 @@ class ArenaMatchController extends ChangeNotifier {
   void onBoardIdle() {
     if (_busy) {
       _busy = false;
+      if (!isOnline && _queuedPower != null && myTurnInput) {
+        final power = _queuedPower!;
+        _queuedPower = null;
+        firePower(power);
+        return;
+      }
+      if (!isOnline &&
+          _queuedA != null &&
+          _queuedB != null &&
+          myTurnInput) {
+        final a = _queuedA!, b = _queuedB!;
+        _queuedA = _queuedB = null;
+        tryMove(a, b);
+        return;
+      }
+      _queuedA = _queuedB = null;
+      _queuedPower = null;
       refresh();
     }
   }
@@ -1170,6 +1304,7 @@ class ArenaMatchController extends ChangeNotifier {
     _clock?.cancel();
     _turnClock?.cancel();
     _botTimer?.cancel();
+    _bonusTimer?.cancel();
     _turnKey = null;
     _turnTicksLeft = 0;
     if (isEngine) {
@@ -1205,6 +1340,7 @@ class ArenaMatchController extends ChangeNotifier {
     _clock?.cancel();
     _turnClock?.cancel();
     _botTimer?.cancel();
+    _bonusTimer?.cancel();
     _busy = false;
     result = outcome;
     phase = MatchPhase.finished;
@@ -1221,6 +1357,7 @@ class ArenaMatchController extends ChangeNotifier {
     _pollTimer?.cancel();
     _turnClock?.cancel();
     _botTimer?.cancel();
+    _bonusTimer?.cancel();
     _settleTimer?.cancel();
     for (final sub in _onlineSubs) {
       sub.cancel();

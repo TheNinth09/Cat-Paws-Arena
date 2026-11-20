@@ -235,6 +235,16 @@ class _MatchScreenState extends State<MatchScreen>
     }
   }
 
+  /// Cancels the pre-match search and leaves: no duel ever started, so
+  /// no confirmation and no penalty. The PopScope only allows the pop
+  /// after `leaveSearch` flips the phase to finished on the next build.
+  void _leaveSearch() {
+    match.leaveSearch();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).maybePop();
+    });
+  }
+
   Future<void> surrender() async {
     if (showingDialog || match.phase == MatchPhase.finished) return;
     showingDialog = true;
@@ -375,7 +385,12 @@ class _MatchScreenState extends State<MatchScreen>
       builder: (context, _) => PopScope(
         canPop: match.phase == MatchPhase.finished,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) surrender();
+          if (didPop) return;
+          if (match.phase == MatchPhase.searching) {
+            _leaveSearch();
+          } else {
+            surrender();
+          }
         },
         child: Scaffold(
           body: SafeArea(
@@ -471,7 +486,9 @@ class _MatchScreenState extends State<MatchScreen>
         : 'Se caută adversarul...',
     cancelKey: const ValueKey('match-cancel'),
     cancelText: 'RENUNȚĂ',
-    onCancel: surrender,
+    // Cancelling the search just leaves — no duel ever started, so no
+    // confirmation and no penalty.
+    onCancel: _leaveSearch,
     middle: match.isEngine && match.opponent == null && !match.isOnline
         ? _botLevelPicker()
         : null,
@@ -525,7 +542,6 @@ class _MatchScreenState extends State<MatchScreen>
               meterColor: const Color(0xff7ed957),
               iconSprite: 'tile_yarn',
               active: match.playerTurn,
-              emote: emote,
               pulse: fx,
             ),
           ),
@@ -547,7 +563,6 @@ class _MatchScreenState extends State<MatchScreen>
                 meterColor: const Color(0xff9d6bff),
                 iconSprite: 'icon_paw_coin',
                 active: enginePlaying && !match.playerTurn && !match.isFlagged,
-                emote: opponentEmote,
                 pulse: fx,
               ),
             ),
@@ -648,6 +663,15 @@ class _MatchScreenState extends State<MatchScreen>
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                  if (match.bonusSeconds > 0)
+                    TextSpan(
+                      text: '  +${match.bonusSeconds}s',
+                      style: const TextStyle(
+                        color: Color(0xff3f7d33),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                 ],
               ),
               maxLines: 1,
@@ -814,7 +838,7 @@ class _MatchScreenState extends State<MatchScreen>
                       onSwapAttempt: match.tryMove,
                       onEvent: _onBoardEvent,
                       onIdle: match.onBoardIdle,
-                      inputEnabled: match.acceptingInput,
+                      inputEnabled: match.myTurnInput,
                       active: match.phase != MatchPhase.finished,
                       suspended: match.paused,
                       hintCells: hint == null ? null : {hint.$1, hint.$2},
@@ -1551,7 +1575,6 @@ class _PortraitPlate extends StatelessWidget {
     required this.meterColor,
     required this.iconSprite,
     required this.active,
-    required this.emote,
     required this.pulse,
   });
 
@@ -1565,7 +1588,6 @@ class _PortraitPlate extends StatelessWidget {
   final Color meterColor;
   final String iconSprite;
   final bool active;
-  final String emote;
   final Animation<double> pulse;
 
   @override
@@ -1687,11 +1709,6 @@ class _PortraitPlate extends StatelessWidget {
             ],
           ),
         ),
-        if (emote.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: IgnorePointer(child: _EmoteBubble(emote)),
-          ),
       ],
     );
   }

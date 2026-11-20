@@ -236,6 +236,7 @@ class BoardViewState extends State<BoardView>
     }
     final done = Completer<void>();
     _completers.add(done);
+    _idleNotified = false;
     _schedule = math.max(_schedule, _now);
     for (final e in events) {
       _fold(e);
@@ -244,9 +245,22 @@ class BoardViewState extends State<BoardView>
     return done.future;
   }
 
+  Type? _lastKind;
+  double _lastStart = 0;
+
   void _fold(BoardEvent event) {
-    final start = _schedule;
-    _schedule += _slotFor(event);
+    // Same-wave physics events animate together: a collapse drops its
+    // column in one move and refills rain down as a group — not one cell
+    // at a time like a waterfall.
+    final kind = event.runtimeType;
+    final grouped = identical(kind, _lastKind) &&
+        (event is Fell || event is Refilled);
+    final start = grouped ? _lastStart + 0.012 : _schedule;
+    _schedule = grouped
+        ? _schedule + 0.012
+        : math.max(start, _schedule) + _slotFor(event);
+    _lastKind = kind;
+    _lastStart = start;
     final fx = _apply(event, start);
     if (fx.isEmpty) {
       _meta.add((at: start, event: event));
@@ -258,6 +272,8 @@ class BoardViewState extends State<BoardView>
       _fx.addAll(fx);
     }
   }
+
+  bool _idleNotified = true;
 
   /// Logical mutation + animation specs for one event. Grid changes happen
   /// here, synchronously, so [cells] is always the post-event state.
@@ -747,16 +763,22 @@ class BoardViewState extends State<BoardView>
     });
     _banners.removeWhere((b) => _now >= b.start + _Banner.dur);
     _fx.removeWhere((f) => f.done(_now));
-    if (_fx.isEmpty &&
-        _meta.isEmpty &&
-        _banners.isEmpty &&
-        _schedule <= _now) {
-      _ticker.stop();
+    // Idle means the cell animations and scheduled events have drained —
+    // floating meta banners (score/combo labels) may still be visible, so
+    // they no longer hold the input lock or delay the bot's next move.
+    if (_fx.isEmpty && _meta.isEmpty && _schedule <= _now && !_idleNotified) {
+      _idleNotified = true;
       widget.onIdle?.call();
       for (final c in _completers) {
         if (!c.isCompleted) c.complete();
       }
       _completers.clear();
+    }
+    if (_fx.isEmpty &&
+        _meta.isEmpty &&
+        _banners.isEmpty &&
+        _schedule <= _now) {
+      _ticker.stop();
     }
     if (dirty || _fx.isNotEmpty || _meta.isNotEmpty) setState(() {});
   }
@@ -803,7 +825,7 @@ class BoardViewState extends State<BoardView>
 
   void _onTapUp(TapUpDetails details, double cell) {
     final target = _cellAt(details.localPosition, cell);
-    if (target == null || !widget.inputEnabled || busy) return;
+    if (target == null || !widget.inputEnabled) return;
     final picker = widget.rowPicker;
     if (picker != null) {
       picker(target ~/ width);
@@ -824,7 +846,7 @@ class BoardViewState extends State<BoardView>
   }
 
   void _onPanUpdate(DragUpdateDetails details, double cell) {
-    if (!widget.inputEnabled || busy || widget.rowPicker != null) return;
+    if (!widget.inputEnabled || widget.rowPicker != null) return;
     _dragFrom ??= _downCell;
     final from = _dragFrom;
     if (from == null) return;

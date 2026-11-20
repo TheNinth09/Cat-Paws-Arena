@@ -21,7 +21,6 @@ import 'package:cat_paws_arena/shell/online_play.dart';
 import 'package:cat_paws_arena/shell/reward_calendar.dart';
 import 'package:cat_paws_arena/team_screen.dart';
 import 'package:cat_paws_arena/ui_widgets.dart';
-import 'package:cat_paws_arena/vs_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'artwork_test_support.dart';
@@ -481,11 +480,11 @@ void main() {
     expect(find.text('CONTRA PISICILOR CASEI'), findsOneWidget);
     expect(find.text('CAMERĂ DE PRIETEN'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('mode-offline')));
-    // VsScreen runs an infinite preparing animation — settle would never
-    // finish, so advance fixed frames instead.
+    // One pre-match page now: the duel's own searching scene ("Se caută
+    // adversarul..."), no separate "preparing the arena" step.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(VsScreen), findsOneWidget);
+    expect(find.byType(MatchScreen), findsOneWidget);
     expect(find.text('CAT PAWS ARENA'), findsOneWidget);
     expect(find.text('MIZELE MECIULUI'), findsOneWidget);
     expect(find.text('+30'), findsOneWidget);
@@ -493,15 +492,15 @@ void main() {
     expect(find.text('EGAL'), findsOneWidget);
     expect(find.text('-25'), findsOneWidget);
     expect(find.text('INFRANGERE'), findsOneWidget);
-    expect(find.text('Se pregătește arena...'), findsOneWidget);
+    expect(find.text('Se caută adversarul...'), findsOneWidget);
     expect(find.text('ANTRENAMENT OFFLINE'), findsWidgets);
     await tester.pump(const Duration(seconds: 4));
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(MatchScreen), findsOneWidget);
+    expect(find.text('Se caută adversarul...'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('VS screen cancel returns to the lobby', (tester) async {
+  testWidgets('searching cancel returns to the lobby', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final p = Player(await SharedPreferences.getInstance());
     await tester.pumpWidget(MaterialApp(home: Home(player: p)));
@@ -515,11 +514,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('mode-offline')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(VsScreen), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('vs-cancel')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(VsScreen), findsNothing);
+    expect(find.byType(MatchScreen), findsOneWidget);
+    // Cancelling the search leaves immediately — no duel started, so no
+    // confirmation dialog and no penalty.
+    await tester.tap(find.byKey(const ValueKey('match-cancel')));
+    await tester.pumpAndSettle();
+    expect(find.byType(MatchScreen), findsNothing);
     expect(find.text('MOD: 1v1 ARENA'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -651,11 +651,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
     var guard = 0;
-    while (m.phase == MatchPhase.playing && guard++ < 1200) {
-      if (m.playerTurn && m.acceptingInput) {
-        m.endTurn();
-      }
-      await tester.pump(const Duration(milliseconds: 10));
+    while (m.phase == MatchPhase.playing && guard++ < 600) {
+      m.debugEndActiveTurn();
+      await tester.pump(const Duration(milliseconds: 20));
     }
     expect(m.phase, MatchPhase.finished, reason: 'match did not finish');
     // The result screen animates continuously — advance fixed frames.

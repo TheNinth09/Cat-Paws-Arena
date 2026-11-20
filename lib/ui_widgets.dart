@@ -561,10 +561,10 @@ class PlayerHud extends StatelessWidget {
   );
 }
 
-/// Bottom navigation as a row of tactile 3D buttons — same warm
-/// gradient, thick dark-brown rim, top gloss and drop shadow as the
-/// shop/creator [ArenaButton]s. The active tab lifts with a gold glow;
-/// the centre LUPTĂ button is bigger and uses the primary orange fill.
+/// Bottom navigation in the Match Masters style: a deep-navy band with
+/// dark 3D icon tiles and one big golden tab protruding above the band's
+/// top edge — the centre LUPTĂ is always the biggest; the active side
+/// tab also lifts into a golden tile.
 class ArenaBottomBar extends StatelessWidget {
   const ArenaBottomBar({
     super.key,
@@ -593,6 +593,9 @@ class ArenaBottomBar extends StatelessWidget {
 
     Widget tileIcon(int i) {
       final active = selected == i;
+      final iconColor = active || i == 2
+          ? const Color(0xff5d3a2c)
+          : const Color(0xffdce9f7);
       switch (i) {
         case 0:
           return CustomPaint(
@@ -605,82 +608,90 @@ class ArenaBottomBar extends StatelessWidget {
             painter: _CatsIconPainter(selected: active),
           );
         case 2:
-          return sprite('btn_play_paw', size: 26);
+          return sprite('btn_play_paw', size: 28);
         case 3:
         case 4:
           return arenaImage(
             i == 3 ? 'icon_team' : 'icon_events',
             width: 22,
             height: 22,
-            fallback: Icon(
-              icons[i],
-              size: 21,
-              color: active ? const Color(0xff5d3a2c) : const Color(0xff8a6242),
-            ),
+            fallback: Icon(icons[i], size: 21, color: iconColor),
           );
         default:
-          return Icon(
-            icons[i],
-            size: 21,
-            color: active ? const Color(0xff5d3a2c) : const Color(0xff8a6242),
-          );
+          return Icon(icons[i], size: 21, color: iconColor);
       }
     }
 
-    // The blue band carries over from the segmented reference; the band
-    // itself absorbs the system inset so nothing shows beneath it.
+    // Band height 54 + headroom so the raised tiles can pop above it.
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    return Container(
-      height: 72 + bottomInset,
-      padding: EdgeInsets.only(bottom: bottomInset),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xffaad6ef), Color(0xff6da5cc)],
-        ),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border(top: BorderSide(color: Color(0xff3f7ba8), width: 2)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x5520130e),
-            offset: Offset(0, -6),
-            blurRadius: 16,
+    return SizedBox(
+      height: 74 + bottomInset,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              height: 54 + bottomInset,
+              padding: EdgeInsets.only(bottom: bottomInset),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xff4a7ec2), Color(0xff2c4e85)],
+                ),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                border: Border(
+                  top: BorderSide(color: Color(0xff8fb4e0), width: 2),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x5520130e),
+                    offset: Offset(0, -6),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned.fill(
+            bottom: bottomInset,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < 5; i++)
+                    Expanded(
+                      flex: i == 2 ? 3 : 2,
+                      child: _NavButton(
+                        key: ValueKey('nav-$i'),
+                        label: labels[i],
+                        centre: i == 2,
+                        active: selected == i,
+                        badge: i == 0 && shopBadge,
+                        onTap: () => onSelected(i),
+                        child: tileIcon(i),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ],
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 8, 6, 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (var i = 0; i < 5; i++)
-                Expanded(
-                  flex: i == 2 ? 3 : 2,
-                  child: _NavButton(
-                    key: ValueKey('nav-$i'),
-                    label: labels[i],
-                    centre: i == 2,
-                    active: selected == i,
-                    badge: i == 0 && shopBadge,
-                    onTap: () => onSelected(i),
-                    child: tileIcon(i),
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }
 }
 
-/// One tactile 3D nav button: cream→caramel gradient, thick cocoa rim,
-/// glossy top edge and a hard bottom shadow. Pressing scales it down
-/// with a selection haptic; the active tab floats up with a gold glow
-/// and the centre LUPTĂ button keeps the primary orange fill.
+/// One nav tab, Match Masters style: inactive tabs are dark-navy 3D
+/// tiles recessed in the band; the active tab (and always the centre
+/// LUPTĂ button) is a golden tile that protrudes above the band's top
+/// edge. Pressing scales it down with a selection haptic.
 class _NavButton extends StatefulWidget {
   const _NavButton({
     super.key,
@@ -708,66 +719,61 @@ class _NavButtonState extends State<_NavButton> {
   Widget build(BuildContext context) {
     final centre = widget.centre;
     final active = widget.active;
-    final h = centre ? 52.0 : 44.0;
-    final lift = active ? 4.0 : 0.0;
+    final golden = active || centre;
+    // Tile heights measured from the row bottom: the band occupies its
+    // lower 54 px, so taller tiles protrude above the band's top edge.
+    final h = centre ? 68.0 : (active ? 58.0 : 42.0);
     return Semantics(
       button: true,
       selected: active,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        transform: Matrix4.translationValues(0, -lift, 0),
-        margin: const EdgeInsets.symmetric(horizontal: 3),
-        child: AnimatedScale(
-          scale: _pressed ? 0.92 : 1,
-          duration: const Duration(milliseconds: 90),
-          curve: Curves.easeOut,
-          child: Stack(
-            clipBehavior: Clip.none,
-            fit: StackFit.expand,
-            children: [
-              Container(
-                height: h,
+      child: Stack(
+        clipBehavior: Clip.none,
+        fit: StackFit.expand,
+        children: [
+          Positioned(
+            left: 3,
+            right: 3,
+            bottom: 0,
+            height: h,
+            child: AnimatedScale(
+              scale: _pressed ? 0.92 : 1,
+              duration: const Duration(milliseconds: 90),
+              curve: Curves.easeOut,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: centre
+                    colors: golden
                         ? const [
                             Color(0xfffff6b8),
                             Color(0xffffe08a),
                             gold,
                             Color(0xffdf931f),
                           ]
-                        : active
-                            ? const [
-                                Color(0xfffff3d0),
-                                Color(0xffffe9ad),
-                                Color(0xfff0cd7e),
-                                Color(0xffd9a854),
-                              ]
-                            : const [
-                                Color(0xfffff6df),
-                                Color(0xfff3ddb0),
-                                Color(0xffe0bd7f),
-                                Color(0xffc99f5f),
-                              ],
+                        : const [
+                            Color(0xff5d8cc9),
+                            Color(0xff3a61a0),
+                            Color(0xff2d4c81),
+                          ],
                   ),
-                  borderRadius: BorderRadius.circular(centre ? 17 : 14),
+                  borderRadius: BorderRadius.circular(centre ? 18 : 14),
                   border: Border.all(
-                    color: active
+                    color: golden
                         ? const Color(0xff8a4b0f)
-                        : const Color(0xff5d3a2c),
+                        : const Color(0xff1d3460),
                     width: centre || active ? 2.4 : 2.0,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: active
+                      color: golden
                           ? const Color(0x99ffc63c)
-                          : const Color(0x5520130e),
-                      offset: Offset(0, active ? 3 : 4),
-                      blurRadius: active ? 10 : 0,
+                          : const Color(0x66101d38),
+                      offset: Offset(0, golden ? 3 : 4),
+                      blurRadius: golden ? 10 : 0,
                     ),
-                    if (active)
+                    if (golden)
                       const BoxShadow(
                         color: Color(0x44fff3c4),
                         offset: Offset(0, -1),
@@ -777,64 +783,75 @@ class _NavButtonState extends State<_NavButton> {
                 ),
                 child: Material(
                   color: Colors.transparent,
-                  child: InkWell(
-                    onTap: widget.onTap,
-                    onHighlightChanged: (v) {
-                      if (v) HapticFeedback.selectionClick();
-                      if (mounted) setState(() => _pressed = v);
-                    },
-                    borderRadius: BorderRadius.circular(centre ? 17 : 14),
-                    splashColor: Colors.white.withValues(alpha: .45),
-                    highlightColor: Colors.white.withValues(alpha: .10),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(child: widget.child),
-                        SizedBox(
-                          height: centre ? 12 : 10,
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              widget.label,
-                              style: TextStyle(
-                                color: centre || active
-                                    ? const Color(0xff5d3a2c)
-                                    : const Color(0xff7a5232),
-                                fontSize: centre ? 10.5 : 9,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.2,
-                                shadows: const [
-                                  Shadow(
-                                    color: Color(0x66ffffff),
-                                    offset: Offset(0, -0.6),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    fit: StackFit.expand,
+                    children: [
+                      InkWell(
+                        onTap: widget.onTap,
+                        onHighlightChanged: (v) {
+                          if (v) HapticFeedback.selectionClick();
+                          if (mounted) setState(() => _pressed = v);
+                        },
+                        borderRadius: BorderRadius.circular(centre ? 18 : 14),
+                        splashColor: Colors.white.withValues(alpha: .45),
+                        highlightColor: Colors.white.withValues(alpha: .10),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Flexible(child: widget.child),
+                            SizedBox(
+                              height: centre ? 13 : 11,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  widget.label,
+                                  style: TextStyle(
+                                    color: golden
+                                        ? const Color(0xff5d3a2c)
+                                        : const Color(0xffdce9f7),
+                                    fontSize: centre ? 10.5 : 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.2,
+                                    shadows: [
+                                      Shadow(
+                                        color: golden
+                                            ? const Color(0x66ffffff)
+                                            : const Color(0x66101d38),
+                                        offset: const Offset(0, -0.6),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (widget.badge)
+                        Positioned(
+                          right: -2,
+                          top: -3,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: const Color(0xffe2433a),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.6,
                               ),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
               ),
-              if (widget.badge)
-                Positioned(
-                  right: -2,
-                  top: -3,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: const Color(0xffe2433a),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.6),
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

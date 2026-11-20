@@ -1,162 +1,10 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import 'cat_avatar.dart';
-import 'match_controller.dart';
 import 'profile.dart';
-import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
-
-/// Opponent identity shown on the pre-match VS screen. [badge] is the
-/// peer-visible label required by the contract: 'BOT' for house cats and
-/// 'ONLINE' for friend rooms — never an unlabelled stranger.
-class VsOpponent {
-  const VsOpponent({
-    required this.name,
-    required this.trophies,
-    required this.badge,
-    required this.avatar,
-    this.subtitle,
-  });
-
-  final String name;
-  final int trophies;
-  final String badge;
-  final Widget avatar;
-  final String? subtitle;
-
-  /// House-cat bot (or the rotating practice bot when [cat] is null).
-  factory VsOpponent.houseCat(Player player, HouseCat? cat) {
-    if (cat == null) {
-      return VsOpponent(
-        name: 'BOT',
-        trophies: player.trophies,
-        badge: 'BOT',
-        avatar: const _BotAvatar(size: 64),
-        subtitle: 'Antrenament',
-      );
-    }
-    return VsOpponent(
-      name: cat.name,
-      trophies: cat.trophies,
-      badge: 'BOT',
-      avatar: catPortrait(cat.name, size: 64),
-      subtitle: 'Nv ${cat.level}',
-    );
-  }
-
-  /// Friend duel opponent resolved from the cloud profile (preset name and
-  /// cat loadout only — typed names never leave the device).
-  factory VsOpponent.online(Player player, OnlineOpponentInfo info) {
-    final spec = Player(player.prefs)
-      ..name = info.name
-      ..cat = info.cat
-      ..trophies = info.trophies
-      ..coins = 0
-      ..fur = info.fur
-      ..eyes = info.eyes
-      ..ears = info.ears
-      ..pattern = info.pattern
-      ..accessory = info.accessory
-      ..power = info.power
-      ..photo = null;
-    return VsOpponent(
-      name: info.name,
-      trophies: info.trophies,
-      badge: 'ONLINE',
-      avatar: catPortrait(spec.cat, size: 64),
-      subtitle: 'Prieten',
-    );
-  }
-}
-
-/// Pre-match versus screen shown before [MatchScreen] for both house-cat
-/// duels and online friend duels. Displays the matchup, the trophy stakes
-/// and a preparing state, then replaces itself with [matchScreen] once the
-/// arena is ready. [autoStartAfter] is tunable for tests.
-class VsScreen extends StatefulWidget {
-  const VsScreen({
-    super.key,
-    required this.player,
-    required this.opponent,
-    required this.matchScreen,
-    this.autoStartAfter = const Duration(seconds: 3),
-  });
-
-  final Player player;
-  final VsOpponent opponent;
-
-  /// The duel screen pushed (via pushReplacement) when the arena is ready,
-  /// normally a [MatchScreen] for the same opponent.
-  final Widget matchScreen;
-  final Duration autoStartAfter;
-
-  @override
-  State<VsScreen> createState() => _VsScreenState();
-}
-
-class _VsScreenState extends State<VsScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _dots;
-  Timer? _startTimer;
-
-  Player get p => widget.player;
-  bool get english => p.english;
-
-  @override
-  void initState() {
-    super.initState();
-    _dots = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat();
-    _startTimer = Timer(widget.autoStartAfter, _startMatch);
-  }
-
-  @override
-  void dispose() {
-    _startTimer?.cancel();
-    _dots.dispose();
-    super.dispose();
-  }
-
-  void _startMatch() {
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => widget.matchScreen),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    body: MatchupScene(
-      english: english,
-      modeText: widget.opponent.badge == 'BOT'
-          ? (english ? 'OFFLINE PRACTICE' : 'ANTRENAMENT OFFLINE')
-          : (english ? 'ONLINE FRIEND' : 'PRIETEN ONLINE'),
-      playerName: p.name,
-      playerTrophies: p.trophies,
-      playerBadge: english ? 'YOU' : 'TU',
-      playerPortrait: duelCatArt(p, size: 118),
-      opponentName: widget.opponent.name,
-      opponentTrophies: widget.opponent.trophies,
-      // House cats stay labelled via the mode text; the card chip stays
-      // clean — no 'BOT' tag on the matchup page.
-      opponentBadge: widget.opponent.badge == 'BOT' ? '' : widget.opponent.badge,
-      opponentPortrait: widget.opponent.avatar,
-      opponentSubtitle: widget.opponent.subtitle,
-      statusText: english
-          ? 'Getting the arena ready...'
-          : 'Se pregătește arena...',
-      cancelKey: const ValueKey('vs-cancel'),
-      cancelText: english ? 'CANCEL' : 'ANULEAZĂ',
-      onCancel: () => Navigator.of(context).maybePop(),
-      pulse: _dots,
-    ),
-  );
-}
 
 /// Full-body art for a cat on the VS/search scene; falls back to the
 /// procedural avatar when the cat has no drawn art.
@@ -164,11 +12,10 @@ Widget duelCatArt(Player p, {double size = 118}) {
   return catPortrait(p.cat, size: size);
 }
 
-/// The single matchmaking/search page shared by [VsScreen] and the
-/// [MatchScreen] searching phase — room artwork, cartoon logo, two tall
-/// fighter cards, wooden stakes board, animated status and one cancel
-/// action. Keeping both flows on this scene makes the transition read as
-/// one continuous page.
+/// The single matchmaking/search page — shown by the [MatchScreen]
+/// searching phase for both house-cat duels and online friend duels.
+/// Room artwork, cartoon logo, two tall fighter cards, wooden stakes
+/// board, animated status and one cancel action.
 class MatchupScene extends StatelessWidget {
   const MatchupScene({
     super.key,
@@ -723,25 +570,4 @@ class _SelfAnimatedDotsHolderState extends State<_SelfAnimatedDotsHolder>
 
   @override
   Widget build(BuildContext context) => _Dots(text: widget.text, pulse: _c);
-}
-
-/// Generic bot head for practice opponents without a fixed house cat.
-class _BotAvatar extends StatelessWidget {
-  const _BotAvatar({required this.size});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: const BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xff8d8177), Color(0xff5d534b)],
-      ),
-    ),
-    child: Icon(Icons.smart_toy_rounded, color: cream, size: size * .55),
-  );
 }
