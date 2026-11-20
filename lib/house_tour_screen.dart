@@ -638,35 +638,7 @@ class _RoomSheet extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  english
-                      ? 'House cats in this room'
-                      : 'Pisicile casei din cameră',
-                  style: const TextStyle(
-                    color: Color(0xff8a6242),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final cat in room.cats)
-                      Chip(
-                        avatar: const Icon(Icons.pets, size: 16),
-                        label: Text(
-                          '${cat.name} • lv ${cat.level}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                        backgroundColor: const Color(0xfff0dfc0),
-                        side: const BorderSide(color: Color(0xffd9b98c)),
-                      ),
-                  ],
-                ),
+                _RoomRoute(player: player, index: index, english: english),
                 const SizedBox(height: 14),
                 if (reward != null)
                   Container(
@@ -811,4 +783,160 @@ class _PawTrailPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PawTrailPainter oldDelegate) => false;
+}
+
+/// Mini-route inside a room sheet: every milestone between this room's
+/// threshold and the next room's, listed as small detailed rewards.
+class _RoomRoute extends StatelessWidget {
+  const _RoomRoute({
+    required this.player,
+    required this.index,
+    required this.english,
+  });
+
+  final Player player;
+  final int index;
+  final bool english;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = houseRooms[index].threshold;
+    final end =
+        index + 1 < houseRooms.length ? houseRooms[index + 1].threshold : 1 << 30;
+    final stops = [
+      for (final m in roadMilestones)
+        if (m.trophies >= start && m.trophies < end) m,
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          english ? 'ROUTE TO THE NEXT ROOM' : 'TRASEUL SPRE CAMERA URMĂTOARE',
+          style: const TextStyle(
+            color: Color(0xff8a6242),
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (var i = 0; i < stops.length; i++) ...[
+          if (i > 0)
+            Container(
+              width: 3,
+              height: 10,
+              decoration: BoxDecoration(
+                color: const Color(0xffd9b98c),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          _routeStop(stops[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _routeStop(RoadMilestone m) {
+    final reached = player.trophies >= m.trophies;
+    final claimed = player.roadClaims.contains(m.trophies);
+    final claimable = reached && !claimed;
+    final rewardText = m.gear != null
+        ? '${itemName(m.gear!)} + ${m.coins} 🐾'
+        : m.emote != null
+        ? (english ? 'Emote ${m.emote}' : 'Emote ${m.emote}')
+        : '${m.coins} 🐾';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: claimed
+            ? const Color(0xffe8e0d2)
+            : claimable
+            ? const Color(0xfffdf0cd)
+            : const Color(0xfff2ead8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: claimable ? gold : const Color(0xffd9c9ac),
+          width: claimable ? 1.6 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xff5f4a38),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '🏆${m.trophies}',
+              style: const TextStyle(
+                color: Color(0xffffd75e),
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (m.gear != null) ...[
+            sprite(m.gear!, size: 24),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Text(
+              rewardText,
+              style: const TextStyle(
+                color: ink,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          if (claimable)
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => player.claimRoad(
+                m.trophies,
+                coinGift: m.coins,
+                emote: m.emote,
+                gear: m.gear,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xff93d94f), Color(0xff4e9c22)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xff2e6b14),
+                    width: 1.2,
+                  ),
+                ),
+                child: Text(
+                  english ? 'CLAIM' : 'IA',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            )
+          else
+            Icon(
+              claimed ? Icons.check_circle_rounded : Icons.lock_rounded,
+              color: claimed
+                  ? const Color(0xff4e9c22)
+                  : const Color(0xff9a8d80),
+              size: 20,
+            ),
+        ],
+      ),
+    );
+  }
 }

@@ -72,6 +72,12 @@ EngineResult<List<Move>> legalMoves(MatchState state) {
   final moves = <Move>[
     for (final (a, b) in pairs)
       SwapMove(firstCell: pos(a), secondCell: pos(b)),
+    // Tap detonations: every unlocked special fires via a self-swap.
+    for (var i = 0; i < board.cells.length; i++)
+      if (isPieceCode(board.cells[i]) &&
+          !isYarnedCode(board.cells[i]) &&
+          isSpecialCode(board.cells[i]))
+        SwapMove(firstCell: pos(i), secondCell: pos(i)),
   ];
   if (state.canFirePower(slot)) {
     moves.add(PowerMove(power: state.config.powerFor(slot)));
@@ -144,12 +150,33 @@ EngineResult<MoveResult> _applySwap(
   final ca = board.cells[a];
   final cb = board.cells[b];
   final bothSpecial = isSpecialCode(ca) && isSpecialCode(cb);
-  // Royal Kingdom rules: a special may swap with a normal piece only when
-  // the exchange forms a 3+ match — the special moves but stays inert.
-  // Exception: the rainbow paw clears the swapped piece's colour.
+  // A special never merges with a plain piece: it fires by tap, by a
+  // special+special combo, or — for the rainbow paw — by touching the
+  // colour it should clear. Any other special+normal swap is rejected.
   final rainbowOnColour =
       (basePieceCode(ca) == kRainbow && isColourCode(cb)) ||
       (basePieceCode(cb) == kRainbow && isColourCode(ca));
+  if (!bothSpecial &&
+      !rainbowOnColour &&
+      (isSpecialCode(ca) || isSpecialCode(cb))) {
+    final first = a < b ? a : b;
+    final second = a < b ? b : a;
+    return EngineOk(
+      MoveResult(
+        state: state,
+        events: [
+          SwapRejected(
+            player: slot,
+            firstCell: _posOf(w, first),
+            secondCell: _posOf(w, second),
+            reason: 'special-blocked',
+          ),
+        ],
+        hashBefore: hashBefore,
+        hashAfter: hashBefore,
+      ),
+    );
+  }
   final fires = bothSpecial || rainbowOnColour;
 
   // Simulate the swap to test productivity.

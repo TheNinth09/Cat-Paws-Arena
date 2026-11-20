@@ -181,14 +181,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('TEAM: ROYAL CATS'), findsOneWidget);
-    expect(find.text('TRADE REQUEST'), findsOneWidget);
+    expect(find.text('TEAMS ARRIVE SOON'), findsOneWidget);
     expect(find.text('PREVIEW'), findsOneWidget);
-    expect(find.textContaining('coming soon'), findsWidgets);
-    // No fabricated live members count or real chat content.
+    // No fabricated chat bubbles, trade cards or member counts.
+    expect(find.text('TRADE REQUEST'), findsNothing);
     expect(find.textContaining(RegExp(r'\d+\s*/\s*30')), findsNothing);
-    await tester.tap(find.text('TRADE'));
-    await tester.pumpAndSettle();
-    expect(unavailable, contains('Team trading'));
   });
 
   testWidgets('events toggle shows parked global and private choices', (

@@ -36,8 +36,8 @@ class Player extends ChangeNotifier {
       bestScore = d['bestScore'] ?? 0;
       roadClaims = Set<int>.from(d['roadClaims'] ?? []);
       unlockedEmotes = Set<String>.from(
-        d['unlockedEmotes'] ?? const ['hello', 'oops', 'thanks'],
-      );
+        d['unlockedEmotes'] ?? baseEmotes,
+      )..addAll(baseEmotes);
     }
   }
   final SharedPreferences prefs;
@@ -68,9 +68,19 @@ class Player extends ChangeNotifier {
   /// Trophy-road milestones already claimed (threshold values).
   Set<int> roadClaims = {};
 
-  /// Duel emote wire values the player may send — three defaults, the
-  /// rest unlocked along the trophy road.
-  Set<String> unlockedEmotes = {'hello', 'oops', 'thanks'};
+  /// The six standard duel emotes every cat (Tzuki, Bubble…) starts with.
+  static const baseEmotes = {
+    'hello',
+    'good_game',
+    'wow',
+    'oops',
+    'thanks',
+    'purr',
+  };
+
+  /// Duel emote wire values the player may send — the standard six, plus
+  /// any extras unlocked along the trophy road.
+  Set<String> unlockedEmotes = Set<String>.of(baseEmotes);
   int get tier => trophies >= 4000
       ? 4
       : trophies >= 3000

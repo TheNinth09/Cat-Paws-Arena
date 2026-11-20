@@ -12,7 +12,9 @@ import 'duel_events.dart';
 /// turn boundaries.
 ///
 /// [localSlot] is the engine slot this client plays (host = first, guest =
-/// second in online duels); only events acting on that slot reach the view.
+/// second in online duels). The duel board is shared — both players' moves
+/// animate on the same grid; private events (SwapRejected, PowerCharged,
+/// ObstacleQueued) stay local-only.
 class EngineViewAdapter {
   EngineViewAdapter({
     this.width = 7,
@@ -29,6 +31,12 @@ class EngineViewAdapter {
   /// Events are always emitted for the view's own [PlayerSlot.first]; the
   /// board widget does not distinguish slots.
   static const _viewPlayer = PlayerSlot.first;
+
+  /// Maps an engine slot to the view slot: the human is always
+  /// [PlayerSlot.first], the opponent [PlayerSlot.second]. The board is
+  /// physically shared — both players' moves animate on the same grid.
+  PlayerSlot _vp(engine.PlayerSlot player) =>
+      player == localSlot ? PlayerSlot.first : PlayerSlot.second;
 
   int _nextId = 1;
 
@@ -111,11 +119,10 @@ class EngineViewAdapter {
     final state = result.state;
     for (final e in result.events) {
       switch (e) {
-        case engine.Swapped(:final player, :final firstCell, :final secondCell)
-            when player == localSlot:
+        case engine.Swapped(:final player, :final firstCell, :final secondCell):
           out.add(
             Swapped(
-              player: _viewPlayer,
+              player: _vp(player),
               firstCell: _idx(firstCell),
               secondCell: _idx(secondCell),
             ),
@@ -135,11 +142,10 @@ class EngineViewAdapter {
               reason: reason,
             ),
           );
-        case engine.Cleared(:final player, :final cells, :final points)
-            when player == localSlot:
+        case engine.Cleared(:final player, :final cells, :final points):
           out.add(
             Cleared(
-              player: _viewPlayer,
+              player: _vp(player),
               cells: [for (final c in cells) _idx(c)],
               points: points,
             ),
@@ -149,33 +155,29 @@ class EngineViewAdapter {
           :final kind,
           :final orientation,
           :final cell,
-        )
-            when player == localSlot:
+        ):
           out.add(
             SpecialCreated(
-              player: _viewPlayer,
+              player: _vp(player),
               kind: _specialKind(kind, orientation),
               cell: _idx(cell),
             ),
           );
-        case engine.SpecialFired(:final player, :final kind, :final cells, :final points)
-            when player == localSlot:
+        case engine.SpecialFired(:final player, :final kind, :final cells, :final points):
           out.add(
             SpecialFired(
-              player: _viewPlayer,
+              player: _vp(player),
               kind: _firedSpecialKind(kind),
               cells: [for (final c in cells) _idx(c)],
               points: points,
             ),
           );
-        case engine.Fell(:final player, :final from, :final to)
-            when player == localSlot:
-          out.add(Fell(player: _viewPlayer, from: _idx(from), to: _idx(to)));
-        case engine.Refilled(:final player, :final cell, :final piece)
-            when player == localSlot:
+        case engine.Fell(:final player, :final from, :final to):
+          out.add(Fell(player: _vp(player), from: _idx(from), to: _idx(to)));
+        case engine.Refilled(:final player, :final cell, :final piece):
           out.add(
             Refilled(
-              player: _viewPlayer,
+              player: _vp(player),
               cell: _idx(cell),
               piece: BoardPiece(id: _nextId++, kind: piece.clamp(0, 5)),
             ),
@@ -189,8 +191,7 @@ class EngineViewAdapter {
               count: count,
             ),
           );
-        case engine.ObstacleLanded(:final player, :final cells)
-            when player == localSlot:
+        case engine.ObstacleLanded(:final player, :final cells):
           // The engine event does not carry kinds; resolve each cell from
           // the post-move board and group by kind for the view.
           final board = state.boardOf(player);
@@ -207,17 +208,16 @@ class EngineViewAdapter {
           for (final entry in byKind.entries) {
             out.add(
               ObstacleLanded(
-                player: _viewPlayer,
+                player: _vp(player),
                 cells: entry.value,
                 obstacle: entry.key,
               ),
             );
           }
-        case engine.ObstacleBroken(:final player, :final cells)
-            when player == localSlot:
+        case engine.ObstacleBroken(:final player, :final cells):
           out.add(
             ObstacleBroken(
-              player: _viewPlayer,
+              player: _vp(player),
               cells: [for (final c in cells) _idx(c)],
             ),
           );
@@ -231,18 +231,16 @@ class EngineViewAdapter {
           :final power,
           :final cells,
           :final points,
-        )
-            when player == localSlot:
+        ):
           out.add(
             PowerFired(
-              player: _viewPlayer,
+              player: _vp(player),
               power: _powerKind(power),
               cells: [for (final c in cells) _idx(c)],
               points: points,
             ),
           );
-        case engine.Shuffled(:final player, :final cells, :final reason)
-            when player == localSlot:
+        case engine.Shuffled(:final player, :final cells, :final reason):
           final board = state.boardOf(player);
           final pieces = <int, BoardPiece>{};
           for (final c in cells) {
@@ -252,7 +250,7 @@ class EngineViewAdapter {
           }
           out.add(
             Shuffled(
-              player: _viewPlayer,
+              player: _vp(player),
               cells: [for (final c in cells) _idx(c)],
               reason: reason,
               pieces: pieces,
@@ -278,8 +276,8 @@ class EngineViewAdapter {
               finalHashes: (first: finalHashes.first, second: finalHashes.second),
             ),
           );
-        // Opponent (second player) events never reach the human's board;
-        // everything else is covered above.
+        // SwapRejected/PowerCharged/ObstacleQueued stay local-only above;
+        // everything else reached the shared board.
         case _:
           break;
       }

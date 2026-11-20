@@ -395,10 +395,29 @@ class _MatchScreenState extends State<MatchScreen>
           }
         },
         child: Scaffold(
-          body: SafeArea(
-            child: Stack(
-              children: [
-                Center(
+          body: Stack(
+            children: [
+              if (match.phase == MatchPhase.playing) ...[
+                Positioned.fill(
+                  child: arenaImage(
+                    'bg_arena_battle',
+                    fit: BoxFit.cover,
+                    fallback: RoomBackground(
+                      tier: p.tier,
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
+                const Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0x6620130e),
+                    ),
+                  ),
+                ),
+              ],
+              SafeArea(
+                child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 540),
                     child: switch (match.phase) {
@@ -406,42 +425,14 @@ class _MatchScreenState extends State<MatchScreen>
                       // as the VS page — one continuous page, no HUD swap.
                       MatchPhase.searching => versus(),
                       MatchPhase.finished => result(),
-                      MatchPhase.playing => Column(
-                        children: [
-                          Expanded(
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                arenaImage(
-                                  'bg_arena_battle',
-                                  fit: BoxFit.cover,
-                                  fallback: RoomBackground(
-                                    tier: p.tier,
-                                    child: const SizedBox.expand(),
-                                  ),
-                                ),
-                                const DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: Color(0x6620130e),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    8,
-                                    6,
-                                    8,
-                                    8,
-                                  ),
-                                  child: battle(),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                      MatchPhase.playing => Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                        child: battle(),
                       ),
                     },
                   ),
                 ),
+              ),
                 if (_momentPower != null)
                   Positioned.fill(
                     child: IgnorePointer(
@@ -458,7 +449,6 @@ class _MatchScreenState extends State<MatchScreen>
             ),
           ),
         ),
-      ),
     );
     return kFrameProbeEnabled ? FrameTimeOverlay(child: content) : content;
   }
@@ -545,6 +535,7 @@ class _MatchScreenState extends State<MatchScreen>
               iconSprite: 'tile_yarn',
               active: match.playerTurn,
               pulse: fx,
+              emote: emote,
             ),
           ),
           const SizedBox(width: 6),
@@ -566,6 +557,7 @@ class _MatchScreenState extends State<MatchScreen>
                 iconSprite: 'icon_paw_coin',
                 active: enginePlaying && !match.playerTurn && !match.isFlagged,
                 pulse: fx,
+                emote: opponentEmote,
               ),
             ),
           ),
@@ -846,18 +838,6 @@ class _MatchScreenState extends State<MatchScreen>
                       hintCells: hint == null ? null : {hint.$1, hint.$2},
                     ),
                   ),
-                  if (opponentEmote.isNotEmpty)
-                    Positioned(
-                      left: 6,
-                      top: 6,
-                      child: IgnorePointer(child: _EmoteBubble(opponentEmote)),
-                    ),
-                  if (emote.isNotEmpty)
-                    Positioned(
-                      right: 6,
-                      top: 6,
-                      child: IgnorePointer(child: _EmoteBubble(emote)),
-                    ),
                   _tutorialOverlay(),
                 ],
               ),
@@ -1578,6 +1558,7 @@ class _PortraitPlate extends StatelessWidget {
     required this.iconSprite,
     required this.active,
     required this.pulse,
+    this.emote = '',
   });
 
   final Widget avatar;
@@ -1592,9 +1573,15 @@ class _PortraitPlate extends StatelessWidget {
   final bool active;
   final Animation<double> pulse;
 
+  /// Sprite name of the emote bubble shown under the plate ('' hides it).
+  final String emote;
+
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         AnimatedBuilder(
@@ -1711,6 +1698,16 @@ class _PortraitPlate extends StatelessWidget {
             ],
           ),
         ),
+        ]),
+        if (emote.isNotEmpty)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: -30,
+            child: IgnorePointer(
+              child: Center(child: _EmoteBubble(emote)),
+            ),
+          ),
       ],
     );
   }

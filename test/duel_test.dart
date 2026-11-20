@@ -673,7 +673,7 @@ void main() {
           scores: (first: 10, second: 5),
           finalHashes: (first: 'x', second: 'y'),
         ),
-        // Opponent events never reach the human's board.
+        // Opponent board events animate on the shared board too.
         engine.Swapped(
           player: engine.PlayerSlot.second,
           firstCell: c(0, 0),
@@ -687,9 +687,9 @@ void main() {
       ],
     );
     final view = EngineViewAdapter(width: 7, height: 7).adaptMove(mr);
-    expect(view.whereType<Swapped>(), hasLength(1));
+    expect(view.whereType<Swapped>(), hasLength(2));
     expect(view.whereType<SwapRejected>(), hasLength(1));
-    expect(view.whereType<Cleared>(), hasLength(1));
+    expect(view.whereType<Cleared>(), hasLength(2));
     expect(view.whereType<SpecialCreated>(), hasLength(4));
     expect(view.whereType<SpecialFired>(), hasLength(1));
     expect(view.whereType<Fell>(), hasLength(1));

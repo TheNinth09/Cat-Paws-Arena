@@ -25,234 +25,46 @@ class TeamScreen extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _bubble(
-                'cat_tzuki',
-                'Miorlău22',
-                english ? 'Hello everyone!' : 'Salutare tuturor!',
+              const SizedBox(height: 6),
+              Center(
+                child: arenaImage(
+                  'icon_team',
+                  width: 64,
+                  height: 64,
+                  fallback: const Icon(Icons.shield, size: 64),
+                ),
               ),
-              _bubble(
-                'cat_bubble',
-                'ShadowCat',
+              const SizedBox(height: 10),
+              Text(
+                english ? 'TEAMS ARRIVE SOON' : 'ECHIPELE VIN ÎN CURÂND',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: ink,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
                 english
-                    ? 'Anyone up for a match?'
-                    : 'Cine are chef de un meci?',
+                    ? 'Friendly duels with your own code already work from the HOME tab. Teams, chat and trading are not live services yet — this page will show them honestly when they arrive.'
+                    : 'Duelele cu un prieten prin cod funcționează deja din tab-ul ACASĂ. Echipele, chatul și schimburile nu sunt încă servicii live — această pagină le va arăta onest când vin.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xff6b4a32),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
               ),
-              _tradeCard(english),
-              _bubble(
-                'emote_love',
-                'Pisoi_Lover',
-                english ? 'Request sent!' : 'Am trimis cererea!',
-              ),
+              const SizedBox(height: 6),
             ],
-          ),
-        ),
-        _inputBar(english),
-        const SizedBox(height: 8),
-        Text(
-          english
-              ? 'Preview only — teams, chat and trading arrive later. Nothing here is a live service.'
-              : 'Doar previzualizare — echipele, chatul și schimburile vin în curând. Nimic de aici nu este live.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xff6b4a32),
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
           ),
         ),
       ],
     );
   }
-
-  Widget _bubble(String catArt, String name, String message) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xfff3e0b8),
-            border: Border.all(color: ink, width: 1.8),
-          ),
-          child: ClipOval(
-            child: Padding(
-              padding: const EdgeInsets.all(2),
-              child: arenaImage(
-                catArt,
-                width: 34,
-                height: 34,
-                fallback: sprite(catArt, size: 34),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 8,
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0xfffffbec),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(16),
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-              ),
-              border: Border.all(color: ink, width: 1.6),
-            ),
-            child: Text(
-              '$name: $message',
-              style: const TextStyle(
-                color: ink,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _tradeCard(bool english) => Container(
-    margin: const EdgeInsets.symmetric(vertical: 8),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xffffe6a8), Color(0xfff6c46a)],
-      ),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: ink, width: 2),
-      boxShadow: const [
-        BoxShadow(color: Color(0x4451312d), offset: Offset(0, 3)),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          english ? 'TRADE REQUEST' : 'CERERE DE TRADE (SCHIMB)',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: ink,
-            fontSize: 15,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.6,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            sprite('acc_witch_hat', size: 44),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    english ? 'OFFERS: Gigel' : 'OFERĂ: Gigel',
-                    style: const TextStyle(
-                      color: ink,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                    ),
-                  ),
-                  Text(
-                    english ? 'Wizard Hat' : 'Pălărie Vrăjitoare',
-                    style: const TextStyle(
-                      color: Color(0xff6b4a32),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    english
-                        ? 'ASKS: Pirate Bandana / Zoomies'
-                        : 'CERE: Bandană Pirat / Putere Zoomies',
-                    style: const TextStyle(
-                      color: ink,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      sprite('acc_pirate_bandana', size: 34),
-                      const SizedBox(width: 8),
-                      arenaImage(
-                        'power_zoomies',
-                        width: 34,
-                        height: 34,
-                        fallback: sprite('vfx_zoomies', size: 34),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              width: 120,
-              child: ArenaButton(
-                text: english ? 'TRADE' : 'SCHIMBĂ',
-                singleLine: true,
-                onPressed: () {
-                  onUnavailable(
-                    english ? 'Team trading' : 'Schimburi de echipă',
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-
-  Widget _inputBar(bool english) => Container(
-    margin: const EdgeInsets.only(top: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    decoration: BoxDecoration(
-      color: const Color(0xfffffbec),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: ink, width: 1.8),
-    ),
-    child: Row(
-      children: [
-        sprite('tile_paw', size: 28),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            english ? 'Chat arrives soon...' : 'Chatul vine în curând...',
-            style: TextStyle(
-              color: ink.withValues(alpha: 0.45),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        Icon(Icons.send, color: ink.withValues(alpha: 0.35)),
-      ],
-    ),
-  );
 }
 
 class _TeamHeader extends StatelessWidget {

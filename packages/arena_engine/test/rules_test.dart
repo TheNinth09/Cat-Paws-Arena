@@ -342,23 +342,19 @@ void main() {
     final specialAt = findSpecial(state, PlayerSlot.first, specialCode);
     expect(specialAt, isNonNegative, reason: 'special must exist pre-fire');
     final board = state.boardOf(PlayerSlot.first);
-    final partner = neighbourPiece(board, specialAt);
-    expect(partner, isNonNegative, reason: 'special needs a swappable neighbour');
 
-    // Simulate the swap on a scratch copy to compute the expected blast.
+    // Tap detonation fires the special in place — a special never merges
+    // with a plain piece, so the blast is computed at its own cell.
     final w = board.width, h = board.height;
     final scratch = List<int>.of(board.cells);
-    final tmp = scratch[specialAt];
-    scratch[specialAt] = scratch[partner];
-    scratch[partner] = tmp;
-    final specialNow = partner; // special moved to the partner's cell
-    final base = basePieceCode(tmp);
+    final specialNow = specialAt;
+    final base = basePieceCode(scratch[specialAt]);
 
     final res = mustApply(
       state,
       SwapMove(
         firstCell: (row: specialAt ~/ w, col: specialAt % w),
-        secondCell: (row: partner ~/ w, col: partner % w),
+        secondCell: (row: specialAt ~/ w, col: specialAt % w),
       ),
     );
     final fired = res.value.events.whereType<SpecialFired>().firstWhere(
@@ -370,11 +366,11 @@ void main() {
     if (base == kRainbow) {
       expected = <int>{};
       if (config.rainbowRule == RainbowRule.clearOneColour) {
-        // Partner piece colour decides; fall back to a drawn colour.
-        final partnerCode = scratch[specialAt];
-        final target = isColourCode(partnerCode)
-            ? basePieceCode(partnerCode)
-            : -1;
+        // Tap fire draws a random colour from the shared rng stream.
+        final rng = GameRandom.fromState(
+          state.rngState[PlayerSlot.first.index],
+        );
+        final target = rng.nextInt(config.colourCount);
         if (target >= 0) {
           for (var j = 0; j < scratch.length; j++) {
             if (isColourCode(scratch[j]) && basePieceCode(scratch[j]) == target) {
@@ -458,19 +454,13 @@ void main() {
     final cells = fixture(overrides: {copterAt: kCopter});
     final state = stateWith(firstCells: cells);
     final board = state.boardOf(PlayerSlot.first);
-    final partner = neighbourPiece(board, copterAt);
-    expect(partner, isNonNegative, reason: 'copter needs a swappable neighbour');
-
     final scratch = List<int>.of(board.cells);
-    final tmp = scratch[copterAt];
-    scratch[copterAt] = scratch[partner];
-    scratch[partner] = tmp;
 
     final res = mustApply(
       state,
       SwapMove(
         firstCell: (row: copterAt ~/ w, col: copterAt % w),
-        secondCell: (row: partner ~/ w, col: partner % w),
+        secondCell: (row: copterAt ~/ w, col: copterAt % w),
       ),
     );
     final fired = res.value.events.whereType<SpecialFired>().firstWhere(
@@ -482,9 +472,9 @@ void main() {
     final rng = GameRandom.fromState(state.rngState[PlayerSlot.first.index]);
     final colours = <int>[
       for (var j = 0; j < scratch.length; j++)
-        if (j != partner && isColourCode(scratch[j])) j,
+        if (j != copterAt && isColourCode(scratch[j])) j,
     ];
-    final expected = <int>{colours[rng.nextInt(colours.length)], partner};
+    final expected = <int>{colours[rng.nextInt(colours.length)], copterAt};
     expect(fired.cells, posListOf(w, expected));
     expect(fired.points, expected.length * kPointsPerPiece);
   });
@@ -495,26 +485,20 @@ void main() {
     final cells = fixture(overrides: {bombAt: kBomb});
     final state = stateWith(firstCells: cells);
     final board = state.boardOf(PlayerSlot.first);
-    final partner = neighbourPiece(board, bombAt);
-    expect(partner, isNonNegative, reason: 'bomb needs a swappable neighbour');
-
     final scratch = List<int>.of(board.cells);
-    final tmp = scratch[bombAt];
-    scratch[bombAt] = scratch[partner];
-    scratch[partner] = tmp;
 
     final res = mustApply(
       state,
       SwapMove(
         firstCell: (row: bombAt ~/ w, col: bombAt % w),
-        secondCell: (row: partner ~/ w, col: partner % w),
+        secondCell: (row: bombAt ~/ w, col: bombAt % w),
       ),
     );
     final fired = res.value.events.whereType<SpecialFired>().firstWhere(
       (e) => e.kind == SpecialKind.bomb,
       orElse: () => throw StateError('no SpecialFired event'),
     );
-    expect(fired.cells, posListOf(w, expectedBlast(scratch, w, h, partner, kBomb)));
+    expect(fired.cells, posListOf(w, expectedBlast(scratch, w, h, bombAt, kBomb)));
     expect(fired.points, greaterThan(0));
   });
 
@@ -563,7 +547,7 @@ void main() {
     expect(state.turnMoves, 1);
     expect(state.activePlayer, PlayerSlot.first);
     expect(state.turn, 1);
-    expect(state.turnsLeft(PlayerSlot.first), 5);
+    expect(state.turnsLeft(PlayerSlot.first), duel.turnsPerPlayer);
   });
 
   test('cleared pieces add power charge', () {
@@ -686,7 +670,8 @@ void main() {
     int boxes(BoardState b) =>
         b.cells.where((c) => c == kCellBox).length;
 
-    // First ends turn 7: only the opponent's queue lands, on their board.
+    // First ends turn 7: the queue addressed to second lands on the
+    // shared board — both players swap on one board, alternating turns.
     final m1 = mustApply(s, const EndTurnMove());
     final st1 = m1.value.state;
     expect(st1.turn, 8);
@@ -700,9 +685,11 @@ void main() {
     expect(st1.pendingObstacles[1], isEmpty);
     expect(st1.pendingObstacles[0], hasLength(2));
     expect(boxes(st1.boardOf(PlayerSlot.second)), 1);
-    expect(boxes(st1.boardOf(PlayerSlot.first)), 0);
+    // Shared board: the same physical box is visible from first's view.
+    expect(boxes(st1.boardOf(PlayerSlot.first)), 1);
 
-    // Second ends turn 8: first's two boxes land on first's board.
+    // Second ends turn 8: first's two queued boxes land on the shared
+    // board, joining the one already there.
     final m2 = mustApply(st1, const EndTurnMove());
     final st2 = m2.value.state;
     expect(st2.turn, 9);
@@ -713,8 +700,8 @@ void main() {
     expect(landed2.single.player, PlayerSlot.first);
     expect(landed2.single.cells, hasLength(2)); // two boxes
     expect(st2.pendingObstacles[0], isEmpty);
-    expect(boxes(st2.boardOf(PlayerSlot.first)), 2);
-    expect(boxes(st2.boardOf(PlayerSlot.second)), 1);
+    expect(boxes(st2.boardOf(PlayerSlot.first)), 3);
+    expect(boxes(st2.boardOf(PlayerSlot.second)), 3);
   });
 
   // -------------------------------------------------------------------------
@@ -756,20 +743,33 @@ void main() {
     expect(res.value.state.chargeOf(PlayerSlot.first), kPowerMeterMax);
   });
 
-  test('zoomies clears the fullest row and sends two boxes', () {
+  test('zoomies converts two pieces into specials and sends boxes', () {
     final cells = fixture();
     final s = stateWith(firstCells: cells, charge: [kPowerMeterMax, 0]);
+    // Replicate the deterministic picks: two random colour cells become
+    // random specials (rng stream consumed in order).
+    final rng = GameRandom.fromState(s.rngState[PlayerSlot.first.index]);
+    final colours = <int>[
+      for (var i = 0; i < cells.length; i++)
+        if (isColourCode(cells[i])) i,
+    ];
+    final converted = <int>[];
+    for (var k = 0; k < 2; k++) {
+      converted.add(colours.removeAt(rng.nextInt(colours.length)));
+      rng.nextInt(4); // specialBase pick
+    }
     final res = mustApply(
       s,
       const PowerMove(power: PowerKind.zoomies),
     );
     final st = res.value.state;
+    final created = res.value.events.whereType<SpecialCreated>().toList();
+    expect(created, hasLength(2));
     final fired = res.value.events.whereType<PowerFired>().single;
     expect(fired.power, PowerKind.zoomies);
-    // Every fixture row holds 7 pieces; ties go to the lowest row.
-    expect(fired.cells, hasLength(7));
-    expect(fired.cells.every((p) => p.row == 0), isTrue);
-    expect(fired.points, 70);
+    // No boxes on the fixture board: cells are the two converted pieces.
+    expect(fired.cells, posListOf(7, converted.toSet()));
+    expect(fired.points, 0);
     final queued = res.value.events.whereType<ObstacleQueued>().toList();
     expect(queued, hasLength(1));
     expect(queued.single.player, PlayerSlot.second);
@@ -802,14 +802,10 @@ void main() {
     );
   });
 
-  test('shadow pounce clears the most common colour', () {
-    // Overwhelming colour 0: a sparse grid so no two overridden cells are
-    // adjacent and no pattern cell can complete a run between them.
-    final overrides = <int, int>{
-      for (var r = 0; r < 7; r += 3)
-        for (var c = 0; c < 7; c += 3) idx(r, c): 0,
-    };
-    final cells = fixture(overrides: overrides);
+  test('shadow pounce clears the densest 3x3 area', () {
+    // Full fixture: every 3x3 window holds 9 cells; the tie goes to the
+    // lowest index, i.e. the top-left corner.
+    final cells = fixture();
     final s = stateWith(
       firstCells: cells,
       charge: [kPowerMeterMax, 0],
@@ -817,10 +813,9 @@ void main() {
     );
     expectCleanFixture(cells);
 
-    // Expected: every colour-0 piece on the pre-fire board.
     final expected = <int>{
-      for (var i = 0; i < cells.length; i++)
-        if (isColourCode(cells[i]) && basePieceCode(cells[i]) == 0) i,
+      for (var r = 0; r < 3; r++)
+        for (var c = 0; c < 3; c++) idx(r, c),
     };
     final res = mustApply(
       s,
@@ -834,7 +829,7 @@ void main() {
     expect(st_pendingBoxes(res.value.state), kPowerObstacleCount);
   });
 
-  test('laser chase breaks eight pieces and sends two boxes', () {
+  test('laser chase clears a row-column cross and sends two boxes', () {
     final cells = fixture();
     final s = stateWith(
       firstCells: cells,
@@ -843,20 +838,19 @@ void main() {
     );
     expectCleanFixture(cells);
 
-    // Replicate the deterministic pick of piece cells.
+    // Replicate the deterministic pick: one random row + one random
+    // column, cleared as a cross.
     final rng = GameRandom.fromState(s.rngState[PlayerSlot.first.index]);
-    final eligible = <int>[
-      for (var i = 0; i < cells.length; i++)
-        if (isPieceCode(cells[i])) i,
-    ];
-    final expected = <int>{};
-    for (var k = 0; k < kLaserBreakCount && k < eligible.length; k++) {
-      final j = k + rng.nextInt(eligible.length - k);
-      final t = eligible[k];
-      eligible[k] = eligible[j];
-      eligible[j] = t;
-      expected.add(eligible[k]);
-    }
+    final row = rng.nextInt(7);
+    final col = rng.nextInt(7);
+    final expected = <int>{
+      for (var c = 0; c < 7; c++)
+        if (isPieceCode(cells[row * 7 + c]) || isBoxCode(cells[row * 7 + c]))
+          row * 7 + c,
+      for (var r = 0; r < 7; r++)
+        if (isPieceCode(cells[r * 7 + col]) || isBoxCode(cells[r * 7 + col]))
+          r * 7 + col,
+    };
 
     final res = mustApply(
       s,
