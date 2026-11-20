@@ -20,7 +20,19 @@ export 'match_screen.dart' show MatchScreen;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  // Transparent system bars everywhere — the default nav-bar colour shows as
+  // a dark band at the bottom (and a scrim at the top) on many devices.
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarContrastEnforced: false,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
   // Ask Android for the panel's highest refresh mode — without this many
   // phones pin Flutter to 60 Hz and the game reads as stuttery.
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
