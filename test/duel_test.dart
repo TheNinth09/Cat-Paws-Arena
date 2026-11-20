@@ -556,6 +556,59 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('swiping a piece commits a directional swap', (tester) async {
+    BoardPiece pc(int id, int kind) => BoardPiece(id: id, kind: kind);
+    final initial = BoardSnapshot(
+      width: 7,
+      height: 7,
+      cells: [
+        for (var i = 0; i < 49; i++)
+          BoardCell(piece: pc(i, i % 5)),
+      ],
+    );
+    final attempts = <(int, int)>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 350,
+              height: 350,
+              child: BoardView(
+                initial: initial,
+                onSwapAttempt: (a, b) => attempts.add((a, b)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 350px board inside the 800×600 test surface → the board centre
+    // sits at (400,300); cells are 50px, so cell 24 is the centre.
+    // The drag origin must come from onPanStart — onTapDown is not
+    // delivered once the pan recogniser wins the arena.
+    final h = await tester.startGesture(const Offset(400, 300));
+    for (var i = 0; i < 3; i++) {
+      await h.moveBy(const Offset(15, 0));
+      await tester.pump();
+    }
+    await h.up();
+    await tester.pump();
+    expect(attempts, [(24, 25)]);
+
+    attempts.clear();
+    final v = await tester.startGesture(const Offset(400, 300));
+    for (var i = 0; i < 3; i++) {
+      await v.moveBy(const Offset(0, -15));
+      await tester.pump();
+    }
+    await v.up();
+    await tester.pump();
+    expect(attempts, [(24, 17)]);
+  });
+
   testWidgets('power moment and frame probe render', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

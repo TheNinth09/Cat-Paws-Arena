@@ -476,6 +476,9 @@ class _MatchScreenState extends State<MatchScreen>
 
   @override
   Widget build(BuildContext context) {
+    // A rematch restarts the phase cycle — drop the cached board layer so
+    // the fresh initial snapshot is picked up on the next playing build.
+    if (match.phase == MatchPhase.searching) _boardLayerCache = null;
     final content = AnimatedBuilder(
       animation: match,
       builder: (context, _) => PopScope(
@@ -851,8 +854,37 @@ class _MatchScreenState extends State<MatchScreen>
     ],
   );
 
+  /// The board + VFX stack — cached for the whole match so cascade-frame
+  /// controller notifies never rebuild it. The board animates via its
+  /// own ticker and reads live flags from [match.boardSignals]; a new
+  /// round board arrives through the `play()` event stream.
+  Widget? _boardLayerCache;
+  Widget _boardLayer() {
+    return _boardLayerCache ??= RepaintBoundary(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: BoardView(
+              key: _boardKey,
+              initial: match.initialSnapshot,
+              onSwapAttempt: match.tryMove,
+              onEvent: _onBoardEvent,
+              onIdle: match.onBoardIdle,
+              signals: match.boardSignals,
+            ),
+          ),
+          // Non-blocking VFX layer: particles, beams, shockwaves and
+          // floating labels render over the 7×7 grid without eating
+          // gestures (IgnorePointer inside the widget).
+          Positioned.fill(
+            child: BoardVfxOverlay(controller: _vfx),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _board() {
-    final hint = match.hintSwap;
     return LayoutBuilder(
       builder: (context, constraints) {
         final side = constraints.biggest.shortestSide;
@@ -891,31 +923,7 @@ class _MatchScreenState extends State<MatchScreen>
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(13),
-              child: RepaintBoundary(
-                child: Stack(
-                  children: [
-                  Positioned.fill(
-                    child: BoardView(
-                      key: _boardKey,
-                      initial: match.initialSnapshot,
-                      onSwapAttempt: match.tryMove,
-                      onEvent: _onBoardEvent,
-                      onIdle: match.onBoardIdle,
-                      inputEnabled: match.myTurnInput,
-                      active: match.phase != MatchPhase.finished,
-                      suspended: match.paused,
-                      hintCells: hint == null ? null : {hint.$1, hint.$2},
-                    ),
-                  ),
-                  // Non-blocking VFX layer: particles, beams, shockwaves
-                  // and floating labels render over the 7×7 grid without
-                  // eating gestures (IgnorePointer inside the widget).
-                  Positioned.fill(
-                    child: BoardVfxOverlay(controller: _vfx),
-                  ),
-                  ],
-                ),
-              ),
+              child: _boardLayer(),
             ),
           ),
         );

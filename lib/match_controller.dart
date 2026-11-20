@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'arena.dart';
+import 'board_game.dart';
 import 'duel_events.dart';
 import 'engine_events.dart';
 import 'house_bot.dart';
@@ -553,6 +554,18 @@ class ArenaMatchController extends ChangeNotifier {
 
   bool _refreshQueued = false;
 
+  /// Live board flags — the board subtree reads these instead of widget
+  /// params so it never needs a parent rebuild mid-animation.
+  final boardSignals = BoardSignals();
+
+  void _syncBoardSignals() {
+    boardSignals.inputEnabled.value = myTurnInput;
+    boardSignals.active.value = phase != MatchPhase.finished;
+    boardSignals.suspended.value = paused;
+    final h = hintSwap;
+    boardSignals.hints.value = h == null ? null : {h.$1, h.$2};
+  }
+
   /// Coalesces bursts into at most one notification per event-loop turn.
   /// Cascade floods call [refresh] many times back-to-back; batching them
   /// keeps the full-page rebuild to one per frame instead of dozens.
@@ -561,7 +574,9 @@ class ArenaMatchController extends ChangeNotifier {
     _refreshQueued = true;
     scheduleMicrotask(() {
       _refreshQueued = false;
-      if (!_disposed) notifyListeners();
+      if (_disposed) return;
+      _syncBoardSignals();
+      notifyListeners();
     });
   }
 

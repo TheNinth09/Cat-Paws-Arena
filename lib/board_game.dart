@@ -55,6 +55,19 @@ const _gemColors = [
 const _bannerGold = Color(0xffffd166);
 const _mutedBanner = Color(0xffd8b48f);
 
+/// Live board flags pushed by the match controller through
+/// [ValueNotifier]s. Passing these lets the board subtree stay mounted
+/// for the whole match — the controller only notifies when a value
+/// actually flips, so heavy cascade frames never rebuild the widget.
+class BoardSignals {
+  BoardSignals();
+
+  final inputEnabled = ValueNotifier<bool>(true);
+  final active = ValueNotifier<bool>(true);
+  final suspended = ValueNotifier<bool>(false);
+  final hints = ValueNotifier<Set<int>?>(null);
+}
+
 /// Presentation-only board. It renders a [BoardSnapshot] and animates the
 /// contract event list from `docs/contract.md`; it contains no game rules —
 /// all timing lives in the view's ticker, never in rule code.
@@ -73,6 +86,7 @@ class BoardView extends StatefulWidget {
     this.suspended = false,
     this.rowPicker,
     this.hintCells,
+    this.signals,
   });
 
   /// Initial board contents (row-major, zero-based cell indices).
@@ -104,6 +118,11 @@ class BoardView extends StatefulWidget {
   /// Cells highlighted as a suggested move (tutorial hint).
   final Set<int>? hintCells;
 
+  /// When set, [inputEnabled]/[active]/[suspended]/[hintCells] are read
+  /// live from these notifiers instead of the widget fields — the parent
+  /// can then keep this widget mounted instead of rebuilding it.
+  final BoardSignals? signals;
+
   @override
   State<BoardView> createState() => BoardViewState();
 }
@@ -119,7 +138,6 @@ class BoardViewState extends State<BoardView>
   late final Ticker _ticker = createTicker(_onTick);
 
   int? _selected;
-  int? _downCell;
   int? _dragFrom;
   Offset _panDelta = Offset.zero;
   double _now = 0;
@@ -129,6 +147,17 @@ class BoardViewState extends State<BoardView>
 
   int get width => widget.initial.width;
   int get height => widget.initial.height;
+
+  // Live reads — when [BoardSignals] is provided the widget may never be
+  // rebuilt while these values flip, so handlers must not read the stale
+  // widget fields.
+  bool get _inputEnabled =>
+      widget.signals?.inputEnabled.value ?? widget.inputEnabled;
+  bool get _active => widget.signals?.active.value ?? widget.active;
+  bool get _suspended =>
+      widget.signals?.suspended.value ?? widget.suspended;
+  Set<int>? get _hintCells =>
+      widget.signals?.hints.value ?? widget.hintCells;
 
   /// Logical board contents; final as soon as [play] returns.
   List<BoardCell> get cells => List.unmodifiable(_cells);
@@ -155,6 +184,28 @@ class BoardViewState extends State<BoardView>
     super.initState();
     _resetCells();
     _loadArt();
+    final s = widget.signals;
+    if (s != null) {
+      s.suspended.addListener(_syncSuspended);
+      s.active.addListener(_syncActive);
+      s.hints.addListener(_repaint);
+    }
+  }
+
+  void _repaint() {
+    if (mounted) setState(() {});
+  }
+
+  void _syncSuspended() {
+    if (_suspended) {
+      _ticker.stop();
+    } else {
+      _ensureTicker();
+    }
+  }
+
+  void _syncActive() {
+    if (!_active) _finishAll();
   }
 
   @override
@@ -179,6 +230,12 @@ class BoardViewState extends State<BoardView>
 
   @override
   void dispose() {
+    final s = widget.signals;
+    if (s != null) {
+      s.suspended.removeListener(_syncSuspended);
+      s.active.removeListener(_syncActive);
+      s.hints.removeListener(_repaint);
+    }
     _ticker.dispose();
     widget.onIdle?.call();
     for (final c in _completers) {
@@ -227,7 +284,7 @@ class BoardViewState extends State<BoardView>
   /// animations. The returned future completes when everything has played.
   Future<void> play(List<BoardEvent> events) {
     if (events.isEmpty) return Future<void>.value();
-    if (!widget.active) {
+    if (!_active) {
       // Match is over: keep the grid truthful, skip animation work.
       final fxCount = _fx.length;
       final metaCount = _meta.length;
@@ -245,7 +302,7 @@ class BoardViewState extends State<BoardView>
     for (final e in events) {
       _fold(e);
     }
-    if (!widget.suspended) _ensureTicker();
+    if (!_suspended) _ensureTicker();
     return done.future;
   }
 
@@ -820,7 +877,6 @@ class BoardViewState extends State<BoardView>
 
   void _attempt(int from, int to) {
     _selected = null;
-    _downCell = null;
     _dragFrom = null;
     _panDelta = Offset.zero;
     setState(() {});
@@ -829,7 +885,7 @@ class BoardViewState extends State<BoardView>
 
   void _onTapUp(TapUpDetails details, double cell) {
     final target = _cellAt(details.localPosition, cell);
-    if (target == null || !widget.inputEnabled) return;
+    if (target == null || !_inputEnabled) return;
     final picker = widget.rowPicker;
     if (picker != null) {
       picker(target ~/ width);
@@ -844,8 +900,7 @@ class BoardViewState extends State<BoardView>
   }
 
   void _onPanUpdate(DragUpdateDetails details, double cell) {
-    if (!widget.inputEnabled || widget.rowPicker != null) return;
-    _dragFrom ??= _downCell;
+    if (!_inputEnabled || widget.rowPicker != null) return;
     final from = _dragFrom;
     if (from == null) return;
     // Short swipes (~16px) commit the swap in the drag direction right
@@ -959,12 +1014,28 @@ class BoardViewState extends State<BoardView>
         child: SizedBox(
           width: cell * width,
           height: cell * height,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown: (d) => _downCell = _cellAt(d.localPosition, cell),
-            onTapUp: (d) => _onTapUp(d, cell),
-            onPanStart: (_) {},
+          // A raw Listener catches the touch-down point before the
+          // gesture arena runs: onTapDown is not delivered once the pan
+          // recogniser wins, and onPanStart reports the *recognition*
+          // point (~slop into the drag), never the contact cell.
+          child: Listener(
+            onPointerDown: (e) {
+              _dragFrom = _cellAt(e.localPosition, cell);
+              _panDelta = Offset.zero;
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (d) => _onTapUp(d, cell),
+              onPanStart: (_) {},
             onPanUpdate: (d) => _onPanUpdate(d, cell),
+            onPanEnd: (_) {
+              _dragFrom = null;
+              _panDelta = Offset.zero;
+            },
+            onPanCancel: () {
+              _dragFrom = null;
+              _panDelta = Offset.zero;
+            },
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -975,7 +1046,7 @@ class BoardViewState extends State<BoardView>
                     now: _now,
                     art: _art,
                     selected: _selected,
-                    hinted: widget.hintCells,
+                    hinted: _hintCells,
                     width: width,
                     height: height,
                   ),
@@ -985,7 +1056,8 @@ class BoardViewState extends State<BoardView>
             ),
           ),
         ),
-      );
+      ),
+    );
     },
   );
 }
