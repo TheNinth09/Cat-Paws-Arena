@@ -94,6 +94,207 @@ Future<void> showUnavailable(BuildContext context, String feature) =>
 Future<void> showPlayerProfile(BuildContext context, Player p) =>
     showAppDialog(context, 'Profilul meu', _ProfileEditor(player: p));
 
+/// Match Masters-inspired "GAME UPDATES" feed: scrollable cards with a
+/// coloured banner, version/date chip, title and changelog body. Content
+/// is an honest local changelog — no fake live-service announcements.
+Future<void> showNews(BuildContext context, {required bool english}) =>
+    showAppDialog(
+      context,
+      english ? 'NEWS' : 'NOUTĂȚI',
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final item in _newsItems(english)) ...[
+            _NewsCard(item: item),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+
+class _NewsItem {
+  const _NewsItem({
+    required this.version,
+    required this.title,
+    required this.body,
+    required this.asset,
+    required this.fallbackIcon,
+    required this.colors,
+  });
+  final String version, title, body, asset;
+  final IconData fallbackIcon;
+  final List<Color> colors;
+}
+
+List<_NewsItem> _newsItems(bool english) => [
+  _NewsItem(
+    version: '0.7.0-29',
+    title: english ? 'Smoother duels' : 'Dueluri mai fluide',
+    body: english
+        ? 'Swipes queue during animations so moves chain instantly. The house cat now plays its whole turn, specials grant bonus time (+2s each, shown on the clock), pieces fall and refill together, and the emote bubble appears once — on the board.'
+        : 'Swipe-urile se bufă în timpul animațiilor, deci mutările se înlănțuie instant. Pisica casei joacă toată tura, piesele speciale dau timp bonus (+2s fiecare, afișat pe cronometru), piesele cad și se reumplu împreună, iar bula de emote apare o singură dată — pe tablă.',
+    asset: 'icon_fight',
+    fallbackIcon: Icons.bolt_rounded,
+    colors: const [Color(0xffe8955a), Color(0xffb45f2e)],
+  ),
+  _NewsItem(
+    version: '0.7.0-28',
+    title: english ? 'New look, new sound' : 'Look nou, sunet nou',
+    body: english
+        ? 'Six dedicated full-screen backgrounds, a 3D bottom bar with a raised FIGHT button, a rebuilt profile editor with round cartoon avatars, and real battle music plus sound effects.'
+        : 'Șase fundaluri dedicate full-screen, bară de jos 3D cu butonul LUPTĂ ridicat, editor de profil refăcut cu avatare rotunde cartoon și muzică de luptă reală plus efecte sonore.',
+    asset: 'icon_music',
+    fallbackIcon: Icons.music_note_rounded,
+    colors: const [Color(0xff7a9fe0), Color(0xff3d5a9e)],
+  ),
+  _NewsItem(
+    version: '0.7.0-27',
+    title: english ? 'Shared board duels' : 'Dueluri pe tabla comună',
+    body: english
+        ? 'Duels are now played on one shared 7×7 board: 3 rounds of 15 seconds each. Royal-style special rules — tap to detonate, combine specials for bigger blasts, 2×2 makes a copter.'
+        : 'Duelurile se joacă acum pe o singură tablă comună 7×7: 3 runde câte 15 secunde. Reguli royale pentru speciale — tap pentru detonare, combină speciale pentru explozii mai mari, 2×2 face elicopter.',
+    asset: 'icon_paw_coin',
+    fallbackIcon: Icons.grid_on_rounded,
+    colors: const [Color(0xff8ec96f), Color(0xff4a8f3a)],
+  ),
+];
+
+class _NewsCard extends StatelessWidget {
+  const _NewsCard({required this.item});
+  final _NewsItem item;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: const Color(0xfffffbf0),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xffe2c493), width: 1.2),
+      boxShadow: const [
+        BoxShadow(color: Color(0x22000000), offset: Offset(0, 2), blurRadius: 4),
+      ],
+    ),
+    clipBehavior: Clip.hardEdge,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Coloured banner strip with the feature icon — MM-style header.
+        Container(
+          height: 64,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: item.colors,
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -12,
+                top: -12,
+                child: Icon(
+                  item.fallbackIcon,
+                  size: 90,
+                  color: const Color(0x22ffffff),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0x33ffffff),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0x55ffffff),
+                          width: 1.4,
+                        ),
+                      ),
+                      child: arenaImage(
+                        item.asset,
+                        fit: BoxFit.contain,
+                        fallback: Icon(
+                          item.fallbackIcon,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          shadows: [
+                            Shadow(
+                              color: Color(0x55000000),
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xfff0dfc0),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'v${item.version}',
+                    style: const TextStyle(
+                      color: Color(0xff8a5c3e),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                item.body,
+                style: const TextStyle(
+                  color: Color(0xff6b4a35),
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _ProfileEditor extends StatefulWidget {
   const _ProfileEditor({required this.player});
   final Player player;
@@ -371,7 +572,7 @@ Future<void> showSettings(BuildContext context, Player p) => showAppDialog(
           _offlineOnline(),
         const SizedBox(height: 6),
         const Text(
-          'Preferințele sunt salvate local. Muzica și livrarea notificărilor necesită conținut și servicii suplimentare.',
+          'Preferințele sunt salvate local. Notificările sunt memento-uri zilnice pentru recompensa gratuită — poți opri oricând de aici sau din setările telefonului.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Color(0xff8a6a52),

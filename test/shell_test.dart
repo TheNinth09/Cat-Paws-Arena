@@ -13,7 +13,6 @@ import 'package:cat_paws_arena/online/rooms.dart';
 import 'package:cat_paws_arena/profile.dart';
 import 'package:cat_paws_arena/profile_screen.dart';
 import 'package:cat_paws_arena/shop_screen.dart';
-import 'package:cat_paws_arena/shell/app_info.dart';
 import 'package:cat_paws_arena/shell/daily_board.dart';
 import 'package:cat_paws_arena/shell/economy.dart';
 import 'package:cat_paws_arena/shell/house_tour.dart';
@@ -171,7 +170,9 @@ void main() {
     }
     await tester.tap(find.text('News'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Versiunea $appVersion'), findsOneWidget);
+    // The Match Masters-style news feed: banner cards with versions.
+    expect(find.text('NEWS'), findsOneWidget);
+    expect(find.textContaining('0.7.0-29'), findsWidgets);
     await tester.tap(find.text('ÎNCHIDE'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

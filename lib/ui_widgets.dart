@@ -308,114 +308,73 @@ class PlayerHud extends StatelessWidget {
   /// Optional keys so a victory-flight overlay can find the badge centers.
   final Key? trophyBadgeKey, coinBadgeKey;
 
-  Widget pill(
+  /// Compact stat segment inside the avatar tile: tiny icon + value,
+  /// individually tappable (trophy → road, coins → shop).
+  Widget _stat(
     String asset,
     String value,
     VoidCallback tap, {
+    Key? key,
     bool plus = false,
-  }) => Stack(
-    clipBehavior: Clip.none,
-    children: [
-      Container(
-        height: 36,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xcc8a5c3e), Color(0xcc6e432e)],
-          ),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0x66ffe9bd), width: 1.6),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x33000000),
-              offset: Offset(0, 2),
-              blurRadius: 6,
-            ),
-          ],
-        ),
-        foregroundDecoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0x40ffffff), Color(0x00ffffff)],
-            stops: [0, 0.45],
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: tap,
-            borderRadius: BorderRadius.circular(999),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-              child: Row(
-                children: [
-                  sprite(asset, size: 20),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.center,
-                      child: Text(
-                        value,
-                        style: const TextStyle(
-                          color: cream,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                          shadows: [
-                            Shadow(
-                              color: Color(0x66000000),
-                              offset: Offset(0, 1),
-                            ),
-                          ],
+  }) => Expanded(
+    child: KeyedSubtree(
+      key: key,
+      child: InkWell(
+        onTap: tap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              sprite(asset, size: 15),
+              const SizedBox(width: 3),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      color: cream,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12.5,
+                      shadows: [
+                        Shadow(
+                          color: Color(0x66000000),
+                          offset: Offset(0, 1),
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+              if (plus)
+                Container(
+                  width: 14,
+                  height: 14,
+                  margin: const EdgeInsets.only(left: 2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xff93d94f), Color(0xff4e9c22)],
+                    ),
+                    border: Border.all(color: Colors.white, width: 1),
+                  ),
+                  child: const Icon(Icons.add, size: 9, color: Colors.white),
+                ),
+            ],
           ),
         ),
       ),
-      // "+" badge sits on the pill's corner so it never eats label width.
-      if (plus)
-        Positioned(
-          top: -4,
-          right: -4,
-          child: IgnorePointer(
-            child: Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xff93d94f), Color(0xff4e9c22)],
-                ),
-                border: Border.all(color: Colors.white, width: 1.2),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x44000000),
-                    offset: Offset(0, 1),
-                    blurRadius: 2,
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.add, size: 12, color: Colors.white),
-            ),
-          ),
-        ),
-    ],
+    ),
   );
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-    // Frameless bar: only the avatar, pills and menu button float over the
-    // room — a faint top scrim keeps them readable without a visible strip.
+    // Frameless top: one compact avatar tile (portrait, name, stats) on
+    // the left and the menu button on the right — no bar, no big pills.
     decoration: const BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topCenter,
@@ -432,15 +391,34 @@ class PlayerHud extends StatelessWidget {
             child: InkWell(
               onTap: onProfile,
               borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Column(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xcc8a5c3e), Color(0xcc5d3a2c)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0x66ffe9bd),
+                    width: 1.4,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      offset: Offset(0, 2),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 48,
-                      height: 48,
-                      padding: const EdgeInsets.all(3),
+                      width: 46,
+                      height: 46,
+                      padding: const EdgeInsets.all(2.5),
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
@@ -448,13 +426,6 @@ class PlayerHud extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [Color(0xff9a6b4a), Color(0xff5c3a26)],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Color(0x44000000),
-                            offset: Offset(0, 2),
-                            blurRadius: 5,
-                          ),
-                        ],
                       ),
                       child: Container(
                         decoration: const BoxDecoration(
@@ -465,53 +436,59 @@ class PlayerHud extends StatelessWidget {
                         child: avatar,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    SizedBox(
-                      width: 50,
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: cream,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 10.5,
-                          shadows: [
-                            Shadow(
-                              color: Color(0x66000000),
-                              offset: Offset(0, 1),
+                    const SizedBox(width: 7),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 90),
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: cream,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x66000000),
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 1),
+                        SizedBox(
+                          width: 96,
+                          child: Row(
+                            children: [
+                              _stat(
+                                'icon_trophy',
+                                '$trophies',
+                                onRoad,
+                                key: trophyBadgeKey,
+                              ),
+                              _stat(
+                                'icon_paw_coin',
+                                '$coins',
+                                onShop,
+                                key: coinBadgeKey,
+                                plus: true,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 5),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: KeyedSubtree(
-                    key: trophyBadgeKey,
-                    child: pill('icon_trophy', '$trophies', onRoad),
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: KeyedSubtree(
-                    key: coinBadgeKey,
-                    child: pill('icon_paw_coin', '$coins', onShop, plus: true),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 5),
+          const Spacer(),
           Tooltip(
             message: 'Meniu',
             child: Container(
@@ -572,11 +549,15 @@ class ArenaBottomBar extends StatelessWidget {
     required this.onSelected,
     this.english = false,
     this.shopBadge = false,
+    this.haptics = true,
   });
   final int selected;
   final ValueChanged<int> onSelected;
   final bool english;
   final bool shopBadge;
+
+  /// Whether tap haptics fire — bound to the player's Vibrații setting.
+  final bool haptics;
 
   @override
   Widget build(BuildContext context) {
@@ -674,6 +655,7 @@ class ArenaBottomBar extends StatelessWidget {
                         centre: i == 2,
                         active: selected == i,
                         badge: i == 0 && shopBadge,
+                        haptics: haptics,
                         onTap: () => onSelected(i),
                         child: tileIcon(i),
                       ),
@@ -701,9 +683,11 @@ class _NavButton extends StatefulWidget {
     this.centre = false,
     this.active = false,
     this.badge = false,
+    this.haptics = true,
   });
 
   final String label;
+  final bool haptics;
   final VoidCallback onTap;
   final Widget child;
   final bool centre, active, badge;
@@ -790,7 +774,9 @@ class _NavButtonState extends State<_NavButton> {
                       InkWell(
                         onTap: widget.onTap,
                         onHighlightChanged: (v) {
-                          if (v) HapticFeedback.selectionClick();
+                          if (v && widget.haptics) {
+                            HapticFeedback.selectionClick();
+                          }
                           if (mounted) setState(() => _pressed = v);
                         },
                         borderRadius: BorderRadius.circular(centre ? 18 : 14),

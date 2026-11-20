@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -5,13 +6,14 @@ import 'package:flutter/material.dart';
 import 'app_dialogs.dart';
 import 'cat_avatar.dart';
 import 'cats_screen.dart';
+import 'duel_audio.dart';
 import 'events_screen.dart';
+import 'game_notifications.dart';
 import 'house_tour_screen.dart';
 import 'lobby_screen.dart';
 import 'match_screen.dart';
 import 'profile.dart';
 import 'profile_screen.dart';
-import 'shell/app_info.dart';
 import 'shell/friend_room.dart';
 import 'shell/house_tour.dart';
 import 'shop_screen.dart';
@@ -25,20 +27,55 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with WidgetsBindingObserver {
   final scaffold = GlobalKey<ScaffoldState>();
   final pages = PageController(initialPage: 2);
   final _trophyBadgeKey = GlobalKey();
   final _coinBadgeKey = GlobalKey();
   int tab = 2;
+  late final DuelMusic _lobbyMusic;
   Player get p => widget.player;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Calm looping bed over the lobby, honouring the Muzică toggle.
+    _lobbyMusic = DuelMusic(
+      enabled: () => p.music,
+      asset: 'generated/audio/music_lobby.wav',
+      volume: 0.18,
+    );
+    p.addListener(_lobbyMusic.sync);
+    _lobbyMusic.sync();
+    // One shared click for UI taps, bound to the Efecte sonore toggle.
+    UiSfx.bind(() => p.sfx);
+    // Daily-reward reminder follows the Notificări toggle live.
+    p.addListener(_syncNotifications);
+    _syncNotifications();
+  }
+
+  void _syncNotifications() =>
+      unawaited(GameNotifications.sync(() => p.notifications));
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    p.removeListener(_lobbyMusic.sync);
+    p.removeListener(_syncNotifications);
+    _lobbyMusic.dispose();
+    UiSfx.bind(() => false);
     pages.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lobbyMusic.setBackgrounded(state != AppLifecycleState.resumed);
+  }
+
   void select(int index) {
+    UiSfx.tap();
     setState(() => tab = index);
     pages.animateToPage(
       index,
@@ -138,6 +175,7 @@ class _HomeState extends State<Home> {
   ];
 
   void menuAction(String id) {
+    UiSfx.tap();
     Navigator.pop(context);
     switch (id) {
       case 'daily':
@@ -147,13 +185,7 @@ class _HomeState extends State<Home> {
       case 'ranks':
         showLeaderboard(context, english: p.english, player: p);
       case 'news':
-        showAppDialog(
-          context,
-          p.english ? 'News' : 'Noutăți',
-          Text(
-            'Versiunea $appVersion • Cinci tab-uri, un singur mod de joc și identitate One Ear Games.',
-          ),
-        );
+        showNews(context, english: p.english);
       case 'support':
         unavailable(p.english ? 'Support' : 'Suport');
       case 'account':
@@ -397,6 +429,7 @@ class _HomeState extends State<Home> {
                       onSelected: select,
                       english: p.english,
                       shopBadge: p.dailyReady,
+                      haptics: p.haptics,
                     ),
                   ],
                 ),

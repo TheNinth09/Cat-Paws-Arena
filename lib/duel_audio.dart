@@ -175,12 +175,16 @@ void _platformHaptics(HapticKind kind) {
   unawaited(f.catchError((Object _) {}));
 }
 
-/// Looping battle-music bed (`generated/audio/music_battle.wav`,
-/// synthesized in-house). One dedicated [AudioPlayer] with game audio
-/// focus; honours the player's Music toggle live and pauses when the
-/// app is backgrounded.
+/// Looping music bed (`generated/audio/music_*.wav`, synthesized
+/// in-house). One dedicated [AudioPlayer] with game audio focus;
+/// honours the player's Music toggle live and pauses when the app is
+/// backgrounded. Used for the battle loop and the calmer lobby bed.
 class DuelMusic {
-  DuelMusic({required this.enabled}) : _player = AudioPlayer() {
+  DuelMusic({
+    required this.enabled,
+    this.asset = 'generated/audio/music_battle.wav',
+    this.volume = 0.32,
+  }) : _player = AudioPlayer() {
     unawaited(
       _player.setAudioContext(
         AudioContext(
@@ -198,6 +202,10 @@ class DuelMusic {
   /// Whether the player's Music setting is on — read on every [sync].
   final bool Function() enabled;
 
+  /// Loop asset under `assets/` and its base volume.
+  final String asset;
+  final double volume;
+
   final AudioPlayer _player;
   bool _started = false;
   bool _backgrounded = false;
@@ -210,8 +218,8 @@ class DuelMusic {
       _started = true;
       unawaited(
         _player.play(
-          AssetSource('generated/audio/music_battle.wav'),
-          volume: 0.32,
+          AssetSource(asset),
+          volume: volume,
         ).catchError((Object _) {}),
       );
     } else if (!want && _started) {
@@ -238,8 +246,9 @@ class _AudioPlayersOutput implements SfxOutput {
   _AudioPlayersOutput() {
     for (var i = 0; i < 4; i++) {
       final p = AudioPlayer();
-      // Transient focus: short cues duck the music bed instead of
-      // pausing it or fighting for the stream.
+      // Low-latency mode for short cues; transient focus ducks the music
+      // bed instead of pausing it or fighting for the stream.
+      unawaited(p.setPlayerMode(PlayerMode.lowLatency));
       unawaited(
         p.setAudioContext(
           AudioContext(
@@ -265,6 +274,8 @@ class _AudioPlayersOutput implements SfxOutput {
     unawaited(
       p
           .setPlaybackRate(rate)
+          // The rate is a nicety — if the device rejects it, still play.
+          .catchError((Object _) {})
           .then((_) => p.play(AssetSource(asset), volume: volume))
           .catchError((Object _) {}),
     );
@@ -276,5 +287,34 @@ class _AudioPlayersOutput implements SfxOutput {
       await p.dispose();
     }
     _players.clear();
+  }
+}
+
+/// Lightweight UI sound: one shared click for menu/nav taps, bound once
+/// to the player's Efecte sonore setting. No-op until [bind] is called —
+/// the home shell binds it at start-up, so tests never touch the audio
+/// stack.
+class UiSfx {
+  UiSfx._();
+
+  static bool Function() enabled = () => false;
+  static AudioPlayer? _player;
+
+  /// Bind the player's SFX toggle; called once by the shell.
+  static void bind(bool Function() isEnabled) => enabled = isEnabled;
+
+  /// A short, quiet click — the same synthesized tick used on the board.
+  static void tap() {
+    if (!enabled()) return;
+    final p = _player ??= AudioPlayer()
+      ..setPlayerMode(PlayerMode.lowLatency);
+    unawaited(
+      p
+          .play(
+            AssetSource('generated/audio/sfx_tick.wav'),
+            volume: 0.3,
+          )
+          .catchError((Object _) {}),
+    );
   }
 }
