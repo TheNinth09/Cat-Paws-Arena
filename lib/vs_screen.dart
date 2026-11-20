@@ -6,10 +6,10 @@ import 'cat_avatar.dart';
 import 'profile.dart';
 import 'ui_widgets.dart';
 
-/// Full-body art for a cat on the VS/search scene; falls back to the
-/// procedural avatar when the cat has no drawn art.
+/// Full-body cat on the VS/search and result scenes: real sprite with
+/// the dimensional treatment (rim light, ground shadow, breathing sway).
 Widget duelCatArt(Player p, {double size = 118}) {
-  return catPortrait(p.cat, size: size);
+  return realCatArt(p, height: size);
 }
 
 /// The single matchmaking/search page — shown by the [MatchScreen]

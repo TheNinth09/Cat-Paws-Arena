@@ -1651,10 +1651,11 @@ String _catBodyAsset(String cat) => switch (cat.toLowerCase()) {
 };
 
 /// Real sprite art for a cat — this is what every screen shows now that
-/// the hand-drawn cat painters are retired. The custom cat still answers
-/// the editor: its sprite is tinted by the chosen fur colour and the
-/// equipped accessory is drawn on the head. [portrait] picks the round
-/// `avatar_*` bust; otherwise the seated full-body sprite is used.
+/// the hand-drawn cat painters are retired. Full-body cats get the
+/// Brawl-Stars-style dimensional treatment (rim light, ground shadow,
+/// top sheen, breathing sway); [portrait] picks the round `avatar_*`
+/// bust which is already dimensional art. The custom cat still answers
+/// the editor: tinted by the chosen fur and wearing the accessory.
 Widget realCatSprite(
   String cat, {
   double height = 210,
@@ -1677,6 +1678,14 @@ Widget realCatSprite(
       child: img,
     );
   }
+  if (!portrait) {
+    return _DepthCat(
+      asset: asset,
+      tinted: img,
+      accessory: accessory,
+      height: height,
+    );
+  }
   return SizedBox(
     width: height,
     height: height,
@@ -1688,8 +1697,8 @@ Widget realCatSprite(
           Align(
             alignment: Alignment.topCenter,
             child: FractionallySizedBox(
-              widthFactor: portrait ? 0.64 : 0.52,
-              heightFactor: portrait ? 0.6 : 0.48,
+              widthFactor: 0.64,
+              heightFactor: 0.6,
               child: FittedBox(
                 fit: BoxFit.contain,
                 child: catAccessoryOverlay(accessory, size: 120),
@@ -1699,6 +1708,136 @@ Widget realCatSprite(
       ],
     ),
   );
+}
+
+/// Pseudo-3D cat: soft ground shadow, warm rim light leaking from the
+/// top-left silhouette, a top sheen and a slow breathing sway — the
+/// cheap tricks that make a 2D sprite read as a dimensional character.
+class _DepthCat extends StatefulWidget {
+  const _DepthCat({
+    required this.asset,
+    required this.tinted,
+    required this.accessory,
+    required this.height,
+  });
+
+  final String asset;
+  final Widget tinted;
+  final String accessory;
+  final double height;
+
+  @override
+  State<_DepthCat> createState() => _DepthCatState();
+}
+
+class _DepthCatState extends State<_DepthCat>
+    with SingleTickerProviderStateMixin {
+  // One-shot spawn bounce (plays once, then rests): the cat pops in
+  // like a brawler landing on stage, so screens stay settle-able.
+  late final AnimationController _intro = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 800),
+  )..forward();
+
+  @override
+  void dispose() {
+    _intro.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h = widget.height;
+    return SizedBox(
+      width: h,
+      height: h,
+      child: Stack(
+        children: [
+          // Contact shadow — grounds the cat like a figure on a stage.
+          Positioned(
+            left: h * 0.14,
+            right: h * 0.14,
+            bottom: h * 0.018,
+            height: h * 0.075,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0x66000000), Color(0x00000000)],
+                ),
+              ),
+            ),
+          ),
+          // Rim light: the same sprite tinted warm and nudged up-left so
+          // a bright edge leaks from behind the silhouette.
+          Positioned.fill(
+            child: Transform.translate(
+              offset: Offset(-h * 0.013, -h * 0.013),
+              child: Opacity(
+                opacity: 0.55,
+                child: ColorFiltered(
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xffffe9b0),
+                    BlendMode.srcIn,
+                  ),
+                  child: arenaImage(widget.asset, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+          ),
+          // Main sprite + top sheen + spawn bounce.
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _intro,
+              builder: (context, _) {
+                final t = Curves.easeOutBack.transform(_intro.value);
+                return Transform.scale(
+                  scale: 0.82 + 0.18 * t,
+                  alignment: Alignment.bottomCenter,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      widget.tinted,
+                      // Sheen on the top ~40%: a screen-blended copy,
+                      // clipped so only head and shoulders catch light.
+                      Align(
+                        alignment: Alignment.topCenter,
+                        heightFactor: 0.42,
+                        child: ClipRect(
+                          child: ColorFiltered(
+                            colorFilter: const ColorFilter.mode(
+                              Color(0x3dffffff),
+                              BlendMode.screen,
+                            ),
+                            child: arenaImage(
+                              widget.asset,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          if (widget.accessory.isNotEmpty)
+            Align(
+              alignment: Alignment.topCenter,
+              child: FractionallySizedBox(
+                widthFactor: 0.52,
+                heightFactor: 0.48,
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: catAccessoryOverlay(widget.accessory, size: 120),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// The player's equipped cat as real sprite art. Preset cats keep their

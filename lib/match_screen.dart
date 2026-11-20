@@ -566,7 +566,7 @@ class _MatchScreenState extends State<MatchScreen>
     // The 'ANTRENAMENT OFFLINE' mode pill above already labels the bot;
     // the card and the in-match HUD keep the name clean (spec §5).
     opponentBadge: match.isOnline ? 'PRIETEN' : '',
-    opponentPortrait: Center(child: _opponentAvatar(84)),
+    opponentPortrait: Center(child: _opponentAvatar(84, portrait: false)),
     opponentSubtitle: match.isOnline
         ? 'Prieten'
         : match.opponent == null
@@ -588,12 +588,16 @@ class _MatchScreenState extends State<MatchScreen>
 
   /// Opponent avatar: the friend's cat loadout for online duels, the
   /// resident house cat's look for House Tour battles, otherwise the
-  /// generic bot head.
-  Widget _opponentAvatar(double size) {
+  /// generic bot head. `portrait` picks the round HUD medallion; the VS
+  /// scene shows the full-body sprite with the 3D treatment.
+  Widget _opponentAvatar(double size, {bool portrait = true}) {
     final online = widget.online;
-    return online != null
-        ? catPortrait(online.opponent.cat, size: size)
-        : catPortrait('${widget.opponent ?? ''}', size: size);
+    final cat = online != null
+        ? online.opponent.cat
+        : '${widget.opponent ?? ''}';
+    return portrait
+        ? catPortrait(cat, size: size)
+        : realCatSprite(cat, height: size);
   }
 
   /// House-cat difficulty, pickable while the VS phase searches.
