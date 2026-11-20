@@ -122,10 +122,20 @@ EngineResult<MoveResult> _applySwap(
   }
   final a = move.firstCell.row * w + move.firstCell.col;
   final b = move.secondCell.row * w + move.secondCell.col;
-  if (a == b) return _invalidMove('swap cells must differ');
 
   final work = _Work.fromState(state);
   final board = work.boards[slot.index];
+  if (a == b) {
+    // Tap detonation: tapping a special piece fires it in place.
+    if (!isSpecialCode(board.cells[a])) {
+      return _invalidMove('swap cells must differ');
+    }
+    work.turnMoves++;
+    _fireSwapSpecials(work, slot, a, a);
+    _resolveMatches(work, slot);
+    _ensureLegalMove(work, slot);
+    return _result(work, hashBefore);
+  }
   if (!board.adjacent(a, b)) return _invalidMove('swap cells not adjacent');
   if (!swappablePair(board, a, b)) {
     return _invalidMove('swap involves a blocked or locked cell');
@@ -133,12 +143,19 @@ EngineResult<MoveResult> _applySwap(
 
   final ca = board.cells[a];
   final cb = board.cells[b];
-  final involvesSpecial = isSpecialCode(ca) || isSpecialCode(cb);
+  final bothSpecial = isSpecialCode(ca) && isSpecialCode(cb);
+  // Royal Kingdom rules: a special may swap with a normal piece only when
+  // the exchange forms a 3+ match — the special moves but stays inert.
+  // Exception: the rainbow paw clears the swapped piece's colour.
+  final rainbowOnColour =
+      (basePieceCode(ca) == kRainbow && isColourCode(cb)) ||
+      (basePieceCode(cb) == kRainbow && isColourCode(ca));
+  final fires = bothSpecial || rainbowOnColour;
 
   // Simulate the swap to test productivity.
   board.cells[a] = cb;
   board.cells[b] = ca;
-  final productive = involvesSpecial || scanMatches(board).isNotEmpty;
+  final productive = fires || scanMatches(board).isNotEmpty;
   if (!productive) {
     board.cells[a] = ca;
     board.cells[b] = cb;
@@ -173,7 +190,11 @@ EngineResult<MoveResult> _applySwap(
   );
   work.turnMoves++;
 
-  _fireSwapSpecials(work, slot, first, second);
+  if (bothSpecial) {
+    _fireCombo(work, slot, first, second);
+  } else if (rainbowOnColour) {
+    _fireSwapSpecials(work, slot, first, second);
+  }
   _resolveMatches(work, slot);
   _ensureLegalMove(work, slot);
 
@@ -208,7 +229,7 @@ EngineResult<MoveResult> _applyPower(
   final rng = work.rngFor(slot);
   switch (move.power) {
     case PowerKind.zoomies:
-      _powerZoomies(work, slot);
+      _powerZoomies(work, slot, rng);
     case PowerKind.shadowPounce:
       _powerShadowPounce(work, slot);
     case PowerKind.laserChase:
@@ -338,20 +359,26 @@ class _Work {
     required this.outcome,
   });
 
-  factory _Work.fromState(MatchState s) => _Work._(
-    seed: s.seed,
-    config: s.config,
-    turn: s.turn,
-    activePlayer: s.activePlayer,
-    turnsRemaining: List<int>.of(s.turnsRemaining),
-    turnMoves: s.turnMoves,
-    scores: List<int>.of(s.scores),
-    boards: [for (final b in s.boards) MutableBoard.fromState(b)],
-    pending: [for (final q in s.pendingObstacles) List<ObstacleKind>.of(q)],
-    powerCharge: List<int>.of(s.powerCharge),
-    rngState: List<int>.of(s.rngState),
-    outcome: s.outcome,
-  );
+  factory _Work.fromState(MatchState s) {
+    // Shared board: both players act on the same 7×7 board, alternating
+    // turns. `newMatch` already seeds identical boards for both slots, so
+    // sharing one mutable instance keeps replays deterministic.
+    final shared = MutableBoard.fromState(s.boards.first);
+    return _Work._(
+      seed: s.seed,
+      config: s.config,
+      turn: s.turn,
+      activePlayer: s.activePlayer,
+      turnsRemaining: List<int>.of(s.turnsRemaining),
+      turnMoves: s.turnMoves,
+      scores: List<int>.of(s.scores),
+      boards: [shared, shared],
+      pending: [for (final q in s.pendingObstacles) List<ObstacleKind>.of(q)],
+      powerCharge: List<int>.of(s.powerCharge),
+      rngState: List<int>.of(s.rngState),
+      outcome: s.outcome,
+    );
+  }
 
   GameRandom rngFor(PlayerSlot p) => GameRandom.fromState(rngState[p.index]);
 
@@ -431,7 +458,9 @@ Set<int> _removePieceCells(
   final h = board.height;
   final broken = <int>{};
   for (final i in cells) {
-    if (isYarnedCode(board.cells[i])) broken.add(i);
+    if (isYarnedCode(board.cells[i]) || isBoxCode(board.cells[i])) {
+      broken.add(i);
+    }
     board.cells[i] = kCellEmpty;
   }
   if (breakBoxes) {
@@ -675,6 +704,188 @@ void _fireSwapSpecials(_Work work, PlayerSlot slot, int first, int second) {
     player: slot,
     events: work.events,
   );
+  // Sabotage: firing a special sends 1–2 boxes to the opponent.
+  _earnObstacles(work, slot.other, 1 + rng.nextInt(2));
+  work.storeRng(slot, rng);
+}
+
+/// Fires the combined effect of two adjacent special pieces swapped onto
+/// each other (Royal Kingdom pair rules). [first] and [second] are the
+/// post-swap cell indices; both specials are consumed by the blast.
+void _fireCombo(_Work work, PlayerSlot slot, int first, int second) {
+  final board = work.boards[slot.index];
+  final w = board.width;
+  final h = board.height;
+  final scratch = List<int>.of(board.cells);
+  final rng = work.rngFor(slot);
+  final kindA = _specialKindOf(basePieceCode(scratch[first]));
+  final kindB = _specialKindOf(basePieceCode(scratch[second]));
+
+  /// Copter priority: a box if any exist, else a random colour piece.
+  int copterTarget(Set<int> exclude) {
+    final boxes = <int>[
+      for (var i = 0; i < scratch.length; i++)
+        if (isBoxCode(scratch[i]) && !exclude.contains(i)) i,
+    ];
+    if (boxes.isNotEmpty) return boxes[rng.nextInt(boxes.length)];
+    final colours = <int>[
+      for (var i = 0; i < scratch.length; i++)
+        if (isColourCode(scratch[i]) && !exclude.contains(i)) i,
+    ];
+    if (colours.isEmpty) return -1;
+    return colours[rng.nextInt(colours.length)];
+  }
+
+  final cells = <int>{first, second};
+  final kinds = {kindA, kindB};
+
+  void crossAt(int index) {
+    final r = index ~/ w, c = index % w;
+    for (var cc = 0; cc < w; cc++) {
+      final j = r * w + cc;
+      if (isPieceCode(scratch[j])) cells.add(j);
+    }
+    for (var rr = 0; rr < h; rr++) {
+      final j = rr * w + c;
+      if (isPieceCode(scratch[j])) cells.add(j);
+    }
+  }
+
+  if (kindA == SpecialKind.rainbow && kindB == SpecialKind.rainbow) {
+    // Rainbow + rainbow clears the whole board.
+    for (var i = 0; i < scratch.length; i++) {
+      if (isPieceCode(scratch[i])) cells.add(i);
+    }
+  } else if (kindA == SpecialKind.rainbow || kindB == SpecialKind.rainbow) {
+    // Rainbow + special: convert the most frequent colour into that
+    // special kind and detonate the chain.
+    final other = kindA == SpecialKind.rainbow ? kindB : kindA;
+    final counts = List<int>.filled(kPieceColours, 0);
+    for (final c in scratch) {
+      if (isColourCode(c)) counts[basePieceCode(c)]++;
+    }
+    var target = 0;
+    for (var i = 1; i < counts.length; i++) {
+      if (counts[i] > counts[target]) target = i;
+    }
+    final converted = <int>[
+      for (var i = 0; i < scratch.length; i++)
+        if (isColourCode(scratch[i]) && basePieceCode(scratch[i]) == target)
+          i,
+    ];
+    cells.addAll(converted);
+    for (final j in converted) {
+      final base = switch (other) {
+        SpecialKind.line => j.isEven ? kLineRow : kLineColumn,
+        SpecialKind.bomb => kBomb,
+        SpecialKind.copter => kCopter,
+        _ => kLineRow,
+      };
+      cells.addAll(
+        _specialEffectCells(
+          work: work,
+          slot: slot,
+          index: j,
+          base: base,
+          scratch: scratch,
+          otherSwap: j,
+          rng: rng,
+        ),
+      );
+    }
+  } else if (kinds.length == 1) {
+    switch (kindA) {
+      case SpecialKind.line:
+        // Rocket + rocket clears the whole row and column in a cross.
+        crossAt(second);
+      case SpecialKind.bomb:
+        // Bomb + bomb: 5×5 explosion centred on the second cell.
+        final r = second ~/ w, c = second % w;
+        for (var rr = r - 2; rr <= r + 2; rr++) {
+          for (var cc = c - 2; cc <= c + 2; cc++) {
+            if (rr < 0 || rr >= h || cc < 0 || cc >= w) continue;
+            final j = rr * w + cc;
+            if (isPieceCode(scratch[j])) cells.add(j);
+          }
+        }
+      case SpecialKind.copter:
+        // Copter + copter launches three copters at three targets.
+        final taken = <int>{};
+        for (var k = 0; k < 3; k++) {
+          final t = copterTarget(taken);
+          if (t < 0) break;
+          taken.add(t);
+          cells.add(t);
+        }
+      case SpecialKind.rainbow:
+        break;
+    }
+  } else if (kinds.contains(SpecialKind.copter)) {
+    // Copter + rocket/bomb: the copter carries the special to a priority
+    // target and detonates it there.
+    final carry = kindA == SpecialKind.copter ? kindB : kindA;
+    final t = copterTarget(const {});
+    if (t >= 0) {
+      if (carry == SpecialKind.bomb) {
+        final tr = t ~/ w, tc = t % w;
+        for (var rr = tr - 1; rr <= tr + 1; rr++) {
+          for (var cc = tc - 1; cc <= tc + 1; cc++) {
+            if (rr < 0 || rr >= h || cc < 0 || cc >= w) continue;
+            final j = rr * w + cc;
+            if (isPieceCode(scratch[j]) || isBoxCode(scratch[j])) {
+              cells.add(j);
+            }
+          }
+        }
+      } else {
+        crossAt(t);
+        if (isBoxCode(scratch[t])) cells.add(t);
+      }
+    }
+  } else {
+    // Rocket + bomb: three rows and three columns centred on the second
+    // cell.
+    final r = second ~/ w, c = second % w;
+    for (var rr = r - 1; rr <= r + 1; rr++) {
+      if (rr < 0 || rr >= h) continue;
+      for (var cc = 0; cc < w; cc++) {
+        final j = rr * w + cc;
+        if (isPieceCode(scratch[j])) cells.add(j);
+      }
+    }
+    for (var cc = c - 1; cc <= c + 1; cc++) {
+      if (cc < 0 || cc >= w) continue;
+      for (var rr = 0; rr < h; rr++) {
+        final j = rr * w + cc;
+        if (isPieceCode(scratch[j])) cells.add(j);
+      }
+    }
+  }
+
+  // Commit: write the scratch back, then score, charge, gravity, sabotage.
+  for (final j in cells) {
+    scratch[j] = kCellEmpty;
+  }
+  board.cells.setAll(0, scratch);
+  final sorted = cells.toList()..sort();
+  work.events.add(
+    SpecialFired(
+      player: slot,
+      kind: kindA,
+      cells: _posList(w, sorted),
+      points: sorted.length * kPointsPerPiece,
+    ),
+  );
+  _addScore(work, slot, sorted.length);
+  _addCharge(work, slot, sorted.length);
+  _removePieceCells(work, slot, cells);
+  applyGravityAndRefill(
+    board: board,
+    colourCount: work.config.colourCount,
+    player: slot,
+    events: work.events,
+  );
+  _earnObstacles(work, slot.other, 1 + rng.nextInt(2));
   work.storeRng(slot, rng);
 }
 
@@ -845,64 +1056,99 @@ void _earnObstacles(_Work work, PlayerSlot receiver, int count) {
   }
 }
 
-/// Clears every piece in the fullest row of [slot]'s board (ties: lowest
-/// row), then sends [kPowerObstacleCount] boxes to the opponent.
-void _powerZoomies(_Work work, PlayerSlot slot) {
+/// Midnight Zoomies: transforms two random pieces into special pieces and
+/// breaks two boxes, then sends [kPowerObstacleCount] boxes to the
+/// opponent.
+void _powerZoomies(_Work work, PlayerSlot slot, GameRandom rng) {
   final board = work.boards[slot.index];
   final w = board.width;
-  final h = board.height;
 
-  var bestRow = 0;
-  var bestCount = -1;
-  for (var r = 0; r < h; r++) {
-    var count = 0;
-    for (var c = 0; c < w; c++) {
-      if (isPieceCode(board.cells[r * w + c])) count++;
-    }
-    if (count > bestCount) {
-      bestCount = count;
-      bestRow = r;
-    }
+  const specialBases = [kLineRow, kLineColumn, kBomb, kCopter];
+  final colours = <int>[
+    for (var i = 0; i < board.cells.length; i++)
+      if (isColourCode(board.cells[i])) i,
+  ];
+  final converted = <int>[];
+  for (var k = 0; k < 2 && colours.isNotEmpty; k++) {
+    final j = colours.removeAt(rng.nextInt(colours.length));
+    board.cells[j] = specialBases[rng.nextInt(specialBases.length)];
+    converted.add(j);
+    work.events.add(
+      SpecialCreated(
+        player: slot,
+        kind: _specialKindOf(basePieceCode(board.cells[j])),
+        orientation: switch (basePieceCode(board.cells[j])) {
+          kLineRow => LineOrientation.row,
+          kLineColumn => LineOrientation.column,
+          _ => null,
+        },
+        cell: _posOf(w, j),
+      ),
+    );
   }
 
-  final cells = <int>{};
-  for (var c = 0; c < w; c++) {
-    final i = bestRow * w + c;
-    if (isPieceCode(board.cells[i])) cells.add(i);
+  final boxes = <int>[
+    for (var i = 0; i < board.cells.length; i++)
+      if (isBoxCode(board.cells[i])) i,
+  ];
+  final broken = <int>[];
+  for (var k = 0; k < 2 && boxes.isNotEmpty; k++) {
+    broken.add(boxes.removeAt(rng.nextInt(boxes.length)));
   }
-  final sorted = cells.toList()..sort();
+  for (final j in broken) {
+    board.cells[j] = kCellEmpty;
+  }
+  if (broken.isNotEmpty) {
+    work.events.add(
+      ObstacleBroken(player: slot, cells: _posList(w, broken)),
+    );
+  }
+
+  final shown = <int>[...converted, ...broken]..sort();
   work.events.add(
     PowerFired(
       player: slot,
       power: PowerKind.zoomies,
-      cells: _posList(w, sorted),
-      points: sorted.length * kPointsPerPiece,
+      cells: _posList(w, shown),
+      points: broken.length * kPointsPerPiece,
     ),
   );
-  _addScore(work, slot, sorted.length);
-  _addCharge(work, slot, sorted.length);
-  _removePieceCells(work, slot, cells);
+  _addScore(work, slot, broken.length);
+  _addCharge(work, slot, converted.length + broken.length);
   _earnObstacles(work, slot.other, kPowerObstacleCount);
 }
 
-/// Clears every piece of the most common colour on [slot]'s board.
-/// Ties resolve to the lowest colour code. Then sends
-/// [kPowerObstacleCount] boxes to the opponent.
+/// Shadow Pounce: clears every piece and box inside the densest 3×3 area
+/// (deterministic pick — the fullest window, ties to the lowest index),
+/// then sends [kPowerObstacleCount] boxes to the opponent.
 void _powerShadowPounce(_Work work, PlayerSlot slot) {
   final board = work.boards[slot.index];
   final w = board.width;
-  final counts = List<int>.filled(kPieceColours, 0);
-  for (final code in board.cells) {
-    if (isColourCode(code)) counts[basePieceCode(code)]++;
-  }
-  var target = 0;
-  for (var i = 1; i < counts.length; i++) {
-    if (counts[i] > counts[target]) target = i;
+  final h = board.height;
+
+  var best = -1;
+  var bestR = 0, bestC = 0;
+  for (var r = 0; r + 2 < h; r++) {
+    for (var c = 0; c + 2 < w; c++) {
+      var n = 0;
+      for (var rr = r; rr < r + 3; rr++) {
+        for (var cc = c; cc < c + 3; cc++) {
+          if (board.cells[rr * w + cc] != kCellEmpty) n++;
+        }
+      }
+      if (n > best) {
+        best = n;
+        bestR = r;
+        bestC = c;
+      }
+    }
   }
   final cells = <int>{};
-  for (var i = 0; i < board.cells.length; i++) {
-    final code = board.cells[i];
-    if (isColourCode(code) && basePieceCode(code) == target) cells.add(i);
+  for (var rr = bestR; rr < bestR + 3; rr++) {
+    for (var cc = bestC; cc < bestC + 3; cc++) {
+      final j = rr * w + cc;
+      if (board.cells[j] != kCellEmpty) cells.add(j);
+    }
   }
   final sorted = cells.toList()..sort();
   work.events.add(
@@ -919,26 +1165,28 @@ void _powerShadowPounce(_Work work, PlayerSlot slot) {
   _earnObstacles(work, slot.other, kPowerObstacleCount);
 }
 
-/// Breaks [kLaserBreakCount] random pieces on [slot]'s board, then sends
-/// [kPowerObstacleCount] boxes to the opponent.
+/// Laser Chase: clears one full row and one full column in a cross, then
+/// sends [kPowerObstacleCount] boxes to the opponent.
 void _powerLaserChase(_Work work, PlayerSlot slot, GameRandom rng) {
   final board = work.boards[slot.index];
   final w = board.width;
-  final eligible = <int>[
-    for (var i = 0; i < board.cells.length; i++)
-      if (isPieceCode(board.cells[i])) i,
-  ];
-  final take =
-      eligible.length < kLaserBreakCount ? eligible.length : kLaserBreakCount;
-  final broken = <int>{};
-  for (var k = 0; k < take; k++) {
-    final j = k + rng.nextInt(eligible.length - k);
-    final t = eligible[k];
-    eligible[k] = eligible[j];
-    eligible[j] = t;
-    broken.add(eligible[k]);
+  final h = board.height;
+  final row = rng.nextInt(h);
+  final col = rng.nextInt(w);
+  final cells = <int>{};
+  for (var c = 0; c < w; c++) {
+    final j = row * w + c;
+    if (isPieceCode(board.cells[j]) || isBoxCode(board.cells[j])) {
+      cells.add(j);
+    }
   }
-  final sorted = broken.toList()..sort();
+  for (var r = 0; r < h; r++) {
+    final j = r * w + col;
+    if (isPieceCode(board.cells[j]) || isBoxCode(board.cells[j])) {
+      cells.add(j);
+    }
+  }
+  final sorted = cells.toList()..sort();
   work.events.add(
     PowerFired(
       player: slot,
@@ -949,7 +1197,7 @@ void _powerLaserChase(_Work work, PlayerSlot slot, GameRandom rng) {
   );
   _addScore(work, slot, sorted.length);
   _addCharge(work, slot, sorted.length);
-  _removePieceCells(work, slot, broken);
+  _removePieceCells(work, slot, cells);
   _earnObstacles(work, slot.other, kPowerObstacleCount);
 }
 

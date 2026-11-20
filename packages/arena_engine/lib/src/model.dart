@@ -51,22 +51,22 @@ enum PowerRuleset {
 /// three are free and of equal strength — none is sold.
 ///
 /// Exact effects (timed-turn contract, engineVersion 2): every power
-/// clears a burst of pieces on the caster's own board AND queues
-/// [kPowerObstacleCount] cardboard boxes for the opponent (they land on
-/// the opponent's board at the start of their next turn). The burst
-/// differs per power but the strength is identical:
-/// * [zoomies] — every piece in the fullest row (ties: lowest row).
-/// * [shadowPounce] — every piece of the most common colour (ties: lowest
-///   colour code).
-/// * [laserChase] — [kLaserBreakCount] randomly chosen pieces.
+/// acts on the shared board AND queues [kPowerObstacleCount] cardboard
+/// boxes for the opponent (they land on the opponent's board at the
+/// start of their next turn). The burst differs per power:
+/// * [zoomies] — transforms two random pieces into special pieces and
+///   breaks two boxes.
+/// * [shadowPounce] — clears the densest 3x3 area, pieces and boxes
+///   alike (ties: lowest index).
+/// * [laserChase] — clears one full row and one full column in a cross.
 enum PowerKind {
-  /// Clears the fullest row and sends boxes to the opponent.
+  /// Turns two pieces into specials, breaks two boxes.
   zoomies,
 
-  /// Clears the most common colour on your own board.
+  /// Clears a 3x3 area on the board.
   shadowPounce,
 
-  /// Breaks a fixed number of random pieces.
+  /// Clears a full row-plus-column cross.
   laserChase,
 }
 
@@ -164,8 +164,8 @@ class MatchConfig {
     this.boardWidth = 7,
     this.boardHeight = 7,
     this.colourCount = 5,
-    this.turnsPerPlayer = 5,
-    this.turnSeconds = 30,
+    this.turnsPerPlayer = 3,
+    this.turnSeconds = 15,
     this.rainbowRule = RainbowRule.clearOneColour,
     this.engineVersion = kEngineVersion,
     this.powerConfiguration = PowerRuleset.threeFreeEqual,
@@ -184,8 +184,8 @@ class MatchConfig {
     : boardWidth = 7,
       boardHeight = 7,
       colourCount = 5,
-      turnsPerPlayer = 5,
-      turnSeconds = 30,
+      turnsPerPlayer = 3,
+      turnSeconds = 15,
       rainbowRule = RainbowRule.clearOneColour,
       engineVersion = kEngineVersion,
       powerConfiguration = PowerRuleset.threeFreeEqual,

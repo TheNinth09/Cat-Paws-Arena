@@ -12,6 +12,18 @@ const accessoryNames = [
 ];
 const powers = ['vfx_zoomies', 'vfx_shadow_pounce', 'vfx_laser_chase'];
 const powerNames = ['The Midnight Zoomies', 'Shadow Pounce', 'Laser Chase'];
+
+/// `assets/images/` button icons and board VFX sprites per power.
+const powerIcons = [
+  'power_zoomies',
+  'power_shadow_pounce',
+  'power_laser_chase',
+];
+const powerEffects = [
+  'effect_zoomies',
+  'effect_shadow_pounce',
+  'effect_laser_chase',
+];
 const modeNames = ['1v1 Arena', 'Speed Rush', 'Survival', 'High-Stakes Ranked'];
 const modeThresholds = [0, 300, 800, 1500];
 const coinBundles = [

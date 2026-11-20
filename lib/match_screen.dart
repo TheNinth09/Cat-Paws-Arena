@@ -170,7 +170,7 @@ class _MatchScreenState extends State<MatchScreen>
     _audio = DuelAudio(enabled: () => p.sfx, hapticsEnabled: () => p.haptics);
     _momentFx = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1300),
+      duration: const Duration(milliseconds: 600),
     );
     fx = AnimationController(
       vsync: this,
@@ -434,26 +434,9 @@ class _MatchScreenState extends State<MatchScreen>
   /// generic bot head.
   Widget _opponentAvatar(double size) {
     final online = widget.online;
-    if (online != null) {
-      // Synthetic player carrying only the opponent's visual fields; it is
-      // never saved, exactly like houseCatPlayer for house cats.
-      final spec = Player(p.prefs)
-        ..name = online.opponent.name
-        ..cat = online.opponent.cat
-        ..trophies = online.opponent.trophies
-        ..coins = 0
-        ..fur = online.opponent.fur
-        ..eyes = online.opponent.eyes
-        ..ears = online.opponent.ears
-        ..pattern = online.opponent.pattern
-        ..accessory = online.opponent.accessory
-        ..power = online.opponent.power
-        ..photo = null;
-      return CatAvatar(spec, size: size, allowPhoto: false);
-    }
-    return widget.opponent == null
-        ? _BotHead(size: size)
-        : CatAvatar(houseCatPlayer(p.prefs, widget.opponent!), size: size);
+    return online != null
+        ? catPortrait(online.opponent.cat, size: size)
+        : catPortrait('${widget.opponent ?? ''}', size: size);
   }
 
   /// House-cat difficulty, pickable while the VS phase searches.
@@ -484,7 +467,7 @@ class _MatchScreenState extends State<MatchScreen>
         children: [
           Expanded(
             child: _PortraitPlate(
-              avatar: CatAvatar(p, size: 50),
+              avatar: catPortrait(p.cat, size: 50),
               name: p.name,
               score: match.playerScore,
               charge: match.playerCharge,
@@ -506,7 +489,8 @@ class _MatchScreenState extends State<MatchScreen>
               onTap: _opponentDetails,
               child: _PortraitPlate(
                 avatar: _opponentAvatar(50),
-                name: match.isOnline ? match.botName : '${match.botName} · BOT',
+                name: match.botName,
+                tag: match.isOnline ? 'PRIETEN' : 'BOT',
                 score: match.botScore,
                 charge: match.botCharge,
                 ringColor: const Color(0xff9d6bff),
@@ -643,7 +627,7 @@ class _MatchScreenState extends State<MatchScreen>
   Widget _tutorialOverlay() {
     if (!match.tutorialActive) return const SizedBox.shrink();
     final texts = [
-      'Prima ta luptă! Ai 30 de secunde pe rând — tura se termină singură.',
+      'Prima ta luptă! Ai 15 secunde pe rând — tura se termină singură.',
       'Schimbă două piese alăturate de aceeași culoare. Urmează indicatorul auriu!',
       'Când bara de putere e plină, atinge-o ca s-o declanșezi!',
     ];
@@ -799,12 +783,6 @@ class _MatchScreenState extends State<MatchScreen>
                       top: 6,
                       child: IgnorePointer(child: _EmoteBubble(emote)),
                     ),
-                  // Small cat button, bottom-right corner: preset emotes.
-                  Positioned(
-                    right: 6,
-                    bottom: 6,
-                    child: _EmoteCatButton(onTap: emotes),
-                  ),
                   _tutorialOverlay(),
                 ],
               ),
@@ -815,10 +793,9 @@ class _MatchScreenState extends State<MatchScreen>
     );
   }
 
-  /// The single power control: a badge with the cat's chosen power ringed
-  /// by its charge arc, the power name, a fill bar and the percent read.
-  /// At 100% the whole card pulses gold and a tap fires the loadout power
-  /// (the controller logs it as a PowerMove).
+  /// Bottom control row under the board: the compact power button (~68%)
+  /// with the equipped power icon, its charge bar and a clear label,
+  /// next to the dedicated 3D emote button (~29%) — outside the 7×7 grid.
   Widget _powerDeck() {
     final idx = PowerKind.values.indexOf(match.playerPower);
     final charge = match.playerCharge;
@@ -826,111 +803,182 @@ class _MatchScreenState extends State<MatchScreen>
     final canFire = full && match.playerTurn && match.acceptingInput;
     return AnimatedBuilder(
       animation: fx,
-      builder: (context, _) => GestureDetector(
-        key: const Key('power-meter'),
-        behavior: HitTestBehavior.opaque,
-        onTap: canFire ? () => match.firePower(match.playerPower) : null,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(
-            gradient: _panelGradient,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: full ? gold : const Color(0x66ffc63c),
-              width: full ? 1.8 : 1.2,
-            ),
-            boxShadow: [
-              const BoxShadow(
-                color: Color(0x44000000),
-                offset: Offset(0, 3),
-                blurRadius: 8,
-              ),
-              if (full)
-                BoxShadow(
-                  color: const Color(0xffffc63c)
-                      .withValues(alpha: 0.3 + 0.3 * fx.value),
-                  blurRadius: 10 + 10 * fx.value,
-                  spreadRadius: 1,
+      builder: (context, _) => Row(
+        children: [
+          Expanded(
+            flex: 68,
+            child: GestureDetector(
+              key: const Key('power-meter'),
+              behavior: HitTestBehavior.opaque,
+              onTap: canFire
+                  ? () => match.firePower(match.playerPower)
+                  : null,
+              child: Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  gradient: _panelGradient,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: full ? gold : const Color(0x66ffc63c),
+                    width: full ? 1.8 : 1.2,
+                  ),
+                  boxShadow: [
+                    const BoxShadow(
+                      color: Color(0x44000000),
+                      offset: Offset(0, 3),
+                      blurRadius: 8,
+                    ),
+                    if (full)
+                      BoxShadow(
+                        color: const Color(0xffffc63c).withValues(
+                          alpha: 0.3 + 0.3 * fx.value,
+                        ),
+                        blurRadius: 10 + 10 * fx.value,
+                        spreadRadius: 1,
+                      ),
+                  ],
                 ),
-            ],
-          ),
-          child: Row(
-            children: [
-              _PowerBadge(
-                charge: charge / 100,
-                full: full,
-                spriteName: powers[idx],
-                pulse: fx,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                child: Row(
                   children: [
-                    Text(
-                      powerNames[idx].toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: gold,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.6,
-                        shadows: [
-                          Shadow(
-                            color: Color(0x66000000),
-                            offset: Offset(0, 1),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(9),
+                      child: arenaImage(
+                        powerIcons[idx],
+                        width: 36,
+                        height: 36,
+                        fallback: _PowerBadge(
+                          charge: charge / 100,
+                          full: full,
+                          spriteName: powers[idx],
+                          pulse: fx,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              full
+                                  ? '${_shortPowerName(idx)} • ACTIVEAZĂ!'
+                                  : '${_shortPowerName(idx)} • $charge%',
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: full
+                                    ? const Color(0xffb9e07a)
+                                    : gold,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.4,
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x66000000),
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(5),
+                            child: LinearProgressIndicator(
+                              value: (charge / 100).clamp(0.0, 1.0),
+                              minHeight: 8,
+                              backgroundColor: const Color(0x55ffffff),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                full ? gold : const Color(0xff7ed957),
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(5),
-                      child: LinearProgressIndicator(
-                        value: (charge / 100).clamp(0.0, 1.0),
-                        minHeight: 9,
-                        backgroundColor: const Color(0x55ffffff),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          full ? gold : const Color(0xff7ed957),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      full
-                          ? 'APASĂ PENTRU PUTERE!'
-                          : 'Se încarcă la fiecare meci',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: full ? const Color(0xffb9e07a) : _faint,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(
-                '$charge%',
-                style: TextStyle(
-                  color: full ? const Color(0xffb9e07a) : gold,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  shadows: const [
-                    Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          Expanded(flex: 29, child: _emoteDeckButton()),
+        ],
       ),
     );
   }
+
+  /// Short power name for the compact deck label.
+  String _shortPowerName(int idx) =>
+      const ['ZOOMIES', 'POUNCE', 'LASER'][idx.clamp(0, 2)];
+
+  /// The dedicated 3D emote button, fully outside the board.
+  Widget _emoteDeckButton() => GestureDetector(
+    key: const Key('emote-button'),
+    behavior: HitTestBehavior.opaque,
+    onTap: emotes,
+    child: Container(
+      height: 52,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xff8fb4e8), Color(0xff3f6db0)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xffd9ecff), width: 1.6),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x55000000),
+            offset: Offset(0, 4),
+            blurRadius: 8,
+          ),
+          BoxShadow(
+            color: Color(0x4400cfff),
+            offset: Offset(0, -2),
+            blurRadius: 4,
+          ),
+        ],
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              height: 24,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  arenaImage('btn_emote', width: 22, height: 22),
+                  const Text(
+                    '💬',
+                    style: TextStyle(fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
+            const Text(
+              'EMOTE',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.6,
+                shadows: [
+                  Shadow(color: Color(0x88000000), offset: Offset(0, 1)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 
   /// Full-bleed result scene like the reference win/lose pages: room art
   /// behind, warm tint for victory / cool tint for defeat, big cartoon
@@ -1274,19 +1322,6 @@ class _MatchScreenState extends State<MatchScreen>
   );
 }
 
-class _BotHead extends StatelessWidget {
-  const _BotHead({this.size = 48});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => SizedBox.square(
-    dimension: size,
-    child: CustomPaint(
-      painter: CatPainter(const Color(0xff2e3040), 1, gold, 1),
-    ),
-  );
-}
-
 class _VsBadge extends StatelessWidget {
   const _VsBadge({this.size = 64});
   final double size;
@@ -1459,6 +1494,7 @@ class _PortraitPlate extends StatelessWidget {
   const _PortraitPlate({
     required this.avatar,
     required this.name,
+    this.tag,
     required this.score,
     required this.charge,
     required this.ringColor,
@@ -1472,6 +1508,7 @@ class _PortraitPlate extends StatelessWidget {
 
   final Widget avatar;
   final String name;
+  final String? tag;
   final int score;
   final int charge;
   final Color ringColor;
@@ -1549,15 +1586,45 @@ class _PortraitPlate extends StatelessWidget {
         const SizedBox(height: 1),
         FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(
-            name,
-            maxLines: 1,
-            style: const TextStyle(
-              color: cream,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w900,
-              shadows: [Shadow(color: Color(0x66000000), offset: Offset(0, 1))],
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: cream,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                  shadows: [
+                    Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
+                  ],
+                ),
+              ),
+              if (tag != null) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xff3a2418),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: accentColor, width: 1),
+                  ),
+                  child: Text(
+                    tag!,
+                    style: TextStyle(
+                      color: accentColor,
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         Text(
@@ -1579,86 +1646,6 @@ class _PortraitPlate extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Small cat button at the board's bottom-right corner opening the preset
-/// emote sheet. Lane-1 `btn_emote.png` art when bundled; procedural cat
-/// face as fallback.
-class _EmoteCatButton extends StatelessWidget {
-  const _EmoteCatButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: 'Emote',
-    child: GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: arenaImage(
-          'btn_emote',
-          width: 44,
-          height: 44,
-          fallback: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xf5fff8ea),
-              border: Border.all(color: ink, width: 1.6),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x55000000),
-                  offset: Offset(0, 2),
-                  blurRadius: 5,
-                ),
-              ],
-            ),
-            child: CustomPaint(painter: _CatFacePainter()),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-class _CatFacePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final paint = Paint()..color = const Color(0xff5a3a26);
-    // Ears.
-    final ear = Path()
-      ..moveTo(c.dx - size.width * 0.32, c.dy - size.height * 0.08)
-      ..lineTo(c.dx - size.width * 0.30, c.dy - size.height * 0.38)
-      ..lineTo(c.dx - size.width * 0.10, c.dy - size.height * 0.20)
-      ..close()
-      ..moveTo(c.dx + size.width * 0.32, c.dy - size.height * 0.08)
-      ..lineTo(c.dx + size.width * 0.30, c.dy - size.height * 0.38)
-      ..lineTo(c.dx + size.width * 0.10, c.dy - size.height * 0.20)
-      ..close();
-    canvas.drawPath(ear, paint);
-    // Eyes.
-    canvas.drawCircle(
-      Offset(c.dx - size.width * 0.13, c.dy - size.height * 0.02),
-      size.width * 0.055,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(c.dx + size.width * 0.13, c.dy - size.height * 0.02),
-      size.width * 0.055,
-      paint,
-    );
-    // Nose + smile.
-    final nose = Paint()..color = const Color(0xffb0607a);
-    canvas.drawCircle(
-      Offset(c.dx, c.dy + size.height * 0.10),
-      size.width * 0.05,
-      nose,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_CatFacePainter old) => false;
 }
 
 /// House-cat difficulty chip on the VS screen.
@@ -2020,27 +2007,11 @@ class PowerMoment extends StatelessWidget {
                 ),
               ),
             ),
-            // Cat runner crossing the board and smashing pieces.
-            Positioned.fill(child: _CatRunner(t: t)),
-            if (power == PowerKind.zoomies)
-              Center(
-                child: Transform.scale(
-                  scale: 0.7 + 0.5 * Curves.easeOutBack.transform(t),
-                  child: const Text(
-                    'ZOOM!',
-                    style: TextStyle(
-                      color: Color(0xffffd166),
-                      fontSize: 84,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 4,
-                      shadows: [
-                        Shadow(color: Color(0xaa7a4a00), blurRadius: 18),
-                        Shadow(color: Color(0x66000000), offset: Offset(0, 3)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            // Board VFX: the power's effect sprite zooms/pulses over the
+            // centre of the board, well inside the frame — no edge clips.
+            Center(
+              child: _EffectBurst(power: power, t: t),
+            ),
           ],
         ),
       ),
@@ -2122,110 +2093,38 @@ class _PowerBanner extends StatelessWidget {
   );
 }
 
-/// Cat sprinting across the board during the power moment. Tries the
-/// lane-1 runner sprite under `assets/images/cat_run.png`; falls back to
-/// a procedural cat when the sprite is absent.
-class _CatRunner extends StatelessWidget {
-  const _CatRunner({required this.t});
+/// The power's board VFX sprite (`assets/images/effect_*.png`): zooms in
+/// with a pulse over the first ~40% of the moment, then settles. Alpha
+/// art renders cleanly over the board with no edge clipping.
+class _EffectBurst extends StatelessWidget {
+  const _EffectBurst({required this.power, required this.t});
+  final PowerKind power;
   final double t;
 
   @override
   Widget build(BuildContext context) {
-    // Run window: enter ~12%, cross by ~85% of the moment.
-    final u = ((t - 0.12) / 0.73).clamp(0.0, 1.0);
-    if (u <= 0 || u >= 1) return const SizedBox.shrink();
-    final ease = Curves.easeInOut.transform(u);
-    final bounce = math.sin(u * math.pi * 6) * 6 * (1 - u);
+    final idx = power.index.clamp(0, powerEffects.length - 1);
+    final inT = (t / 0.4).clamp(0.0, 1.0);
+    final scale =
+        0.5 +
+        0.75 * Curves.easeOutBack.transform(inT) -
+        0.15 * Curves.easeInOut.transform(((t - 0.4) / 0.6).clamp(0.0, 1.0));
+    final pulse = t > 0.4 && t < 0.75 ? 1 + 0.06 * math.sin(t * math.pi * 10) : 1.0;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final w = constraints.maxWidth;
-        final h = constraints.maxHeight;
-        final catSize = h * 0.16;
-        return Stack(
-          children: [
-            // Motion streaks behind the runner.
-            for (var i = 0; i < 3; i++)
-              Positioned(
-                left: w * ease - catSize * (1.4 + i * 0.5),
-                top: h * 0.62 + bounce + i * 7 - catSize * 0.5,
-                child: Container(
-                  width: catSize * (0.5 + i * 0.2),
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xffffe08a)
-                        .withValues(alpha: 0.7 * (1 - u)),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-              ),
-            Positioned(
-              left: w * ease - catSize / 2,
-              top: h * 0.62 + bounce - catSize / 2,
-              child: SizedBox(
-                width: catSize,
-                height: catSize,
-                child: Image.asset(
-                  'assets/images/cat_run.png',
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stack) =>
-                      CustomPaint(painter: _RunnerCatPainter()),
-                ),
-              ),
-            ),
-          ],
+        final side = constraints.biggest.shortestSide * 0.55;
+        return Transform.scale(
+          scale: scale * pulse,
+          child: arenaImage(
+            powerEffects[idx],
+            width: side,
+            height: side,
+            fallback: const SizedBox.shrink(),
+          ),
         );
       },
     );
   }
-}
-
-/// Procedural running-cat fallback for [_CatRunner].
-class _RunnerCatPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    final s = size.shortestSide;
-    final body = Paint()..color = const Color(0xfff4a259);
-    final dark = Paint()..color = const Color(0xff8a4b2a);
-    // Body: leaning ellipse.
-    canvas.save();
-    canvas.translate(c.dx, c.dy);
-    canvas.rotate(-0.35);
-    canvas.drawOval(
-      Rect.fromCenter(center: Offset.zero, width: s * 0.95, height: s * 0.62),
-      body,
-    );
-    // Head.
-    canvas.drawCircle(Offset(s * 0.34, -s * 0.18), s * 0.26, body);
-    // Ears.
-    final ear = Path()
-      ..moveTo(s * 0.22, -s * 0.34)
-      ..lineTo(s * 0.30, -s * 0.52)
-      ..lineTo(s * 0.42, -s * 0.36)
-      ..close()
-      ..moveTo(s * 0.40, -s * 0.36)
-      ..lineTo(s * 0.50, -s * 0.52)
-      ..lineTo(s * 0.54, -s * 0.32)
-      ..close();
-    canvas.drawPath(ear, dark);
-    // Eye + legs blur lines.
-    canvas.drawCircle(Offset(s * 0.40, -s * 0.20), s * 0.045, dark);
-    canvas.restore();
-    final leg = Paint()
-      ..color = dark.color.withValues(alpha: 0.6)
-      ..strokeWidth = s * 0.07
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < 3; i++) {
-      canvas.drawLine(
-        Offset(s * 0.05 + i * s * 0.14, s * 0.34),
-        Offset(s * 0.02 + i * s * 0.14, s * 0.5),
-        leg,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_RunnerCatPainter old) => false;
 }
 
 class _MomentPainter extends CustomPainter {

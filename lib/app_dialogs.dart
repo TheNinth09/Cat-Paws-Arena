@@ -143,7 +143,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(21),
-                child: CatAvatar(p, size: 96),
+                child: catPortrait(p.cat, size: 96),
               ),
             ),
           ),

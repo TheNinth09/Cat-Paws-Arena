@@ -121,6 +121,7 @@ class BoardViewState extends State<BoardView>
   int? _selected;
   int? _downCell;
   int? _dragFrom;
+  Offset _panDelta = Offset.zero;
   double _now = 0;
   double _schedule = 0;
   Duration _lastElapsed = Duration.zero;
@@ -795,6 +796,7 @@ class BoardViewState extends State<BoardView>
     _selected = null;
     _downCell = null;
     _dragFrom = null;
+    _panDelta = Offset.zero;
     setState(() {});
     widget.onSwapAttempt?.call(from, to);
   }
@@ -805,6 +807,12 @@ class BoardViewState extends State<BoardView>
     final picker = widget.rowPicker;
     if (picker != null) {
       picker(target ~/ width);
+      return;
+    }
+    // Tap detonation: tapping a special piece fires it in place.
+    if ((_cells[target].piece?.special ?? SpecialKind.none) !=
+        SpecialKind.none) {
+      _attempt(target, target);
       return;
     }
     final sel = _selected;
@@ -820,6 +828,23 @@ class BoardViewState extends State<BoardView>
     _dragFrom ??= _downCell;
     final from = _dragFrom;
     if (from == null) return;
+    // Short swipes (~16px) commit the swap in the drag direction right
+    // away — no need to drag a full cell.
+    _panDelta += details.delta;
+    if (_panDelta.distance >= 16) {
+      final horiz = _panDelta.dx.abs() >= _panDelta.dy.abs();
+      final step = horiz
+          ? (_panDelta.dx > 0 ? 1 : -1)
+          : (_panDelta.dy > 0 ? width : -width);
+      final to = from + step;
+      if (to >= 0 && to < _cells.length && _adjacent(from, to)) {
+        _attempt(from, to);
+      } else {
+        _panDelta = Offset.zero;
+        _dragFrom = null;
+      }
+      return;
+    }
     final target = _cellAt(details.localPosition, cell);
     if (target != null && _adjacent(from, target)) _attempt(from, target);
   }

@@ -989,13 +989,45 @@ const avatarArtChoices = ['cat_tzuki', 'cat_bubble', 'cat_custom'];
 /// is set, otherwise the procedural [AvatarSpec] avatar.
 Widget playerAvatarArt(Player p, {double size = 46}) {
   final spec = AvatarSpec.fromJsonString(p.avatarSpec);
-  if (p.avatarArt.isEmpty) return AvatarAvatar(spec, size: size);
+  if (p.avatarArt.isEmpty) return catPortrait(p.cat, size: size);
+  // 'cat_x' choices resolve to the round avatar_x portraits.
+  final art = p.avatarArt.startsWith('cat_')
+      ? 'avatar_${p.avatarArt.substring(4)}'
+      : p.avatarArt;
   return Image.asset(
-    'assets/images/${p.avatarArt}.png',
+    'assets/images/$art.png',
     width: size,
     height: size,
     fit: BoxFit.cover,
     errorBuilder: (_, _, _) => AvatarAvatar(spec, size: size),
+  );
+}
+
+/// Round cat portrait (`assets/images/avatar_tzuki|bubble|custom.png`) for
+/// a cat name — used in duel medallions, the profile, friends and the
+/// leaderboard. Unknown cats fall back to the custom portrait.
+Widget catPortrait(String cat, {double size = 46}) {
+  final key = cat.toLowerCase();
+  final name = key == 'tzuki' || key == 'bubble'
+      ? 'avatar_$key'
+      : 'avatar_custom';
+  return ClipOval(
+    child: Image.asset(
+      'assets/images/$name.png',
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Container(
+        width: size,
+        height: size,
+        color: const Color(0xff5d4037),
+        child: Icon(
+          Icons.pets,
+          size: size * 0.55,
+          color: const Color(0xffffd166),
+        ),
+      ),
+    ),
   );
 }
 

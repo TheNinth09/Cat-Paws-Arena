@@ -552,7 +552,6 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('ZOOM!'), findsOneWidget);
     expect(find.byKey(const Key('power-moment-zoomies')), findsOneWidget);
     expect(find.byKey(const Key('frame-probe')), findsOneWidget);
     expect(find.textContaining('FPS'), findsOneWidget);
@@ -857,7 +856,7 @@ void main() {
     expect(m.phase, MatchPhase.finished, reason: 'match did not finish');
   }
 
-  testWidgets('engine duel plays five timed turns per player to a result', (
+  testWidgets('engine duel plays three timed turns per player to a result', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -873,9 +872,9 @@ void main() {
     expect(m.turn, 1);
     expect(m.playerTurn, isTrue);
     expect(m.turnSecondsLeft, greaterThan(0));
-    expect(m.turnSecondsLeft, lessThanOrEqualTo(30));
-    expect(m.playerTurnsLeft, 5);
-    expect(m.botTurnsLeft, 5);
+    expect(m.turnSecondsLeft, lessThanOrEqualTo(15));
+    expect(m.playerTurnsLeft, 3);
+    expect(m.botTurnsLeft, 3);
     // End the first turn early: the turn flips to the bot.
     m.endTurn();
     await tester.pump(const Duration(milliseconds: 50));
@@ -884,8 +883,8 @@ void main() {
     // Drive the rest of the match to a scored result.
     await driveLocalMatch(tester, m);
     expect(m.result, isNotNull);
-    // Five turns each = ten turn boundaries minimum.
-    expect(m.turn, greaterThanOrEqualTo(9));
+    // Three turns each = six turn boundaries minimum.
+    expect(m.turn, greaterThanOrEqualTo(5));
   });
 
   testWidgets('battle UI shows the turn clock and has no GATA button', (
@@ -951,8 +950,8 @@ void main() {
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
     expect(m.turn, 1);
-    // Let the 30-second clock run out without input.
-    await tester.pump(const Duration(seconds: 31));
+    // Let the 15-second clock run out without input.
+    await tester.pump(const Duration(seconds: 16));
     await tester.pump(const Duration(milliseconds: 50));
     // The turn ended by itself and play moved to the bot.
     expect(m.turn, 2);
@@ -1067,7 +1066,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('BOT'), findsWidgets);
     expect(find.textContaining('Vulpița'), findsWidgets);
-    expect(find.textContaining('5 turnuri'), findsOneWidget);
+    expect(find.textContaining('3 turnuri'), findsOneWidget);
   });
 
   testWidgets('first-match tutorial guides three moves then persists', (
@@ -1472,6 +1471,174 @@ void main() {
     expect(p.coins, coinsBefore);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+  });
+
+  // ---------- shared-board rapid-duel rules (3 × 15 s) ----------
+
+  group('shared-board rapid duel rules', () {
+    engine.MatchState stateWithCells(
+      List<int> cells, {
+      engine.PlayerSlot active = engine.PlayerSlot.first,
+    }) {
+      const w = 7, h = 7;
+      final board = engine.BoardState(
+        w,
+        h,
+        List<int>.of(cells),
+        List<int>.filled(w, 0),
+      );
+      return engine.MatchState.create(
+        seed: 11,
+        config: const engine.MatchConfig.duel(),
+        turn: 1,
+        activePlayer: active,
+        turnsRemaining: const [3, 3],
+        turnMoves: 0,
+        scores: const [0, 0],
+        boards: [board, board],
+        pendingObstacles: const [[], []],
+        powerCharge: const [0, 0],
+        rngState: const [1, 1],
+      );
+    }
+
+    List<int> checker() => [
+      for (var r = 0; r < 7; r++)
+        for (var c = 0; c < 7; c++) (r + c) % 2,
+    ];
+
+    engine.CellPos pos(int i) => (row: i ~/ 7, col: i % 7);
+
+    test('duel config is three 15-second turns per player', () {
+      const cfg = engine.MatchConfig.duel();
+      expect(cfg.turnsPerPlayer, 3);
+      expect(cfg.turnSeconds, 15);
+    });
+
+    test('both slots share one board: each move lands on both views', () {
+      // Swap (9,10): the 0 landing on cell 9 completes a row-3 of 0s.
+      final cells = checker();
+      cells[7] = 0;
+      cells[8] = 0;
+      cells[9] = 2;
+      cells[10] = 0;
+      cells[11] = 0;
+      final st = stateWithCells(cells);
+      final res = engine.applyMove(
+        st,
+        engine.SwapMove(firstCell: pos(9), secondCell: pos(10)),
+      );
+      expect(res, isA<engine.EngineOk<engine.MoveResult>>());
+      final next = (res as engine.EngineOk<engine.MoveResult>).value.state;
+      // The shared board: both slots' board snapshots are identical.
+      expect(next.boards[0].cells, next.boards[1].cells);
+    });
+
+    test('tapping a special detonates it in place', () {
+      final cells = checker();
+      cells[24] = 24; // kCopter in the centre
+      final st = stateWithCells(cells);
+      final res = engine.applyMove(
+        st,
+        engine.SwapMove(firstCell: pos(24), secondCell: pos(24)),
+      );
+      expect(res, isA<engine.EngineOk<engine.MoveResult>>());
+      final out = (res as engine.EngineOk<engine.MoveResult>).value;
+      expect(
+        out.events.whereType<engine.SpecialFired>().isNotEmpty,
+        isTrue,
+        reason: 'a same-cell tap must fire the special in place',
+      );
+      expect(out.state.scores[0], greaterThan(0));
+    });
+
+    test('special + normal swap without a match is rejected', () {
+      final cells = checker();
+      cells[0] = 22; // kBomb next to a normal piece, no match formed
+      final st = stateWithCells(cells);
+      final res = engine.applyMove(
+        st,
+        engine.SwapMove(firstCell: pos(0), secondCell: pos(1)),
+      );
+      final out = (res as engine.EngineOk<engine.MoveResult>).value;
+      expect(out.events.single, isA<engine.SwapRejected>());
+      expect(out.hashAfter, out.hashBefore);
+    });
+
+    test('rocket + rocket combo clears a full cross', () {
+      final cells = checker();
+      cells[16] = 20; // kLineRow
+      cells[17] = 21; // kLineColumn
+      final st = stateWithCells(cells);
+      final res = engine.applyMove(
+        st,
+        engine.SwapMove(firstCell: pos(16), secondCell: pos(17)),
+      );
+      final out = (res as engine.EngineOk<engine.MoveResult>).value;
+      final fired = out.events.whereType<engine.SpecialFired>().toList();
+      expect(fired, isNotEmpty);
+      // Cross at the second cell: full row 2 + full column 3 = 13 cells.
+      expect(fired.first.cells.length, greaterThanOrEqualTo(13));
+      expect(out.state.scores[0], greaterThanOrEqualTo(130));
+    });
+
+    test('rainbow + rainbow clears the whole board', () {
+      final cells = checker();
+      cells[24] = 23; // kRainbow
+      cells[25] = 23; // kRainbow
+      final st = stateWithCells(cells);
+      final res = engine.applyMove(
+        st,
+        engine.SwapMove(firstCell: pos(24), secondCell: pos(25)),
+      );
+      final out = (res as engine.EngineOk<engine.MoveResult>).value;
+      final fired = out.events.whereType<engine.SpecialFired>().toList();
+      expect(fired, isNotEmpty);
+      expect(fired.first.cells.length, greaterThanOrEqualTo(49));
+    });
+
+    test('a 2x2 square creates a copter', () {
+      final cells = checker();
+      // Craft a clean 2x2 of 0s at r2-3 × c2-3 via swap(24,31).
+      cells[10] = 2; // break c3 run above the square
+      cells[16] = 0;
+      cells[17] = 0;
+      cells[18] = 2;
+      cells[22] = 2; // break r3 run left of the square
+      cells[23] = 0;
+      cells[24] = 2; // placeholder that swaps out for the donor 0
+      cells[25] = 2;
+      cells[30] = 2; // break the c2 run below the square
+      cells[31] = 0; // donor: the 0 lands on cell 24, closing the square
+      final st = stateWithCells(cells);
+      final res = engine.applyMove(
+        st,
+        engine.SwapMove(firstCell: pos(24), secondCell: pos(31)),
+      );
+      final out = (res as engine.EngineOk<engine.MoveResult>).value;
+      expect(
+        out.events
+            .whereType<engine.SpecialCreated>()
+            .any((e) => e.kind == engine.SpecialKind.copter),
+        isTrue,
+        reason: 'a 2x2 square must create the mouse copter',
+      );
+    });
+
+    test('firing a special queues sabotage boxes for the opponent', () {
+      final cells = checker();
+      cells[24] = 22; // kBomb tapped in place
+      final st = stateWithCells(cells);
+      final res = engine.applyMove(
+        st,
+        engine.SwapMove(firstCell: pos(24), secondCell: pos(24)),
+      );
+      final out = (res as engine.EngineOk<engine.MoveResult>).value;
+      final queued = out.events.whereType<engine.ObstacleQueued>().toList();
+      expect(queued, isNotEmpty);
+      expect(queued.first.player, engine.PlayerSlot.second);
+      expect(queued.first.count, inInclusiveRange(1, 2));
+    });
   });
 }
 

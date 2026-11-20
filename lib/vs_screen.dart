@@ -42,7 +42,7 @@ class VsOpponent {
       name: cat.name,
       trophies: cat.trophies,
       badge: 'BOT',
-      avatar: CatAvatar(houseCatPlayer(player.prefs, cat), size: 64),
+      avatar: catPortrait(cat.name, size: 64),
       subtitle: 'Nv ${cat.level}',
     );
   }
@@ -66,7 +66,7 @@ class VsOpponent {
       name: info.name,
       trophies: info.trophies,
       badge: 'ONLINE',
-      avatar: CatAvatar(spec, size: 64, allowPhoto: false),
+      avatar: catPortrait(spec.cat, size: 64),
       subtitle: 'Prieten',
     );
   }
@@ -157,19 +157,7 @@ class _VsScreenState extends State<VsScreen>
 /// Full-body art for a cat on the VS/search scene; falls back to the
 /// procedural avatar when the cat has no drawn art.
 Widget duelCatArt(Player p, {double size = 118}) {
-  final asset = switch (p.cat) {
-    'Tzuki' => 'cat_tzuki',
-    'Bubble' => 'cat_bubble',
-    'Custom' => 'cat_custom',
-    _ => null,
-  };
-  if (asset == null) return CatAvatar(p, size: size, allowPhoto: false);
-  return arenaImage(
-    asset,
-    height: size,
-    fit: BoxFit.contain,
-    fallback: CatAvatar(p, size: size, allowPhoto: false),
-  );
+  return catPortrait(p.cat, size: size);
 }
 
 /// The single matchmaking/search page shared by [VsScreen] and the

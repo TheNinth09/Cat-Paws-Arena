@@ -209,8 +209,6 @@ List<MatchGroup> scanMatches(MutableBoard board) {
     }
   }
 
-  if (runs.isEmpty) return const [];
-
   // Union runs that share cells into connected groups.
   final parent = List<int>.generate(runs.length, (i) => i);
   int find(int x) {
@@ -318,12 +316,18 @@ bool swappablePair(MutableBoard board, int a, int b) {
       !isYarnedCode(cb);
 }
 
-/// Whether swapping [a] and [b] is productive: it creates a colour match
-/// or involves a special piece (which always fires when swapped).
+/// Whether swapping [a] and [b] is productive under the Royal Kingdom
+/// rules: two specials always combine, a rainbow swapped onto a colour
+/// clears that colour, and every other pair — including a special with a
+/// normal piece — is only productive when the swap forms a colour match.
 bool productiveSwap(MutableBoard board, int a, int b) {
   final ca = board.cells[a];
   final cb = board.cells[b];
-  if (isSpecialCode(ca) || isSpecialCode(cb)) return true;
+  if (isSpecialCode(ca) && isSpecialCode(cb)) return true;
+  if ((basePieceCode(ca) == kRainbow && isColourCode(cb)) ||
+      (basePieceCode(cb) == kRainbow && isColourCode(ca))) {
+    return true;
+  }
   board.cells[a] = cb;
   board.cells[b] = ca;
   final found = scanMatches(board).isNotEmpty;
