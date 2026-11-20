@@ -607,32 +607,55 @@ class ArenaBottomBar extends StatelessWidget {
       }
     }
 
-    // No background band: the five 3D tiles float directly over the page
-    // art. SafeArea keeps them above the system gesture inset.
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        height: 86,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (var i = 0; i < 5; i++)
-                Expanded(
-                  flex: i == 2 ? 3 : 2,
-                  child: _NavButton(
-                    key: ValueKey('nav-$i'),
-                    label: labels[i],
-                    centre: i == 2,
-                    active: selected == i,
-                    badge: i == 0 && shopBadge,
-                    haptics: haptics,
-                    onTap: () => onSelected(i),
-                    child: tileIcon(i),
+    // Glossy blue 3D bar, edge-to-edge: the container paints behind the
+    // system gesture inset (SafeArea is inside, not outside) so no page
+    // background or black system band can show under the tiles. The
+    // centre LUPTĂ tile keeps its golden raised look.
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xff57b4ea), Color(0xff2f7ec9), Color(0xff1e4f96)],
+        ),
+        border: Border(
+          top: BorderSide(color: Color(0xffaee3ff), width: 2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x6620130e),
+            offset: Offset(0, -3),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          // 66 px of bar while the centre tile is 80 px — LUPTĂ pops
+          // above the bar's top edge like the reference nav.
+          height: 66,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < 5; i++)
+                  Expanded(
+                    flex: i == 2 ? 3 : 2,
+                    child: _NavButton(
+                      key: ValueKey('nav-$i'),
+                      label: labels[i],
+                      centre: i == 2,
+                      active: selected == i,
+                      badge: i == 0 && shopBadge,
+                      haptics: haptics,
+                      onTap: () => onSelected(i),
+                      child: tileIcon(i),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

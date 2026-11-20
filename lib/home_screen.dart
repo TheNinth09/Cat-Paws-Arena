@@ -330,7 +330,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       key: scaffold,
       extendBodyBehindAppBar: true,
       extendBody: true,
-      backgroundColor: Colors.transparent,
+      // Warm dark-brown fallback instead of transparent: while a page
+      // background decodes (or if an OEM forces a scrim band) the eye
+      // sees the game's dark wood, never raw black.
+      backgroundColor: const Color(0xff24150e),
       // Floating dropdown panel under the hamburger — the reference menus
       // are compact rounded cards, not a full-height drawer.
       endDrawer: Drawer(
