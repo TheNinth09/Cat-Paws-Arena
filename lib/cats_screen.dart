@@ -502,11 +502,11 @@ class _CatsScreenState extends State<CatsScreen> {
                       ),
                       clipBehavior: Clip.hardEdge,
                       child: cat == 'Custom'
-                          ? CatSpecAvatar(catSpecForPlayer(player), size: 52)
+                          ? realCatArt(player, height: 52, portrait: true)
                           : arenaImage(
                               'cat_${cat.toLowerCase()}',
                               fit: BoxFit.cover,
-                              fallback: CatAvatar(player, size: 52),
+                              fallback: realCatSprite(cat, height: 52, portrait: true),
                             ),
                     ),
                     if (player.cat == cat)
@@ -808,17 +808,17 @@ class _CatStage extends StatelessWidget {
   }
 }
 
-/// Hero cat art for the stage: the real PNG sprites for the presets. The
-/// created cat renders through the layer system so every editor choice —
-/// fur, pattern, eyes, ears and accessory — changes the cat on screen.
+/// Hero cat art for the stage: real PNG sprites everywhere. The custom
+/// cat renders as sprite + fur tint + accessory so the editor choices
+/// still change it on screen.
 Widget _catHeroArt(Player player, String cat) {
   if (cat == 'Custom') {
-    return CatCharacter(player, height: 215);
+    return realCatArt(player, height: 215);
   }
   return arenaImage(
     'cat_${cat.toLowerCase()}',
     height: 210,
-    fallback: CatCharacter(player, height: 215),
+    fallback: realCatArt(player, height: 215),
   );
 }
 
@@ -1217,10 +1217,11 @@ class CatShareCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Center(
-                      child: CatSpecAvatar(
-                        spec,
-                        size: 205,
-                        showAccessory: false,
+                      child: realCatSprite(
+                        catName,
+                        height: 205,
+                        furTint: isCustomCat(catName) ? spec.fur : null,
+                        accessory: spec.accessory,
                       ),
                     ),
                   ),

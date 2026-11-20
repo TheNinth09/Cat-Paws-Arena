@@ -276,7 +276,7 @@ class ArenaMatchController extends ChangeNotifier {
   /// to zero for instant play.
   Duration? botMoveDelay;
 
-  /// Per-level move pacing inside the bot's 15 s turn: the opponent's
+  /// Per-level move pacing inside the bot's 30 s turn: the opponent's
   /// turn now visibly lasts — no more budget end after ~5 s.
   Duration get _botPace => switch (botLevel) {
     <= 0 => const Duration(milliseconds: 2300),
@@ -426,7 +426,7 @@ class ArenaMatchController extends ChangeNotifier {
     if (phase != MatchPhase.playing || paused || _busy) return false;
     if (!isEngine) return true;
     if (_state == null || _state!.isFinished) return false;
-    // The 15 s clock hit zero: playerInput is closed; a cascade already
+    // The 30 s clock hit zero: playerInput is closed; a cascade already
     // in flight finishes draining, then the turn ends (spec §3).
     if (_turnTicksLeft <= 0) return false;
     if (isOnline) {
@@ -504,9 +504,9 @@ class ArenaMatchController extends ChangeNotifier {
     return _state?.pendingObstacles[_opponentSlot.index].length ?? 0;
   }
 
-  /// Seconds on a fresh turn clock (15 in the agreed duel) — the HUD
+  /// Seconds on a fresh turn clock (30 in the agreed duel) — the HUD
   /// progress bar divides [turnSecondsLeft] by this.
-  int get turnSecondsTotal => _state?.config.turnSeconds ?? 15;
+  int get turnSecondsTotal => _state?.config.turnSeconds ?? 30;
 
   /// Accepted player moves so far (tutorial progress).
   int get playerMoves => _playerMoves;

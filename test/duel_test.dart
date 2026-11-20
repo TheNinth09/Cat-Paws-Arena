@@ -896,7 +896,7 @@ void main() {
     expect(m.turn, 1);
     expect(m.playerTurn, isTrue);
     expect(m.turnSecondsLeft, greaterThan(0));
-    expect(m.turnSecondsLeft, lessThanOrEqualTo(15));
+    expect(m.turnSecondsLeft, lessThanOrEqualTo(30));
     expect(m.playerTurnsLeft, 3);
     expect(m.botTurnsLeft, 3);
     // End the first turn early: the turn flips to the bot.
@@ -926,7 +926,7 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
-    // No end-early control: the 15 s timer owns turn boundaries.
+    // No end-early control: the 30 s timer owns turn boundaries.
     expect(find.text('GATA'), findsNothing);
     // Turn banner, round badge and seconds are visible in the HUD.
     expect(find.text('1/3'), findsWidgets);
@@ -976,8 +976,8 @@ void main() {
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
     expect(m.turn, 1);
-    // Let the 15-second clock run out without input.
-    await tester.pump(const Duration(seconds: 16));
+    // Let the 30-second clock run out without input.
+    await tester.pump(const Duration(seconds: 31));
     await tester.pump(const Duration(milliseconds: 50));
     // The turn ended by itself and play moved to the bot.
     expect(m.turn, 2);
@@ -1501,7 +1501,7 @@ void main() {
     await tester.pump();
   });
 
-  // ---------- shared-board rapid-duel rules (3 × 15 s) ----------
+  // ---------- shared-board rapid-duel rules (3 × 30 s) ----------
 
   group('shared-board rapid duel rules', () {
     engine.MatchState stateWithCells(
@@ -1540,7 +1540,7 @@ void main() {
     test('duel config is three 15-second turns per player', () {
       const cfg = engine.MatchConfig.duel();
       expect(cfg.turnsPerPlayer, 3);
-      expect(cfg.turnSeconds, 15);
+      expect(cfg.turnSeconds, 30);
     });
 
     test('both slots share one board: each move lands on both views', () {

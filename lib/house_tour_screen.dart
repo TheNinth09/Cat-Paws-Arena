@@ -6,6 +6,49 @@ import 'profile.dart';
 import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
 
+/// Claims a road milestone and confirms it with a toast — every claim
+/// surface (road chips, room reward, sheet route) calls this so taps
+/// always produce visible feedback.
+void _claimWithToast(
+  BuildContext context,
+  Player player,
+  int trophies, {
+  int coins = 0,
+  String? emote,
+  String? gear,
+}) {
+  if (!player.claimRoad(
+    trophies,
+    coinGift: coins,
+    emote: emote,
+    gear: gear,
+  )) {
+    return;
+  }
+  final english = player.english;
+  final parts = <String>[
+    if (coins > 0) '+$coins 🐾',
+    if (emote != null) _MilestoneChip.emoteLabels[emote] ?? emote,
+    if (gear != null) itemName(gear),
+  ];
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      duration: const Duration(seconds: 2),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: const Color(0xff4e9c22),
+      content: Text(
+        parts.isEmpty
+            ? (english ? 'CLAIMED!' : 'REVENDICAT!')
+            : '${english ? 'CLAIMED' : 'REVENDICAT'}: ${parts.join(' + ')}',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ),
+  );
+}
+
 /// Trophy road / house tour, Match Masters / Brawl Stars style: one
 /// continuous scrollable road climbed bottom-up to the Supreme Crown at
 /// 100000 trophies. Between rooms sit 50 claimable milestones each
@@ -333,9 +376,11 @@ class _MilestoneChip extends StatelessWidget {
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: claimable
-                    ? () => player.claimRoad(
+                    ? () => _claimWithToast(
+                        context,
+                        player,
                         milestone.trophies,
-                        coinGift: milestone.coins,
+                        coins: milestone.coins,
                         emote: milestone.emote,
                       )
                     : null,
@@ -691,8 +736,15 @@ class _RoomSheet extends StatelessWidget {
   final Player player;
   final int index;
 
+  /// Live-rebuild on every claim so IA buttons flip to ticks instantly —
+  /// the sheet used to build once and keep stale claim states.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: player,
+    builder: (context, _) => _sheet(context),
+  );
+
+  Widget _sheet(BuildContext context) {
     final english = player.english;
     final names = english ? houseRoomDisplayNamesEn : houseRoomDisplayNames;
     final room = houseRooms[index];
@@ -865,9 +917,11 @@ class _RoomSheet extends StatelessWidget {
                             child: InkWell(
                               borderRadius: BorderRadius.circular(12),
                               onTap: () {
-                                player.claimRoad(
+                                _claimWithToast(
+                                  context,
+                                  player,
                                   room.threshold,
-                                  coinGift: reward!.coins,
+                                  coins: reward!.coins,
                                   gear: reward.gear,
                                 );
                                 Navigator.pop(context);
@@ -1028,14 +1082,14 @@ class _RoomRoute extends StatelessWidget {
                 ),
               ),
             ),
-            itemBuilder: (context, i) => _routeStop(stops[i]),
+            itemBuilder: (context, i) => _routeStop(stops[i], context),
           ),
         ),
       ],
     );
   }
 
-  Widget _routeStop(RoadMilestone m) {
+  Widget _routeStop(RoadMilestone m, BuildContext context) {
     final reached = player.trophies >= m.trophies;
     final claimed = player.roadClaims.contains(m.trophies);
     final claimable = reached && !claimed;
@@ -1093,9 +1147,11 @@ class _RoomRoute extends StatelessWidget {
           if (claimable)
             InkWell(
               borderRadius: BorderRadius.circular(10),
-              onTap: () => player.claimRoad(
+              onTap: () => _claimWithToast(
+                context,
+                player,
                 m.trophies,
-                coinGift: m.coins,
+                coins: m.coins,
                 emote: m.emote,
                 gear: m.gear,
               ),

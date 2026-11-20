@@ -1637,14 +1637,91 @@ Future<void> saveAvatarSpecFor(Player p, AvatarSpec spec) async {
 /// `'my_cat'`, which renders the player's own customized cat live.
 const avatarArtChoices = ['cat_tzuki', 'cat_bubble', 'cat_custom', 'my_cat'];
 
-/// The player's avatar: `'my_cat'` paints the player's own cat from the
-/// shared spec (fur/pattern/eyes/ears/accessory — it updates when the cat
-/// is edited), the `cat_x` presets resolve to the round portraits, and an
-/// empty choice shows the equipped cat's portrait.
+/// Whether a cat name uses the player's custom spec rather than a preset
+/// identity — mirrors [catSpecFor].
+bool isCustomCat(String cat) {
+  final key = cat.toLowerCase();
+  return key != 'tzuki' && key != 'bubble';
+}
+
+String _catBodyAsset(String cat) => switch (cat.toLowerCase()) {
+  'tzuki' => 'cat_tzuki',
+  'bubble' => 'cat_bubble',
+  _ => 'cat_custom',
+};
+
+/// Real sprite art for a cat — this is what every screen shows now that
+/// the hand-drawn cat painters are retired. The custom cat still answers
+/// the editor: its sprite is tinted by the chosen fur colour and the
+/// equipped accessory is drawn on the head. [portrait] picks the round
+/// `avatar_*` bust; otherwise the seated full-body sprite is used.
+Widget realCatSprite(
+  String cat, {
+  double height = 210,
+  bool portrait = false,
+  Color? furTint,
+  String accessory = '',
+}) {
+  final body = _catBodyAsset(cat);
+  final asset = portrait ? 'avatar_${body.substring(4)}' : body;
+  Widget img = arenaImage(
+    asset,
+    fit: BoxFit.contain,
+    fallback: const Center(
+      child: Icon(Icons.pets, color: Color(0xffffd166), size: 40),
+    ),
+  );
+  if (furTint != null) {
+    img = ColorFiltered(
+      colorFilter: ColorFilter.mode(furTint, BlendMode.modulate),
+      child: img,
+    );
+  }
+  return SizedBox(
+    width: height,
+    height: height,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        img,
+        if (accessory.isNotEmpty)
+          Align(
+            alignment: Alignment.topCenter,
+            child: FractionallySizedBox(
+              widthFactor: portrait ? 0.64 : 0.52,
+              heightFactor: portrait ? 0.6 : 0.48,
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: catAccessoryOverlay(accessory, size: 120),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+/// The player's equipped cat as real sprite art. Preset cats keep their
+/// identity; the custom cat is tinted by [Player.fur] and wears
+/// [Player.accessory]. Eyes/ears/pattern stay stored on the profile.
+Widget realCatArt(Player p, {double height = 210, bool portrait = false}) =>
+    realCatSprite(
+      p.cat,
+      height: height,
+      portrait: portrait,
+      furTint: isCustomCat(p.cat)
+          ? catFurColours[_clampIndex(p.fur, catFurColours.length)]
+          : null,
+      accessory: p.accessory,
+    );
+
+/// The player's avatar: `'my_cat'` shows the player's own cat as real
+/// sprite art (fur tint + accessory — it updates when the cat is edited),
+/// the `cat_x` presets resolve to the round portraits, and an empty choice
+/// shows the equipped cat's portrait.
 Widget playerAvatarArt(Player p, {double size = 46}) {
-  final spec = AvatarSpec.fromJsonString(p.avatarSpec);
   if (p.avatarArt == 'my_cat') {
-    return CatSpecAvatar(catSpecForPlayer(p), size: size);
+    return realCatArt(p, height: size, portrait: true);
   }
   if (p.avatarArt.isEmpty) return catPortrait(p.cat, size: size);
   // 'cat_x' choices resolve to the round avatar_x portraits.
@@ -1656,7 +1733,7 @@ Widget playerAvatarArt(Player p, {double size = 46}) {
     width: size,
     height: size,
     fit: BoxFit.cover,
-    errorBuilder: (_, _, _) => AvatarAvatar(spec, size: size),
+    errorBuilder: (_, _, _) => catPortrait('custom', size: size),
   );
 }
 

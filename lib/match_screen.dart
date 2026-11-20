@@ -799,7 +799,7 @@ class _MatchScreenState extends State<MatchScreen>
   Widget _tutorialOverlay() {
     if (!match.tutorialActive) return const SizedBox.shrink();
     final texts = [
-      'Prima ta luptă! Ai 15 secunde pe rând — tura se termină singură.',
+      'Prima ta luptă! Ai 30 de secunde pe rând — tura se termină singură.',
       'Schimbă două piese alăturate de aceeași culoare. Urmează indicatorul auriu!',
       'Când bara de putere e plină, atinge-o ca s-o declanșezi!',
     ];

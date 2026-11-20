@@ -151,8 +151,8 @@ List<_NewsItem> _newsItems(bool english) => [
     version: '0.7.0-27',
     title: english ? 'Shared board duels' : 'Dueluri pe tabla comună',
     body: english
-        ? 'Duels are now played on one shared 7×7 board: 3 rounds of 15 seconds each. Royal-style special rules — tap to detonate, combine specials for bigger blasts, 2×2 makes a copter.'
-        : 'Duelurile se joacă acum pe o singură tablă comună 7×7: 3 runde câte 15 secunde. Reguli royale pentru speciale — tap pentru detonare, combină speciale pentru explozii mai mari, 2×2 face elicopter.',
+        ? 'Duels are now played on one shared 7×7 board: 3 rounds of 30 seconds each. Royal-style special rules — tap to detonate, combine specials for bigger blasts, 2×2 makes a copter.'
+        : 'Duelurile se joacă acum pe o singură tablă comună 7×7: 3 runde câte 30 de secunde. Reguli royale pentru speciale — tap pentru detonare, combină speciale pentru explozii mai mari, 2×2 face elicopter.',
     asset: 'icon_paw_coin',
     fallbackIcon: Icons.grid_on_rounded,
     colors: const [Color(0xff8ec96f), Color(0xff4a8f3a)],
@@ -349,7 +349,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
         ),
         child: ClipOval(
           child: art == 'my_cat'
-              ? CatSpecAvatar(catSpecForPlayer(p), size: 50)
+              ? realCatArt(p, height: 50, portrait: true)
               : catPortrait(art.substring(4), size: 50),
         ),
       ),

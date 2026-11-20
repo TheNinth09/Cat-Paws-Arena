@@ -438,14 +438,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             clipBehavior: Clip.hardEdge,
             child: art == 'my_cat'
-                ? CatSpecAvatar(catSpecForPlayer(player), size: 60)
+                ? realCatArt(player, height: 60, portrait: true)
                 : arenaImage(
                     art,
                     fit: BoxFit.cover,
-                    fallback: AvatarAvatar(
-                      AvatarSpec.fromJsonString(player.avatarSpec),
-                      size: 60,
-                    ),
+                    fallback: catPortrait('custom', size: 60),
                   ),
           ),
           const SizedBox(height: 3),

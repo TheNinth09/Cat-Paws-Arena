@@ -310,12 +310,12 @@ class LobbyScreen extends StatelessWidget {
     return SizedBox(
       height: height,
       child: catAsset == null
-          ? CatCharacter(player, height: height)
+          ? realCatArt(player, height: height)
           : arenaImage(
               catAsset,
               height: height,
               fit: BoxFit.contain,
-              fallback: CatCharacter(player, height: height),
+              fallback: realCatArt(player, height: height),
             ),
     );
   }
