@@ -252,7 +252,7 @@ class _MatchScreenState extends State<MatchScreen>
 
     switch (event) {
       case Cleared(:final cells, :final points):
-        for (final i in cells.take(10)) {
+        for (final i in cells.take(6)) {
           _vfx.emit(BoardVfxEvent(type: BoardVfxType.tilePop, normalizedPos: at(i)));
         }
         if (cells.isNotEmpty && points > 0) {
@@ -286,7 +286,7 @@ class _MatchScreenState extends State<MatchScreen>
           shake: kind == SpecialKind.bomb ? 0.5 : 0.25,
         );
       case ObstacleBroken(:final cells, :final points):
-        for (final i in cells.take(8)) {
+        for (final i in cells.take(6)) {
           _vfx.emit(
             BoardVfxEvent(
               type: BoardVfxType.boxBreak,

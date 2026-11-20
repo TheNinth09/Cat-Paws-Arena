@@ -294,20 +294,32 @@ class _AudioPlayersOutput implements SfxOutput {
   }
 
   final List<AudioPlayer> _players = [];
+  final List<double> _rates = [1, 1, 1, 1];
   int _next = 0;
 
   @override
   void play(String asset, {required double volume, required double rate}) {
     if (_players.isEmpty) return;
-    final p = _players[_next++ % _players.length];
-    unawaited(
-      p
-          .setPlaybackRate(rate)
-          // The rate is a nicety — if the device rejects it, still play.
-          .catchError((Object _) {})
-          .then((_) => p.play(AssetSource(asset), volume: volume))
-          .catchError((Object _) {}),
-    );
+    final i = _next++ % _players.length;
+    final p = _players[i];
+    // Most cues play at rate 1 — skip the extra platform-channel hop
+    // when the rate on this voice is already right (cascade bursts
+    // otherwise chain two channel calls per event).
+    if (rate == _rates[i]) {
+      unawaited(
+        p.play(AssetSource(asset), volume: volume).catchError((Object _) {}),
+      );
+    } else {
+      _rates[i] = rate;
+      unawaited(
+        p
+            .setPlaybackRate(rate)
+            // The rate is a nicety — if the device rejects it, still play.
+            .catchError((Object _) {})
+            .then((_) => p.play(AssetSource(asset), volume: volume))
+            .catchError((Object _) {}),
+      );
+    }
   }
 
   @override

@@ -46,6 +46,11 @@ class BoardVfxController extends ChangeNotifier {
 
   void emit(BoardVfxEvent event, {double shake = 0.0}) {
     _events.add(event);
+    // Bound the per-frame draw cost: heavy cascades can queue more
+    // particles than a mid-range GPU can draw — drop the oldest.
+    while (_events.length > 36) {
+      _events.removeAt(0);
+    }
     if (shake > shakeIntensity) {
       shakeIntensity = shake;
     }
@@ -165,7 +170,7 @@ class _BoardVfxPainter extends CustomPainter {
       switch (e.type) {
         case BoardVfxType.tilePop:
         case BoardVfxType.boxBreak:
-          final count = e.type == BoardVfxType.boxBreak ? 10 : 8;
+          final count = e.type == BoardVfxType.boxBreak ? 8 : 6;
           for (int i = 0; i < count; i++) {
             final angle = (2 * math.pi * i) / count + (i * 0.3);
             final dist = cellW * (0.2 + 0.85 * ease);

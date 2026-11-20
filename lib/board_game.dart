@@ -1222,6 +1222,20 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
+    // Unfiltered draw for the common alpha-1 case: a modulate filter on
+    // every image routed 50+ draws per frame through the filtered
+    // pipeline for nothing.
+    final plainPaint = Paint()..filterQuality = FilterQuality.medium;
+    Paint? fadePaint;
+    Paint paintFor(double alpha) => alpha >= 0.999
+        ? plainPaint
+        : (fadePaint ??= Paint()
+          ..filterQuality = FilterQuality.medium
+          ..colorFilter = ColorFilter.mode(
+            const Color(0xffffffff).withValues(alpha: alpha),
+            BlendMode.modulate,
+          ));
+
     void drawPiece(
       BoardPiece piece,
       double cx,
@@ -1236,16 +1250,21 @@ class _BoardPainter extends CustomPainter {
         width: s,
         height: s,
       );
-      canvas.save();
-      canvas.translate(cx, cy);
-      if (piece.special == SpecialKind.rainbow) {
+      // Only rainbow tiles rotate — the common path needs no save/
+      // translate sandwich at all.
+      final rotates = piece.special == SpecialKind.rainbow;
+      if (rotates) {
+        canvas.save();
+        canvas.translate(cx, cy);
         canvas.rotate(now * 1.4);
+        canvas.translate(-cx, -cy);
       }
-      canvas.translate(-cx, -cy);
       if (piece.special != SpecialKind.none) {
         // Pulsing glow behind the special tile, tinted by the colour it
         // was made from — that colour is what it combines with. Rainbow
-        // keeps the neutral icy halo.
+        // keeps the neutral icy halo. Two stacked alpha circles cost two
+        // fills; the old per-frame RadialGradient shader allocation is
+        // gone.
         final glow = switch (piece.special) {
           SpecialKind.rainbow => const Color(0xff9fd7ff),
           _ when piece.kind < _gemColors.length => _gemColors[piece.kind],
@@ -1255,28 +1274,17 @@ class _BoardPainter extends CustomPainter {
         canvas.drawCircle(
           rect.center,
           glowR,
-          Paint()
-            // Radial-gradient halo costs one fill; the old MaskFilter blur
-            // forced a software blur pass per special per frame.
-            ..shader = RadialGradient(
-              colors: [
-                glow.withValues(alpha: 0.55 * alpha),
-                glow.withValues(alpha: 0),
-              ],
-            ).createShader(
-              Rect.fromCircle(center: rect.center, radius: glowR),
-            ),
+          Paint()..color = glow.withValues(alpha: 0.22 * alpha),
+        );
+        canvas.drawCircle(
+          rect.center,
+          glowR * 0.62,
+          Paint()..color = glow.withValues(alpha: 0.34 * alpha),
         );
       }
       final img = piece.kind < _tileNames.length
           ? art[_tileNames[piece.kind]]
           : null;
-      final imagePaint = Paint()
-        ..filterQuality = FilterQuality.medium
-        ..colorFilter = ColorFilter.mode(
-          const Color(0xffffffff).withValues(alpha: alpha),
-          BlendMode.modulate,
-        );
       // Lane-1 special art replaces the tile + procedural marks entirely;
       // without it the procedural badge/mark fallback stays.
       final specialKey = switch (piece.special) {
@@ -1289,13 +1297,14 @@ class _BoardPainter extends CustomPainter {
       };
       final specialImg = specialKey == null ? null : art[specialKey];
       if (specialImg != null) {
-        canvas.save();
-        canvas.translate(cx, cy);
         // The rocket art points right; a column-clearer flies up.
-        if (piece.special == SpecialKind.lineVertical) {
+        final spin = piece.special == SpecialKind.lineVertical;
+        if (spin) {
+          canvas.save();
+          canvas.translate(cx, cy);
           canvas.rotate(-math.pi / 2);
+          canvas.translate(-cx, -cy);
         }
-        canvas.translate(-cx, -cy);
         canvas.drawImageRect(
           specialImg,
           Rect.fromLTWH(
@@ -1305,15 +1314,15 @@ class _BoardPainter extends CustomPainter {
             specialImg.height.toDouble(),
           ),
           rect,
-          imagePaint,
+          paintFor(alpha),
         );
-        canvas.restore();
+        if (spin) canvas.restore();
       } else if (img != null) {
         canvas.drawImageRect(
           img,
           Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
           rect,
-          imagePaint,
+          paintFor(alpha),
         );
       } else {
         _drawGem(canvas, rect, piece.kind, alpha);
@@ -1344,7 +1353,7 @@ class _BoardPainter extends CustomPainter {
             ..color = _gemColors[piece.kind].withValues(alpha: alpha),
         );
       }
-      canvas.restore();
+      if (rotates) canvas.restore();
     }
 
     void drawObstacle(
@@ -1367,12 +1376,7 @@ class _BoardPainter extends CustomPainter {
           img,
           Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
           rect,
-          Paint()
-            ..filterQuality = FilterQuality.medium
-            ..colorFilter = ColorFilter.mode(
-              const Color(0xffffffff).withValues(alpha: alpha),
-              BlendMode.modulate,
-            ),
+          paintFor(alpha),
         );
       } else {
         canvas.drawRRect(
