@@ -797,6 +797,507 @@ class _FlowerPainter extends CustomPainter {
   bool shouldRepaint(_FlowerPainter old) => old.centered != centered;
 }
 
+/// Golden bell collar — trophy-road reward for reaching the Main Hall.
+class _CollarPainter extends CustomPainter {
+  const _CollarPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 52.0 : 104.0;
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+    final band = Paint()..color = const Color(0xffc63b3b);
+    final bandPath = Path()
+      ..moveTo(28, cy - 4)
+      ..quadraticBezierTo(60, cy + 12, 92, cy - 4)
+      ..lineTo(92, cy + 5)
+      ..quadraticBezierTo(60, cy + 21, 28, cy + 5)
+      ..close();
+    canvas.drawPath(bandPath, band);
+    canvas.drawPath(bandPath, line);
+    final bell = Rect.fromCircle(center: Offset(60, cy + 12), radius: 7);
+    canvas.drawOval(bell, Paint()..color = gold);
+    canvas.drawOval(bell, line);
+    canvas.drawLine(
+      Offset(56, cy + 12),
+      Offset(64, cy + 12),
+      Paint()
+        ..color = ink
+        ..strokeWidth = 1.6,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_CollarPainter old) => old.centered != centered;
+}
+
+/// Chef's bib tied under the chin — Kitchen reward.
+class _BibPainter extends CustomPainter {
+  const _BibPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 44.0 : 96.0;
+    final cloth = Paint()..color = const Color(0xfffdf6e3);
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+    final bib = Path()
+      ..moveTo(42, cy)
+      ..quadraticBezierTo(60, cy + 8, 78, cy)
+      ..lineTo(88, cy + 22)
+      ..quadraticBezierTo(60, cy + 30, 32, cy + 22)
+      ..close();
+    canvas.drawPath(bib, cloth);
+    canvas.drawPath(bib, line);
+    final pocket = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(60, cy + 17), width: 22, height: 9),
+      const Radius.circular(3),
+    );
+    canvas.drawRRect(
+      pocket,
+      Paint()..color = const Color(0xfff0e0c0),
+    );
+    canvas.drawRRect(pocket, line);
+    for (final dir in [-1.0, 1.0]) {
+      canvas.drawCircle(
+        Offset(42 - 4 * dir, cy - 1),
+        3,
+        cloth,
+      );
+      canvas.drawCircle(Offset(42 - 4 * dir, cy - 1), 3, line);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BibPainter old) => old.centered != centered;
+}
+
+/// Floppy nightcap with a pom — Bedroom reward.
+class _NightcapPainter extends CustomPainter {
+  const _NightcapPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 52.0 : 8.0;
+    final cloth = Paint()..color = const Color(0xff5b6bc0);
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4;
+    final cap = Path()
+      ..moveTo(30, cy + 16)
+      ..quadraticBezierTo(34, cy - 14, 62, cy - 10)
+      ..quadraticBezierTo(88, cy - 8, 92, cy + 10)
+      ..quadraticBezierTo(98, cy - 4, 104, cy + 12)
+      ..lineTo(92, cy + 16);
+    canvas.drawPath(cap, cloth);
+    canvas.drawPath(cap, line);
+    final brim = Path()
+      ..moveTo(26, cy + 14)
+      ..quadraticBezierTo(60, cy + 26, 94, cy + 14)
+      ..lineTo(94, cy + 24)
+      ..quadraticBezierTo(60, cy + 36, 26, cy + 24)
+      ..close();
+    canvas.drawPath(brim, Paint()..color = const Color(0xfffdf6e3));
+    canvas.drawPath(brim, line);
+    final pom = Paint()..color = const Color(0xfffdf6e3);
+    canvas.drawCircle(Offset(104, cy + 13), 6.5, pom);
+    canvas.drawCircle(Offset(104, cy + 13), 6.5, line);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_NightcapPainter old) => old.centered != centered;
+}
+
+/// Three-pointed jester hat with bells — Playroom reward.
+class _JesterPainter extends CustomPainter {
+  const _JesterPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 46.0 : 4.0;
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+    final red = Paint()..color = const Color(0xffd84343);
+    final green = Paint()..color = const Color(0xff4e9c22);
+    // Band across the head.
+    final band = Path()
+      ..moveTo(24, cy + 18)
+      ..quadraticBezierTo(60, cy + 30, 96, cy + 18)
+      ..lineTo(96, cy + 26)
+      ..quadraticBezierTo(60, cy + 38, 24, cy + 26)
+      ..close();
+    canvas.drawPath(band, red);
+    canvas.drawPath(band, line);
+    // Three floppy points alternating colours, each ending in a bell.
+    for (var i = 0; i < 3; i++) {
+      final x0 = 30.0 + i * 26;
+      final tip = Offset(x0 + 12, cy - 14 - (i == 1 ? 8 : 0));
+      final point = Path()
+        ..moveTo(x0, cy + 20)
+        ..quadraticBezierTo(x0 + 4, cy, tip.dx, tip.dy)
+        ..quadraticBezierTo(x0 + 22, cy + 4, x0 + 26, cy + 20)
+        ..close();
+      canvas.drawPath(point, i == 1 ? red : green);
+      canvas.drawPath(point, line);
+      canvas.drawCircle(tip, 4.5, Paint()..color = gold);
+      canvas.drawCircle(tip, 4.5, line);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_JesterPainter old) => old.centered != centered;
+}
+
+/// Knitted winter scarf with a hanging tail — Winter Garden reward.
+class _ScarfPainter extends CustomPainter {
+  const _ScarfPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 52.0 : 103.0;
+    final wool = Paint()..color = const Color(0xff3f6fb5);
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+    final wrap = Path()
+      ..moveTo(24, cy - 3)
+      ..quadraticBezierTo(60, cy + 11, 96, cy - 3)
+      ..lineTo(96, cy + 8)
+      ..quadraticBezierTo(60, cy + 22, 24, cy + 8)
+      ..close();
+    canvas.drawPath(wrap, wool);
+    canvas.drawPath(wrap, line);
+    // Knit stripes + hanging tail on the right side.
+    for (var i = 0; i < 4; i++) {
+      final x = 34.0 + i * 16;
+      canvas.drawLine(
+        Offset(x, cy + (i.isEven ? -1 : 1)),
+        Offset(x + 8, cy + (i.isEven ? 6 : 8)),
+        Paint()
+          ..color = const Color(0xfffdf6e3)
+          ..strokeWidth = 2.4,
+      );
+    }
+    final tail = Path()
+      ..moveTo(74, cy + 12)
+      ..lineTo(88, cy + 12)
+      ..lineTo(92, cy + 34)
+      ..lineTo(78, cy + 36)
+      ..close();
+    canvas.drawPath(tail, wool);
+    canvas.drawPath(tail, line);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_ScarfPainter old) => old.centered != centered;
+}
+
+/// Wide straw sun hat — Sunny Terrace reward.
+class _SunhatPainter extends CustomPainter {
+  const _SunhatPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 54.0 : 10.0;
+    final straw = Paint()..color = const Color(0xfff0d488);
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4;
+    final dome = Path()
+      ..moveTo(38, cy + 10)
+      ..quadraticBezierTo(42, cy - 14, 62, cy - 12)
+      ..quadraticBezierTo(80, cy - 10, 82, cy + 10)
+      ..close();
+    canvas.drawPath(dome, straw);
+    canvas.drawPath(dome, line);
+    final brim = Path()
+      ..moveTo(14, cy + 12)
+      ..quadraticBezierTo(60, cy + 26, 106, cy + 12)
+      ..quadraticBezierTo(60, cy + 20, 14, cy + 12)
+      ..close();
+    canvas.drawPath(brim, straw);
+    canvas.drawPath(brim, line);
+    canvas.drawLine(
+      Offset(40, cy + 8),
+      Offset(80, cy + 8),
+      Paint()
+        ..color = const Color(0xffd84343)
+        ..strokeWidth = 3.4,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_SunhatPainter old) => old.centered != centered;
+}
+
+/// Royal purple cape with a gold clasp — Royal Salon reward.
+class _CapePainter extends CustomPainter {
+  const _CapePainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 44.0 : 92.0;
+    final cloth = Paint()..color = const Color(0xff6a3aa0);
+    final trim = Paint()..color = const Color(0xfffdf6e3);
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+    final cape = Path()
+      ..moveTo(24, cy)
+      ..quadraticBezierTo(60, cy + 12, 96, cy)
+      ..lineTo(104, cy + 28)
+      ..quadraticBezierTo(60, cy + 38, 16, cy + 28)
+      ..close();
+    canvas.drawPath(cape, cloth);
+    canvas.drawPath(cape, line);
+    canvas.drawLine(
+      Offset(26, cy + 3),
+      Offset(94, cy + 3),
+      Paint()
+        ..color = trim.color
+        ..strokeWidth = 3.2,
+    );
+    final clasp = Rect.fromCircle(center: Offset(60, cy + 5), radius: 5);
+    canvas.drawOval(clasp, Paint()..color = gold);
+    canvas.drawOval(clasp, line);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_CapePainter old) => old.centered != centered;
+}
+
+/// Tilted artist beret — Atelier reward.
+class _BeretPainter extends CustomPainter {
+  const _BeretPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 54.0 : 8.0;
+    final felt = Paint()..color = const Color(0xffb33a5b);
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4;
+    final beret = Path()
+      ..moveTo(24, cy + 14)
+      ..quadraticBezierTo(26, cy - 6, 58, cy - 8)
+      ..quadraticBezierTo(94, cy - 10, 96, cy + 16)
+      ..quadraticBezierTo(60, cy + 24, 24, cy + 14)
+      ..close();
+    canvas.drawPath(beret, felt);
+    canvas.drawPath(beret, line);
+    canvas.drawOval(
+      Rect.fromCircle(center: Offset(62, cy - 8), radius: 3.5),
+      felt,
+    );
+    canvas.drawOval(
+      Rect.fromCircle(center: Offset(62, cy - 8), radius: 3.5),
+      line,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BeretPainter old) => old.centered != centered;
+}
+
+/// Champion medal on a ribbon — Trophy Hall reward.
+class _MedalPainter extends CustomPainter {
+  const _MedalPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 56.0 : 102.0;
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+    final ribbon = Path()
+      ..moveTo(46, cy - 8)
+      ..lineTo(56, cy + 8)
+      ..lineTo(60, cy + 4)
+      ..lineTo(64, cy + 8)
+      ..lineTo(74, cy - 8)
+      ..lineTo(66, cy - 10)
+      ..lineTo(60, cy - 2)
+      ..lineTo(54, cy - 10)
+      ..close();
+    canvas.drawPath(ribbon, Paint()..color = const Color(0xffd84343));
+    canvas.drawPath(ribbon, line);
+    final medal = Rect.fromCircle(center: Offset(60, cy + 14), radius: 8);
+    canvas.drawOval(medal, Paint()..color = gold);
+    canvas.drawOval(medal, line);
+    canvas.drawCircle(Offset(60, cy + 14), 3.2, Paint()..color = ink);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_MedalPainter old) => old.centered != centered;
+}
+
+/// Small glowing crown of light — Cat Sanctuary reward.
+class _HaloCrownPainter extends CustomPainter {
+  const _HaloCrownPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 52.0 : 6.0;
+    final glow = Paint()
+      ..color = const Color(0x88ffe27a)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(60, cy + 8), width: 74, height: 20),
+      glow,
+    );
+    final band = Path()
+      ..moveTo(34, cy + 10)
+      ..quadraticBezierTo(60, cy + 20, 86, cy + 10)
+      ..lineTo(86, cy + 16)
+      ..quadraticBezierTo(60, cy + 26, 34, cy + 16)
+      ..close();
+    canvas.drawPath(band, Paint()..color = const Color(0xffffe27a));
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawPath(band, line);
+    for (final x in [40.0, 60.0, 80.0]) {
+      canvas.drawCircle(Offset(x, cy + 6), 4, Paint()..color = Colors.white);
+      canvas.drawCircle(Offset(x, cy + 6), 4, line);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_HaloCrownPainter old) => old.centered != centered;
+}
+
+/// Classic gold crown — Golden Palace reward.
+class _GoldCrownPainter extends CustomPainter {
+  const _GoldCrownPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 50.0 : 2.0;
+    final metal = Paint()..color = gold;
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4;
+    final crown = Path()
+      ..moveTo(28, cy + 26)
+      ..lineTo(24, cy)
+      ..lineTo(40, cy + 12)
+      ..lineTo(60, cy - 4)
+      ..lineTo(80, cy + 12)
+      ..lineTo(96, cy)
+      ..lineTo(92, cy + 26)
+      ..close();
+    canvas.drawPath(crown, metal);
+    canvas.drawPath(crown, line);
+    for (final x in [38.0, 60.0, 82.0]) {
+      canvas.drawCircle(
+        Offset(x, cy + 19),
+        3.4,
+        Paint()..color = const Color(0xffd84343),
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_GoldCrownPainter old) => old.centered != centered;
+}
+
+/// The Supreme Crown — jewelled, glows above every other reward.
+class _SupremeCrownPainter extends CustomPainter {
+  const _SupremeCrownPainter({this.centered = false});
+  final bool centered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _scaleTo(canvas, size, 120, 120);
+    final cy = centered ? 46.0 : 0.0;
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(60, cy + 10), width: 90, height: 26),
+      Paint()
+        ..color = const Color(0x66ffc63c)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+    final metal = Paint()..color = gold;
+    final line = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.6;
+    final crown = Path()
+      ..moveTo(26, cy + 30)
+      ..lineTo(20, cy + 4)
+      ..lineTo(38, cy + 14)
+      ..lineTo(50, cy - 6)
+      ..lineTo(60, cy + 6)
+      ..lineTo(70, cy - 6)
+      ..lineTo(82, cy + 14)
+      ..lineTo(100, cy + 4)
+      ..lineTo(94, cy + 30)
+      ..close();
+    canvas.drawPath(crown, metal);
+    canvas.drawPath(crown, line);
+    final jewel = Rect.fromCircle(center: Offset(60, cy + 19), radius: 5.5);
+    canvas.drawOval(jewel, Paint()..color = const Color(0xffe83a3a));
+    canvas.drawOval(jewel, line);
+    for (final x in [36.0, 84.0]) {
+      canvas.drawCircle(
+        Offset(x, cy + 21),
+        3.4,
+        Paint()..color = const Color(0xff3f6fb5),
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_SupremeCrownPainter old) => old.centered != centered;
+}
+
 /// Procedural accessory painters by sprite id. Anything not listed here is
 /// a real PNG in `assets/generated/` and renders through [sprite].
 CustomPainter? _proceduralAccessory(String name, {bool centered = false}) =>
@@ -804,6 +1305,18 @@ CustomPainter? _proceduralAccessory(String name, {bool centered = false}) =>
       'acc_glasses' => _GlassesPainter(centered: centered),
       'acc_bowtie' => _BowtiePainter(centered: centered),
       'acc_flower' => _FlowerPainter(centered: centered),
+      'acc_collar' => _CollarPainter(centered: centered),
+      'acc_bib' => _BibPainter(centered: centered),
+      'acc_nightcap' => _NightcapPainter(centered: centered),
+      'acc_jester' => _JesterPainter(centered: centered),
+      'acc_scarf' => _ScarfPainter(centered: centered),
+      'acc_sunhat' => _SunhatPainter(centered: centered),
+      'acc_royal_cape' => _CapePainter(centered: centered),
+      'acc_beret' => _BeretPainter(centered: centered),
+      'acc_medal' => _MedalPainter(centered: centered),
+      'acc_halo_crown' => _HaloCrownPainter(centered: centered),
+      'acc_gold_crown' => _GoldCrownPainter(centered: centered),
+      'acc_supreme_crown' => _SupremeCrownPainter(centered: centered),
       _ => null,
     };
 

@@ -37,6 +37,8 @@ const _emoteItems = [
   ('emote_surprised', 'OPS', Emote.oops),
   ('emote_happy', 'MERCI', Emote.thanks),
   ('emote_laugh', 'PURR', Emote.purr),
+  ('emote_love', 'DRAG', Emote.love),
+  ('emote_angry', 'GRRR', Emote.angry),
 ];
 
 /// Sprite shown for a received preset emote.
@@ -45,6 +47,8 @@ String emoteSpriteFor(Emote emote) => switch (emote) {
   Emote.wow || Emote.oops => 'emote_surprised',
   Emote.goodGame => 'emote_cheer',
   Emote.purr => 'emote_laugh',
+  Emote.love => 'emote_love',
+  Emote.angry => 'emote_angry',
 };
 
 /// New-art name -> generated fallback, for sticker images.

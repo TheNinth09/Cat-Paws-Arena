@@ -33,8 +33,8 @@ service cloud.firestore {
       return exactKeys(d, ['schemaVersion', 'revision', 'trophies', 'coins',
             'cat', 'accessory', 'fur', 'eyes', 'ears', 'pattern', 'power',
             'owned', 'claims', 'daily', 'sfx', 'music', 'english',
-            'notifications', 'avatar'])
-        && d.schemaVersion == 1
+            'notifications', 'avatar', 'roadClaims', 'unlockedEmotes'])
+        && d.schemaVersion == 2
         && d.revision is int
         && d.trophies is int && d.trophies >= 0
         && d.coins is int && d.coins >= 0
@@ -47,6 +47,10 @@ service cloud.firestore {
         && inRange(d.power, 3)
         && d.owned is list && d.owned.size() <= 512
         && d.claims is list && d.claims.size() <= 512
+        // Trophy road: up to ~800 claimed thresholds + the few emotes
+        // the road can unlock. Wire values are short preset ids.
+        && d.roadClaims is list && d.roadClaims.size() <= 1024
+        && d.unlockedEmotes is list && d.unlockedEmotes.size() <= 16
         && shortId(d.daily)
         && d.sfx is bool && d.music is bool
         && d.english is bool && d.notifications is bool
@@ -283,7 +287,8 @@ service cloud.firestore {
           && request.resource.data.from == request.auth.uid
           && request.resource.data.at == request.time
           && request.resource.data.emote in
-            ['hello', 'good_game', 'wow', 'oops', 'thanks', 'purr'];
+            ['hello', 'good_game', 'wow', 'oops', 'thanks', 'purr',
+             'love', 'angry'];
         allow update, delete: if false;
       }
     }

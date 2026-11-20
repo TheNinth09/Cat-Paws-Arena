@@ -422,41 +422,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HouseTourScreen), findsOneWidget);
     expect(find.text('TROPHY ROAD'), findsOneWidget);
-    // Claimable milestones sit between the rooms — the first one (+50
-    // paws at 250) is already claimable at 300 trophies. Check the
-    // lock/current labels while the lower rooms are still in view (the
-    // lazy list disposes offscreen elements).
-    expect(find.text('+50'), findsWidgets);
-    expect(find.text('LOCKED AT 1000 TROPHIES'), findsWidgets);
+    // Claimable milestones sit between the rooms — the first stop pays
+    // +10 paws at ~10 trophies and is already claimable at 300. Check
+    // the lock/current labels while the lower rooms are still in view
+    // (the lazy list disposes offscreen elements).
+    expect(find.text('+10'), findsWidgets);
     expect(find.text('CURRENT ROOM'), findsOneWidget);
-    // Five rooms on the road; the ListView is lazy AND reversed, so a
-    // positive drag delta reveals the medallions that sit higher up.
-    final road = find.byType(Scrollable).first;
-    for (final name in [
-      '1. LIVING ROOM',
-      '2. MAIN HALL',
-      '3. KITCHEN',
-      '4. BEDROOM',
-      '5. UPPER HALLWAY',
-    ]) {
-      await tester.scrollUntilVisible(find.text(name), 150, scrollable: road);
-      expect(find.text(name), findsOneWidget);
+    // Sixteen nodes on the road; the ListView is lazy AND reversed, and
+    // every node has a fixed height (chip 92, room 150), so jumping to a
+    // computed offset lands exactly on each medallion.
+    final position = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    Future<void> jumpToRoom(int index) async {
+      // room(150) + 50 chips(4600) between consecutive rooms.
+      position.jumpTo(index * 4750.0);
+      await tester.pumpAndSettle();
     }
-    expect(houseRoomForTrophies(999).name, 'Living');
-    expect(houseRoomForTrophies(1000).name, 'Hall');
+
+    await jumpToRoom(1);
+    expect(find.text('2. MAIN HALL'), findsOneWidget);
+    expect(find.text('LOCKED AT 500 TROPHIES'), findsWidgets);
+    await jumpToRoom(2);
+    expect(find.text('3. KITCHEN'), findsOneWidget);
+    await jumpToRoom(4);
+    expect(find.text('5. PLAYROOM'), findsOneWidget);
+    await jumpToRoom(15);
+    expect(find.text('16. SUPREME CROWN'), findsOneWidget);
+    expect(houseRoomForTrophies(499).name, 'Living');
+    expect(houseRoomForTrophies(500).name, 'Hall');
+    expect(houseRoomForTrophies(1499).name, 'Hall');
+    expect(houseRoomForTrophies(1500).name, 'Kitchen');
+    expect(houseRoomForTrophies(100000).name, 'Crown');
     // Room titles render untruncated in Romanian too (no ellipsis).
     p.english = false;
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('trophy-progress')));
     await tester.pumpAndSettle();
-    for (final name in [
-      '2. HOLUL PRINCIPAL',
-      '3. BUCĂTARIA',
-      '4. DORMITORUL',
-      '5. CULOARUL DE SUS',
+    final roPosition = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    Future<void> jumpToRoomRo(int index) async {
+      roPosition.jumpTo(index * 4750.0);
+      await tester.pumpAndSettle();
+    }
+
+    for (final (index, name) in [
+      (1, '2. HOLUL PRINCIPAL'),
+      (2, '3. BUCĂTARIA'),
+      (3, '4. DORMITORUL'),
+      (4, '5. CAMERA DE JOACĂ'),
     ]) {
-      await tester.scrollUntilVisible(find.text(name), 150, scrollable: road);
+      await jumpToRoomRo(index);
       expect(find.text(name), findsOneWidget);
     }
     expect(tester.takeException(), isNull);

@@ -697,14 +697,18 @@ class _CatsScreenState extends State<CatsScreen> {
                       ? 'ECHIPAT'
                       : player.owned.contains(item)
                       ? 'ECHIPEAZĂ'
-                      : 'MAGAZIN',
+                      : shopAccessories.contains(item)
+                      ? 'MAGAZIN'
+                      : 'LA ${roadGearThresholdOf(item)} 🏆',
                   green:
                       player.accessory != item && player.owned.contains(item),
                   dim: !player.owned.contains(item),
                   onPressed: () => player.owned.contains(item)
                       ? change(() => player.accessory =
                           player.accessory == item ? '' : item)
-                      : widget.onShop(),
+                      : shopAccessories.contains(item)
+                      ? widget.onShop()
+                      : null,
                 ),
             ],
           ),

@@ -43,7 +43,7 @@ const anon = () => env.unauthenticatedContext().firestore();
 const hours = (h) => Timestamp.fromMillis(Date.now() + h * 3600e3);
 
 const profile = (over = {}) => ({
-  schemaVersion: 1,
+  schemaVersion: 2,
   revision: 1,
   trophies: 0,
   coins: 0,
@@ -62,6 +62,8 @@ const profile = (over = {}) => ({
   english: false,
   notifications: true,
   avatar: '',
+  roadClaims: [],
+  unlockedEmotes: [],
   ...over,
 });
 
@@ -147,7 +149,9 @@ describe('users (cloud save)', () => {
     for (const bad of [
       { fur: 6 }, { eyes: 4 }, { ears: 4 }, { pattern: 5 }, { power: 3 },
       { fur: -1 }, { trophies: -1 }, { coins: '5' }, { cat: 'Unknown' },
-      { schemaVersion: 2 }, { accessory: 'x'.repeat(65) }, { daily: 'a\nb' },
+      { schemaVersion: 1 }, { schemaVersion: 3 },
+      { roadClaims: 'x' }, { unlockedEmotes: 'purr' },
+      { accessory: 'x'.repeat(65) }, { daily: 'a\nb' },
       { sfx: 1 },
     ]) {
       await assertFails(setDoc(ref, profile({ revision: 2, ...bad })), JSON.stringify(bad));

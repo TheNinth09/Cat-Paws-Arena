@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'catalog.dart';
+
 class Player extends ChangeNotifier {
   Player(this.prefs) {
     final raw = prefs.getString('player');
@@ -81,23 +83,26 @@ class Player extends ChangeNotifier {
   /// Duel emote wire values the player may send — the standard six, plus
   /// any extras unlocked along the trophy road.
   Set<String> unlockedEmotes = Set<String>.of(baseEmotes);
-  int get tier => trophies >= 4000
-      ? 4
-      : trophies >= 3000
-      ? 3
-      : trophies >= 2000
-      ? 2
-      : trophies >= 1000
-      ? 1
-      : 0;
-  int get next => [1000, 2000, 3000, 4000, 6000][tier];
-  String get room => [
-    'Living',
-    'Holul Principal',
-    'Bucătăria',
-    'Dormitorul Stăpânului',
-    'Culoarul de Sus',
-  ][tier];
+  /// Index of the trophy-road room the player currently lives in
+  /// (0 = Living … 15 = Supreme Crown).
+  int get tier {
+    var t = 0;
+    for (var i = 0; i < roadRoomThresholds.length; i++) {
+      if (trophies >= roadRoomThresholds[i]) t = i;
+    }
+    return t;
+  }
+
+  /// Next room threshold to reach; at the crown it stays on the final
+  /// 100000 goal.
+  int get next {
+    for (final t in roadRoomThresholds) {
+      if (trophies < t) return t;
+    }
+    return roadRoomThresholds.last;
+  }
+
+  String get room => roadRoomNamesRo[tier];
   String get today => DateTime.now().toIso8601String().substring(0, 10);
   Future<void> save() async {
     notifyListeners();

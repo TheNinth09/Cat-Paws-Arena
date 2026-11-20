@@ -333,6 +333,25 @@ void main() {
       expect(CloudProfile.fromJson(json).toJson(), json);
     });
 
+    test('schema v1 saves migrate to v2 with base emotes', () async {
+      final json = await valid()
+        ..['schemaVersion'] = 1
+        ..remove('roadClaims')
+        ..remove('unlockedEmotes');
+      final profile = CloudProfile.fromJson(json);
+      expect(profile.roadClaims, isEmpty);
+      expect(profile.unlockedEmotes, isEmpty);
+    });
+
+    test('road progress round-trips through the cloud shape', () async {
+      final json = await valid();
+      json['roadClaims'] = [10, 20, 500];
+      json['unlockedEmotes'] = ['love', 'angry'];
+      final profile = CloudProfile.fromJson(json);
+      expect(profile.roadClaims, {10, 20, 500});
+      expect(profile.unlockedEmotes, {'love', 'angry'});
+    });
+
     test('rejects unknown keys such as a typed name', () async {
       final json = await valid()
         ..['name'] = 'Alex';
@@ -344,7 +363,7 @@ void main() {
 
     test('rejects wrong types, negatives and unknown schema', () async {
       final cases = <String, Object?>{
-        'schemaVersion': 2,
+        'schemaVersion': 3,
         'trophies': -1,
         'coins': '5',
         'sfx': 1,
@@ -767,7 +786,7 @@ void main() {
     for (final emote in Emote.values) {
       expect(Emote.fromWire(emote.wire), emote);
     }
-    expect(Emote.values.map((e) => e.wire).toSet(), hasLength(6));
+    expect(Emote.values.map((e) => e.wire).toSet(), hasLength(8));
     for (final text in ['hi there', 'HELLO', '', null, 3]) {
       expect(Emote.fromWire(text), isNull);
     }

@@ -27,8 +27,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Player get player => widget.player;
   bool get english => player.english;
 
-  /// The six preset duel emotes (sprite + caption + wire name) — the
-  /// full set; unlocked ones show in colour, the rest greyed out.
+  /// The preset duel emotes (sprite + caption + wire name) — the full
+  /// set; unlocked ones show in colour, the rest greyed out. `love` and
+  /// `angry` are trophy-road exclusives.
   static const _emotes = [
     ('emote_happy', 'SALUT', 'hello'),
     ('emote_surprised', 'WOW', 'wow'),
@@ -36,6 +37,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ('emote_surprised', 'OPS', 'oops'),
     ('emote_happy', 'MERCI', 'thanks'),
     ('emote_laugh', 'PURR', 'purr'),
+    ('emote_love', 'DRAG', 'love'),
+    ('emote_angry', 'GRRR', 'angry'),
   ];
 
   @override

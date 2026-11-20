@@ -24,12 +24,20 @@ class CloudProfile {
     required this.english,
     required this.notifications,
     this.avatar = '',
+    this.roadClaims = const {},
+    this.unlockedEmotes = const {},
     this.revision = 0,
   });
 
-  static const schemaVersion = 1;
+  static const schemaVersion = 2;
   static const maxIdLength = 64;
   static const maxListLength = 512;
+
+  /// Claimed road thresholds — up to ~800 nodes on the 100000 road.
+  static const maxRoadClaims = 1024;
+
+  /// Preset emotes the road can unlock — the wire values only.
+  static const maxEmotes = 16;
 
   /// Values the cat screen and avatar can draw (lib/cats_screen.dart,
   /// lib/cat_avatar.dart). Anything else is not a save this app made.
@@ -44,6 +52,11 @@ class CloudProfile {
   final Set<int> claims;
   final bool sfx, music, english, notifications;
   final String avatar;
+
+  /// Trophy-road progress: claimed milestone thresholds and the emotes
+  /// those milestones unlocked. Added in schema v2.
+  final Set<int> roadClaims;
+  final Set<String> unlockedEmotes;
 
   factory CloudProfile.fromPlayer(Player p, {int revision = 0}) => CloudProfile(
     trophies: p.trophies,
@@ -63,6 +76,8 @@ class CloudProfile {
     english: p.english,
     notifications: p.notifications,
     avatar: p.avatarSpec,
+    roadClaims: {...p.roadClaims},
+    unlockedEmotes: {...p.unlockedEmotes},
     revision: revision,
   );
 
@@ -86,7 +101,9 @@ class CloudProfile {
       ..music = music
       ..english = english
       ..notifications = notifications
-      ..avatarSpec = avatar;
+      ..avatarSpec = avatar
+      ..roadClaims = {...roadClaims}
+      ..unlockedEmotes = {...Player.baseEmotes, ...unlockedEmotes};
     return p.save();
   }
 
@@ -108,6 +125,8 @@ class CloudProfile {
     english: english,
     notifications: notifications,
     avatar: avatar,
+    roadClaims: roadClaims,
+    unlockedEmotes: unlockedEmotes,
     revision: value,
   );
 
@@ -131,6 +150,8 @@ class CloudProfile {
     'english': english,
     'notifications': notifications,
     'avatar': avatar,
+    'roadClaims': roadClaims.toList()..sort(),
+    'unlockedEmotes': unlockedEmotes.toList()..sort(),
   };
 
   static const _keys = {
@@ -153,16 +174,23 @@ class CloudProfile {
     'english',
     'notifications',
     'avatar',
+    'roadClaims',
+    'unlockedEmotes',
   };
 
   /// Strict parse: unknown keys, wrong types or an unknown schema version
   /// throw [OnlineException] with [OnlineErrorCode.invalidCloudSave].
+  /// Schema v1 saves (no road progress) migrate to v2 with empty road
+  /// claims and the base emote set.
   factory CloudProfile.fromJson(Map<String, Object?> json) {
     Never bad(String why) =>
         throw OnlineException(OnlineErrorCode.invalidCloudSave, why);
-    final extra = json.keys.toSet().difference(_keys);
+    final version = json['schemaVersion'];
+    if (version != 1 && version != schemaVersion) bad('schemaVersion');
+    final extra = json.keys.toSet().difference(
+      version == 1 ? _keys.difference({'roadClaims', 'unlockedEmotes'}) : _keys,
+    );
     if (extra.isNotEmpty) bad('unknown keys $extra');
-    if (json['schemaVersion'] != schemaVersion) bad('schemaVersion');
     int count(String k) {
       final v = json[k];
       return v is int && v >= 0 ? v : bad(k);
@@ -182,9 +210,9 @@ class CloudProfile {
         v is String && v.length <= maxIdLength && !v.contains(_control)
         ? v
         : bad(k);
-    List<Object?> list(String k) {
+    List<Object?> list(String k, [int max = maxListLength]) {
       final v = json[k];
-      return v is List && v.length <= maxListLength ? v : bad(k);
+      return v is List && v.length <= max ? v : bad(k);
     }
 
     return CloudProfile(
@@ -208,6 +236,15 @@ class CloudProfile {
       english: flag('english'),
       notifications: flag('notifications'),
       avatar: _avatar(json['avatar']),
+      roadClaims: version == 1
+          ? const {}
+          : {
+              for (final v in list('roadClaims', maxRoadClaims))
+                v is int && v >= 0 ? v : bad('roadClaims'),
+            },
+      unlockedEmotes: version == 1
+          ? const {}
+          : {for (final v in list('unlockedEmotes', maxEmotes)) id(v, 'unlockedEmotes')},
     );
   }
 

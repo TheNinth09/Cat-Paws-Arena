@@ -6,7 +6,10 @@ enum Emote {
   wow('wow'),
   oops('oops'),
   thanks('thanks'),
-  purr('purr');
+  purr('purr'),
+  // Trophy-road exclusives — granted by milestones on the road.
+  love('love'),
+  angry('angry');
 
   const Emote(this.wire);
   final String wire;

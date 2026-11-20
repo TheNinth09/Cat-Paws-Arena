@@ -7,34 +7,70 @@ import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
 
 /// Trophy road / house tour, Match Masters / Brawl Stars style: one
-/// continuous scrollable road climbed bottom-up. Between rooms sit
-/// claimable milestones (small paw gifts + emote unlocks); finishing a
-/// room grants its accessory + coins. Each room medallion opens a
-/// detail sheet with that room's own background, cats and reward.
-class HouseTourScreen extends StatelessWidget {
+/// continuous scrollable road climbed bottom-up to the Supreme Crown at
+/// 100000 trophies. Between rooms sit 50 claimable milestones each
+/// (small paw gifts + a few exclusive emotes); finishing a room grants
+/// its accessory + coins. Each room medallion opens a detail sheet with
+/// that room's own background and reward.
+class HouseTourScreen extends StatefulWidget {
   const HouseTourScreen({super.key, required this.player});
 
   final Player player;
+
+  @override
+  State<HouseTourScreen> createState() => _HouseTourScreenState();
+}
+
+class _HouseTourScreenState extends State<HouseTourScreen> {
+  final _scroll = ScrollController();
+
+  /// Fixed node heights — required by `itemExtentBuilder` so the road
+  /// stays lazy and the jump-to-current offset is exact.
+  static const _chipH = 92.0;
+  static const _roomH = 150.0;
 
   static const _icons = [
     Icons.weekend_rounded,
     Icons.meeting_room_rounded,
     Icons.kitchen_rounded,
     Icons.bed_rounded,
+    Icons.toys_rounded,
+    Icons.menu_book_rounded,
+    Icons.ac_unit_rounded,
+    Icons.wb_sunny_rounded,
+    Icons.castle_rounded,
+    Icons.palette_rounded,
     Icons.stairs_rounded,
+    Icons.emoji_events_rounded,
+    Icons.auto_awesome_rounded,
+    Icons.favorite_rounded,
+    Icons.fort_rounded,
+    Icons.workspace_premium_rounded,
   ];
 
   /// Zigzag: rooms alternate left/right like the Brawl Stars road.
-  static const _sides = [false, true, false, true, false];
+  static const _sides = [
+    false, true, false, true, false, true, false, true, //
+    false, true, false, true, false, true, false, true,
+  ];
 
+  Player get player => widget.player;
   bool get english => player.english;
 
-  @override
-  Widget build(BuildContext context) {
-    final names = english ? houseRoomDisplayNamesEn : houseRoomDisplayNames;
+  /// One laid-out road node: widget, its fixed height and the trophy
+  /// goal it guards (used to find the player's current spot).
+  static ({Widget child, double height, int goal}) _node(
+    Widget child,
+    double height,
+    int goal,
+  ) => (child: child, height: height, goal: goal);
+
+  /// Builds the road bottom-up: room0, 50 milestones, room1, ... crown.
+  List<({Widget child, double height, int goal})> _buildNodes(
+    List<String> names,
+  ) {
     final milestones = roadMilestones;
-    // Build the road bottom-up: room0, ms, ms, ms, room1, ms...
-    final nodes = <Widget>[];
+    final nodes = <({Widget child, double height, int goal})>[];
     var m = 0;
     for (var i = 0; i < houseRooms.length; i++) {
       if (i > 0) {
@@ -42,8 +78,17 @@ class HouseTourScreen extends StatelessWidget {
         while (m < milestones.length &&
             !milestones[m].room &&
             milestones[m].trophies < houseRoomThresholds[i]) {
+          final ms = milestones[m++];
           nodes.add(
-            _MilestoneChip(player: player, milestone: milestones[m++]),
+            _node(
+              _MilestoneChip(
+                player: player,
+                milestone: ms,
+                current: ms.trophies == _currentGoal,
+              ),
+              _chipH,
+              ms.trophies,
+            ),
           );
         }
         // the room-completion milestone rides on the room node itself
@@ -53,18 +98,83 @@ class HouseTourScreen extends StatelessWidget {
         }
       }
       nodes.add(
-        _RoomNode(
-          player: player,
-          index: i,
-          name: names[i],
-          icon: _icons[i],
-          art: houseRoomArt[i],
-          rightSide: _sides[i],
+        _node(
+          _RoomNode(
+            player: player,
+            index: i,
+            name: names[i],
+            icon: _icons[i],
+            art: houseRoomArt[i],
+            rightSide: _sides[i],
+          ),
+          _roomH,
+          houseRoomThresholds[i],
         ),
       );
     }
+    return nodes;
+  }
+
+  /// The first road goal the player has not reached yet — the chip that
+  /// glows as "next" and where the jump button lands.
+  int get _currentGoal {
+    for (final m in roadMilestones) {
+      if (player.trophies < m.trophies) return m.trophies;
+    }
+    return roadFinalThreshold;
+  }
+
+  /// Index of the node guarding [_currentGoal] (a chip or a room).
+  int _currentNode(List<({Widget child, double height, int goal})> nodes) {
+    final goal = _currentGoal;
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].goal >= goal) return i;
+    }
+    return nodes.length - 1;
+  }
+
+  void _jumpToCurrent(
+    List<({Widget child, double height, int goal})> nodes,
+  ) {
+    final index = _currentNode(nodes);
+    var offset = 0.0;
+    for (var i = 0; i < index; i++) {
+      offset += nodes[i].height;
+    }
+    _scroll.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final names = english ? houseRoomDisplayNamesEn : houseRoomDisplayNames;
+    final nodes = _buildNodes(names);
     return Scaffold(
       backgroundColor: const Color(0xff2e2430),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: FloatingActionButton.extended(
+          key: const ValueKey('road-jump-current'),
+          heroTag: 'road-jump-current',
+          backgroundColor: gold,
+          foregroundColor: ink,
+          icon: const Icon(Icons.pets_rounded),
+          label: Text(
+            english ? 'MY SPOT' : 'POZIȚIA MEA',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          onPressed: () => _jumpToCurrent(nodes),
+        ),
+      ),
       body: AnimatedBuilder(
         animation: player,
         builder: (context, _) => Stack(
@@ -85,11 +195,17 @@ class HouseTourScreen extends StatelessWidget {
               ),
             ),
             SafeArea(
-              child: ListView(
+              child: ListView.builder(
                 key: const PageStorageKey('house-tour-scroll'),
+                controller: _scroll,
                 reverse: true,
-                padding: const EdgeInsets.fromLTRB(14, 90, 14, 24),
-                children: nodes,
+                padding: const EdgeInsets.fromLTRB(14, 90, 14, 90),
+                itemCount: nodes.length,
+                itemExtentBuilder: (i, _) => nodes[i].height,
+                itemBuilder: (context, i) => SizedBox(
+                  height: nodes[i].height,
+                  child: Center(child: nodes[i].child),
+                ),
               ),
             ),
             // Floating header: back arrow + titles, no bar.
@@ -174,10 +290,28 @@ class HouseTourScreen extends StatelessWidget {
 /// showing the reward (paws or emote), the trophy threshold and its
 /// state — locked / claimable (glowing) / claimed (check).
 class _MilestoneChip extends StatelessWidget {
-  const _MilestoneChip({required this.player, required this.milestone});
+  const _MilestoneChip({
+    required this.player,
+    required this.milestone,
+    this.current = false,
+  });
 
   final Player player;
   final RoadMilestone milestone;
+
+  /// True on the single next goal — drawn with a bright gold frame so
+  /// the player's spot on the road is obvious at a glance.
+  final bool current;
+
+  /// Sprite art for road-exclusive emotes; anything else keeps the
+  /// generic emote button icon.
+  static const _emoteArt = {
+    'love': 'emote_love',
+    'angry': 'emote_angry',
+  };
+
+  /// Player-facing emote labels for the room-sheet route list.
+  static const emoteLabels = {'love': 'DRAG', 'angry': 'GRRR'};
 
   @override
   Widget build(BuildContext context) {
@@ -185,6 +319,7 @@ class _MilestoneChip extends StatelessWidget {
     final claimed = player.roadClaims.contains(milestone.trophies);
     final claimable = reached && !claimed;
     final isEmote = milestone.emote != null;
+    final glow = claimable || current;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -224,13 +359,13 @@ class _MilestoneChip extends StatelessWidget {
                     ),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: claimable
+                      color: glow
                           ? const Color(0xfffff3c4)
                           : const Color(0x55ffe9bd),
-                      width: claimable ? 2 : 1.2,
+                      width: current ? 2.6 : (claimable ? 2 : 1.2),
                     ),
                     boxShadow: [
-                      if (claimable)
+                      if (glow)
                         const BoxShadow(
                           color: Color(0x88ffc63c),
                           blurRadius: 14,
@@ -253,15 +388,9 @@ class _MilestoneChip extends StatelessWidget {
                           size: 20,
                         )
                       else if (isEmote)
-                        arenaImage(
-                          'btn_emote',
-                          width: 20,
-                          height: 20,
-                          fallback: const Icon(
-                            Icons.emoji_emotions_rounded,
-                            size: 20,
-                            color: Colors.white,
-                          ),
+                        sprite(
+                          _emoteArt[milestone.emote] ?? 'btn_emote',
+                          size: 20,
                         )
                       else
                         sprite('icon_paw_coin', size: 20),
@@ -639,6 +768,56 @@ class _RoomSheet extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Threshold + unlock state, right under the room name.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xff5f4a38),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          sprite('icon_trophy', size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${room.threshold}',
+                            style: const TextStyle(
+                              color: Color(0xffffd75e),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      unlocked
+                          ? (claimed
+                                ? (english ? 'REWARD CLAIMED' : 'RECOMPENSĂ LUATĂ')
+                                : (english ? 'UNLOCKED' : 'DEBLOCATĂ'))
+                          : player.trophies >= houseRooms[index - 1].threshold
+                          ? (english ? 'IN PROGRESS' : 'ÎN PROGRES')
+                          : (english ? 'LOCKED' : 'BLOCATĂ'),
+                      style: TextStyle(
+                        color: unlocked
+                            ? const Color(0xff4e9c22)
+                            : const Color(0xff8a6242),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
                 _RoomRoute(player: player, index: index, english: english),
                 const SizedBox(height: 14),
                 if (reward != null)
@@ -739,7 +918,11 @@ class _RoomSheet extends StatelessWidget {
                   ),
                 const SizedBox(height: 8),
                 Text(
-                  unlocked
+                  reward == null
+                      ? (english
+                            ? 'Win duels to climb the road — the next room waits above.'
+                            : 'Câștigă dueluri și urcă drumul — camera următoare te așteaptă.')
+                      : unlocked
                       ? (english
                             ? 'Tap CLAIM to collect the room reward.'
                             : 'Apasă IA pentru recompensa camerei.')
@@ -808,11 +991,18 @@ class _RoomRoute extends StatelessWidget {
       for (final m in roadMilestones)
         if (m.trophies >= start && m.trophies < end) m,
     ];
+    final last = index + 1 >= houseRooms.length;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          english ? 'ROUTE TO THE NEXT ROOM' : 'TRASEUL SPRE CAMERA URMĂTOARE',
+          last
+              ? (english
+                    ? 'ROUTE TO THE SUPREME CROWN'
+                    : 'TRASEUL SPRE COROANA SUPREMĂ')
+              : (english
+                    ? 'ROUTE TO THE NEXT ROOM'
+                    : 'TRASEUL SPRE CAMERA URMĂTOARE'),
           style: const TextStyle(
             color: Color(0xff8a6242),
             fontSize: 11,
@@ -821,18 +1011,26 @@ class _RoomRoute extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        for (var i = 0; i < stops.length; i++) ...[
-          if (i > 0)
-            Container(
-              width: 3,
-              height: 10,
-              decoration: BoxDecoration(
-                color: const Color(0xffd9b98c),
-                borderRadius: BorderRadius.circular(2),
+        // 50 stops per segment — the list scrolls inside a fixed frame.
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 300),
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            itemCount: stops.length,
+            separatorBuilder: (context, _) => Center(
+              child: Container(
+                width: 3,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: const Color(0xffd9b98c),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          _routeStop(stops[i]),
-        ],
+            itemBuilder: (context, i) => _routeStop(stops[i]),
+          ),
+        ),
       ],
     );
   }
@@ -844,7 +1042,7 @@ class _RoomRoute extends StatelessWidget {
     final rewardText = m.gear != null
         ? '${itemName(m.gear!)} + ${m.coins} 🐾'
         : m.emote != null
-        ? (english ? 'Emote ${m.emote}' : 'Emote ${m.emote}')
+        ? 'Emote „${_MilestoneChip.emoteLabels[m.emote] ?? m.emote}”'
         : '${m.coins} 🐾';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
