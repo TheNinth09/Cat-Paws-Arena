@@ -636,7 +636,7 @@ class ArenaBottomBar extends StatelessWidget {
           // above the bar's top edge like the reference nav.
           height: 66,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
+            padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [

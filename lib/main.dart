@@ -20,7 +20,10 @@ export 'match_screen.dart' show MatchScreen;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  // Full immersive mode: no status bar (clock/battery) and no nav bar —
+  // the art climbs to the screen edges and no band sits above the HUD
+  // or under the nav bar. A swipe from an edge reveals them transiently.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   // Transparent system bars everywhere — the default nav-bar colour shows as
   // a dark band at the bottom (and a scrim at the top) on many devices.
   SystemChrome.setSystemUIOverlayStyle(

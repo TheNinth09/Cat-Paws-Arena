@@ -425,6 +425,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 constraints: const BoxConstraints(maxWidth: 540),
                 child: Column(
                   children: [
+                    // Status bar is hidden system-wide — keep a small
+                    // fixed gap so the HUD never touches the screen edge.
+                    const SizedBox(height: 8),
                     PlayerHud(
                       avatar: playerAvatarArt(p, size: 46),
                       name: p.name,
