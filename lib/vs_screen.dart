@@ -131,191 +131,433 @@ class _VsScreenState extends State<VsScreen>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xff241d3f), Color(0xff3a2a5e), Color(0xff54346b)],
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 14),
-            Text(
-              'CAT PAWS ARENA',
-              style: TextStyle(
-                color: gold,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 3,
-                shadows: const [
-                  Shadow(color: Color(0x88000000), offset: Offset(0, 2)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              english ? '1v1 DUEL' : 'DUEL 1v1',
-              style: const TextStyle(
-                color: Color(0xffcbb8e8),
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(child: _fighterCard(player: true)),
-                  const SizedBox(width: 8),
-                  const _VsLightning(),
-                  const SizedBox(width: 8),
-                  Expanded(child: _fighterCard(player: false)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            _stakesPanel(),
-            const Spacer(),
-            _preparing(),
-            const SizedBox(height: 10),
-            ArenaButton(
-              key: const ValueKey('vs-cancel'),
-              text: english ? 'CANCEL' : 'ANULEAZĂ',
-              danger: true,
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+    body: MatchupScene(
+      english: english,
+      modeText: english ? '1v1 DUEL' : 'DUEL 1v1',
+      playerName: p.name,
+      playerTrophies: p.trophies,
+      playerBadge: english ? 'YOU' : 'TU',
+      playerPortrait: duelCatArt(p, size: 118),
+      opponentName: widget.opponent.name,
+      opponentTrophies: widget.opponent.trophies,
+      opponentBadge: widget.opponent.badge,
+      opponentPortrait: widget.opponent.avatar,
+      opponentSubtitle: widget.opponent.subtitle,
+      statusText: english
+          ? 'Getting the arena ready...'
+          : 'Se pregătește arena...',
+      cancelKey: const ValueKey('vs-cancel'),
+      cancelText: english ? 'CANCEL' : 'ANULEAZĂ',
+      onCancel: () => Navigator.of(context).maybePop(),
+      pulse: _dots,
     ),
   );
+}
 
-  Widget _fighterCard({required bool player}) {
-    final blue = player;
-    final name = player ? p.name : widget.opponent.name;
-    final trophies = player ? p.trophies : widget.opponent.trophies;
-    final badge = player ? (english ? 'YOU' : 'TU') : widget.opponent.badge;
-    final subtitle = player
-        ? (english ? 'PLAYER' : 'JUCĂTOR')
-        : widget.opponent.subtitle;
-    final avatar = player
-        ? CatAvatar(p, size: 58, allowPhoto: false)
-        : widget.opponent.avatar;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: blue
-              ? const [Color(0xff4a90d9), Color(0xff2f5f9e), Color(0xff1d3f6e)]
-              : const [Color(0xff8a5fc0), Color(0xff5e3a8e), Color(0xff3c2554)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: blue ? const Color(0xffbcd8ff) : const Color(0xffe2c8ff),
-          width: 1.6,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x55000000),
-            offset: Offset(0, 4),
-            blurRadius: 10,
+/// Full-body art for a cat on the VS/search scene; falls back to the
+/// procedural avatar when the cat has no drawn art.
+Widget duelCatArt(Player p, {double size = 118}) {
+  final asset = switch (p.cat) {
+    'Tzuki' => 'cat_tzuki',
+    'Bubble' => 'cat_bubble',
+    'Custom' => 'cat_custom',
+    _ => null,
+  };
+  if (asset == null) return CatAvatar(p, size: size, allowPhoto: false);
+  return arenaImage(
+    asset,
+    height: size,
+    fit: BoxFit.contain,
+    fallback: CatAvatar(p, size: size, allowPhoto: false),
+  );
+}
+
+/// The single matchmaking/search page shared by [VsScreen] and the
+/// [MatchScreen] searching phase — room artwork, cartoon logo, two tall
+/// fighter cards, wooden stakes board, animated status and one cancel
+/// action. Keeping both flows on this scene makes the transition read as
+/// one continuous page.
+class MatchupScene extends StatelessWidget {
+  const MatchupScene({
+    super.key,
+    required this.english,
+    required this.modeText,
+    required this.playerName,
+    required this.playerTrophies,
+    required this.playerBadge,
+    required this.playerPortrait,
+    required this.opponentName,
+    required this.opponentTrophies,
+    required this.opponentBadge,
+    required this.opponentPortrait,
+    this.opponentSubtitle,
+    required this.statusText,
+    required this.cancelKey,
+    required this.cancelText,
+    required this.onCancel,
+    this.middle,
+    this.pulse,
+    this.backgroundAsset = 'bg_living_room',
+  });
+
+  final bool english;
+  final String modeText;
+  final String playerName;
+  final int playerTrophies;
+  final String playerBadge;
+  final Widget playerPortrait;
+  final String opponentName;
+  final int opponentTrophies;
+  final String opponentBadge;
+  final Widget opponentPortrait;
+  final String? opponentSubtitle;
+  final String statusText;
+  final Key cancelKey;
+  final String cancelText;
+  final VoidCallback onCancel;
+
+  /// Optional extra widget between the stakes board and the status row —
+  /// used for the offline bot difficulty picker.
+  final Widget? middle;
+
+  /// Optional ticker driving the VS pulse and the status dots.
+  final Animation<double>? pulse;
+  final String backgroundAsset;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      arenaImage(
+        backgroundAsset,
+        fit: BoxFit.cover,
+        fallback: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xff241d3f), Color(0xff3a2a5e), Color(0xff54346b)],
+            ),
           ),
-        ],
+        ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.flag_rounded, size: 13, color: cream.withValues(alpha: .9)),
-              const SizedBox(width: 4),
-              Text(
-                badge,
-                style: const TextStyle(
-                  color: cream,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
-                ),
-              ),
+      const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xa31d1224),
+              Color(0x381d1224),
+              Color(0x0a1d1224),
+              Color(0xb31d1224),
             ],
+            stops: [0, .3, .62, 1],
           ),
-          const SizedBox(height: 8),
-          Container(
-            width: 66,
-            height: 66,
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xfffff3d0),
-              border: Border.all(color: ink, width: 2),
-            ),
-            child: ClipOval(child: avatar),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: cream,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              shadows: [Shadow(color: Color(0x66000000), offset: Offset(0, 1))],
-            ),
-          ),
-          const SizedBox(height: 3),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+        ),
+      ),
+      SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
             children: [
-              sprite('icon_trophy', size: 15),
-              const SizedBox(width: 4),
-              Flexible(
+              const SizedBox(height: 10),
+              const _ArenaLogo(),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xb32b1c33),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0x66ffd98b),
+                    width: 1.4,
+                  ),
+                ),
                 child: Text(
-                  '$trophies',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  modeText,
                   style: const TextStyle(
-                    color: gold,
-                    fontSize: 13,
+                    color: Color(0xfff0d9b0),
+                    fontSize: 11,
                     fontWeight: FontWeight.w900,
+                    letterSpacing: 1.6,
                   ),
                 ),
               ),
+              const Spacer(flex: 2),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: _MatchupCard(
+                      blue: true,
+                      badge: playerBadge,
+                      name: playerName,
+                      trophies: playerTrophies,
+                      portrait: playerPortrait,
+                    ),
+                  ),
+                  _VsLetters(pulse: pulse),
+                  Expanded(
+                    child: _MatchupCard(
+                      blue: false,
+                      badge: opponentBadge,
+                      name: opponentName,
+                      trophies: opponentTrophies,
+                      subtitle: opponentSubtitle,
+                      portrait: opponentPortrait,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(flex: 3),
+              _StakesPanel(english: english),
+              if (middle != null) ...[const SizedBox(height: 10), middle!],
+              const SizedBox(height: 12),
+              _MatchupStatus(text: statusText, pulse: pulse),
+              const SizedBox(height: 12),
+              ArenaButton(
+                key: cancelKey,
+                text: cancelText,
+                danger: true,
+                onPressed: onCancel,
+              ),
+              const SizedBox(height: 12),
             ],
           ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xffd8c8f0),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
+        ),
+      ),
+    ],
+  );
+}
+
+/// Chunky cartoon logo for the matchup scene — single findable text.
+class _ArenaLogo extends StatelessWidget {
+  const _ArenaLogo();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      sprite('btn_play_paw', size: 26),
+      const SizedBox(height: 2),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          'CAT PAWS ARENA',
+          style: TextStyle(
+            color: gold,
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2.5,
+            shadows: const [
+              Shadow(color: Color(0xff6b3a12), offset: Offset(0, 3)),
+              Shadow(
+                color: Color(0x88000000),
+                offset: Offset(0, 5),
+                blurRadius: 8,
               ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+/// Tall framed fighter card like the reference matchup page: coloured
+/// gradient frame, badge pill on the top edge, big portrait panel, name
+/// and trophy count.
+class _MatchupCard extends StatelessWidget {
+  const _MatchupCard({
+    required this.blue,
+    required this.badge,
+    required this.name,
+    required this.trophies,
+    required this.portrait,
+    this.subtitle,
+  });
+
+  final bool blue;
+  final String badge;
+  final String name;
+  final int trophies;
+  final Widget portrait;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = blue
+        ? const [Color(0xff5ea4e8), Color(0xff2f5f9e), Color(0xff1d3f6e)]
+        : const [Color(0xffa06fd0), Color(0xff5e3a8e), Color(0xff3c2554)];
+    final border = blue ? const Color(0xffbcd8ff) : const Color(0xffe2c8ff);
+    final badgeColor = blue ? const Color(0xffd9ecff) : const Color(0xfff0dfff);
+    final badgeInk = blue ? const Color(0xff1d3f6e) : const Color(0xff3c2554);
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.topCenter,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.fromLTRB(8, 18, 8, 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: colors,
             ),
-          ],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x66000000),
+                offset: Offset(0, 5),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 88,
+                width: double.infinity,
+                alignment: Alignment.bottomCenter,
+                decoration: BoxDecoration(
+                  color: const Color(0x33ffffff),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0x44ffffff),
+                    width: 1.2,
+                  ),
+                ),
+                child: portrait,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: cream,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  shadows: [
+                    Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  sprite('icon_trophy', size: 15),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      '$trophies',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: gold,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xffd8c8f0),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+          decoration: BoxDecoration(
+            color: badgeColor,
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: border, width: 1.4),
+            boxShadow: const [
+              BoxShadow(color: Color(0x55000000), offset: Offset(0, 2)),
+            ],
+          ),
+          child: Text(
+            badge,
+            style: TextStyle(
+              color: badgeInk,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Big cartoon VS letters between the fighter cards, pulsing when a
+/// [pulse] ticker is provided.
+class _VsLetters extends StatelessWidget {
+  const _VsLetters({this.pulse});
+  final Animation<double>? pulse;
+
+  @override
+  Widget build(BuildContext context) {
+    final letters = Text(
+      'VS',
+      style: TextStyle(
+        color: gold,
+        fontSize: 44,
+        fontWeight: FontWeight.w900,
+        height: 1,
+        shadows: const [
+          Shadow(color: Color(0xff6b3a12), offset: Offset(0, 3)),
+          Shadow(
+            color: Color(0xaa000000),
+            offset: Offset(0, 6),
+            blurRadius: 12,
+          ),
         ],
       ),
     );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: pulse == null
+          ? letters
+          : AnimatedBuilder(
+              animation: pulse!,
+              builder: (context, child) =>
+                  Transform.scale(scale: 1 + 0.08 * pulse!.value, child: child),
+              child: letters,
+            ),
+    );
   }
+}
 
-  /// Wooden Match Stakes board: +30 win / 0 draw / -25 loss.
-  Widget _stakesPanel() => Container(
-    margin: const EdgeInsets.symmetric(horizontal: 22),
+/// Wooden stakes board: +30 win / 0 draw / -25 loss.
+class _StakesPanel extends StatelessWidget {
+  const _StakesPanel({required this.english});
+  final bool english;
+
+  @override
+  Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
@@ -349,9 +591,17 @@ class _VsScreenState extends State<VsScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _stake('+30', english ? 'WIN' : 'VICTORIE', const Color(0xffb9e07a)),
+            _stake(
+              '+30',
+              english ? 'WIN' : 'VICTORIE',
+              const Color(0xffb9e07a),
+            ),
             _stake('0', english ? 'DRAW' : 'EGAL', const Color(0xffe8e0d0)),
-            _stake('-25', english ? 'LOSS' : 'INFRANGERE', const Color(0xffff9d8a)),
+            _stake(
+              '-25',
+              english ? 'LOSS' : 'INFRANGERE',
+              const Color(0xffff9d8a),
+            ),
           ],
         ),
       ],
@@ -383,21 +633,45 @@ class _VsScreenState extends State<VsScreen>
       ),
     ],
   );
+}
 
-  Widget _preparing() => AnimatedBuilder(
-    animation: _dots,
+/// Bouncing dots + status line. Uses the caller's [pulse] ticker when
+/// provided, otherwise animates itself.
+class _MatchupStatus extends StatelessWidget {
+  const _MatchupStatus({required this.text, this.pulse});
+  final String text;
+  final Animation<double>? pulse;
+
+  @override
+  Widget build(BuildContext context) => pulse == null
+      ? _SelfAnimatedDotsHolder(text: text)
+      : _Dots(text: text, pulse: pulse!);
+}
+
+class _Dots extends StatelessWidget {
+  const _Dots({required this.text, required this.pulse});
+  final String text;
+  final Animation<double> pulse;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: pulse,
     builder: (context, _) {
       Widget dot(int i) {
         final wave =
-            0.5 + 0.5 * math.sin((_dots.value * 2 - i * 0.33) * math.pi);
-        return Opacity(
-          opacity: 0.3 + 0.7 * wave,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: gold,
+            0.5 + 0.5 * math.sin((pulse.value * 2 - i * 0.33) * math.pi);
+        return Transform.translate(
+          offset: Offset(0, -3 * wave),
+          child: Opacity(
+            opacity: 0.3 + 0.7 * wave,
+            child: Container(
+              width: 9,
+              height: 9,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: gold,
+                boxShadow: [BoxShadow(color: Color(0x66ffc63c), blurRadius: 6)],
+              ),
             ),
           ),
         );
@@ -411,17 +685,19 @@ class _VsScreenState extends State<VsScreen>
             children: [
               for (var i = 0; i < 3; i++) ...[
                 dot(i),
-                if (i < 2) const SizedBox(width: 8),
+                if (i < 2) const SizedBox(width: 9),
               ],
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            english ? 'Getting the arena ready...' : 'Se pregătește arena...',
+            text,
+            textAlign: TextAlign.center,
             style: const TextStyle(
-              color: Color(0xffd8c8f0),
+              color: Color(0xfff0ddc8),
               fontSize: 14,
               fontWeight: FontWeight.w800,
+              shadows: [Shadow(color: Color(0xaa000000), offset: Offset(0, 1))],
             ),
           ),
         ],
@@ -430,28 +706,30 @@ class _VsScreenState extends State<VsScreen>
   );
 }
 
-/// Lightning VS badge between the two fighter cards.
-class _VsLightning extends StatelessWidget {
-  const _VsLightning();
+class _SelfAnimatedDotsHolder extends StatefulWidget {
+  const _SelfAnimatedDotsHolder({required this.text});
+  final String text;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 52,
-    height: 52,
-    decoration: const BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xfffff6bd), gold, Color(0xffe8a01f)],
-      ),
-      boxShadow: [
-        BoxShadow(color: Color(0x88ffc63c), blurRadius: 14),
-        BoxShadow(color: Color(0x66000000), offset: Offset(0, 3)),
-      ],
-    ),
-    child: const Icon(Icons.bolt_rounded, color: ink, size: 30),
-  );
+  State<_SelfAnimatedDotsHolder> createState() =>
+      _SelfAnimatedDotsHolderState();
+}
+
+class _SelfAnimatedDotsHolderState extends State<_SelfAnimatedDotsHolder>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Dots(text: widget.text, pulse: _c);
 }
 
 /// Generic bot head for practice opponents without a fixed house cat.

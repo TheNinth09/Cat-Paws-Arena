@@ -15,6 +15,7 @@ import 'online/emotes.dart';
 import 'profile.dart';
 import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
+import 'vs_screen.dart';
 
 /// Compile-time switch for the frame-time profiling overlay. Build a release
 /// APK/AAB with `--dart-define=CPA_FRAME_PROBE=true` to profile on device.
@@ -32,7 +33,7 @@ const _barGradient = LinearGradient(
   end: Alignment.bottomCenter,
   colors: [Color(0xff8a5a44), Color(0xff54342a)],
 );
-const _modeIcons = [Icons.group, Icons.bolt, Icons.shield, Icons.emoji_events];
+
 /// Preset emotes offered in the duel. Only these wire values ever leave the
 /// device (contract: preset emotes only, never free text). The new
 /// `assets/images/` sticker art backs six presets; generated sprites stay
@@ -342,254 +343,90 @@ class _MatchScreenState extends State<MatchScreen>
   @override
   Widget build(BuildContext context) {
     final content = AnimatedBuilder(
-    animation: match,
-    builder: (context, _) => PopScope(
-      canPop: match.phase == MatchPhase.finished,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) surrender();
-      },
-      child: Scaffold(
-        body: SafeArea(
-          child: Stack(
-            children: [
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 540),
-                  child: Column(
-                    children: [
-                      if (match.phase != MatchPhase.playing)
-                        PlayerHud(
-                          avatar: CatAvatar(p, size: 46),
-                          name: p.name,
-                          trophies: p.trophies,
-                          coins: p.coins,
-                          onProfile: () => showPlayerProfile(context, p),
-                          onRoad: () => showTrophyRoad(context, p),
-                          onShop: () => showAppDialog(
-                            context,
-                            'Lăbuțe',
-                            const Text(
-                              'Pachetele sunt disponibile în fila Magazin din ecranul principal.',
+      animation: match,
+      builder: (context, _) => PopScope(
+        canPop: match.phase == MatchPhase.finished,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) surrender();
+        },
+        child: Scaffold(
+          body: SafeArea(
+            child: Stack(
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 540),
+                    child: switch (match.phase) {
+                      // Searching and result are the same full-bleed scenes
+                      // as the VS page — one continuous page, no HUD swap.
+                      MatchPhase.searching => versus(),
+                      MatchPhase.finished => result(),
+                      MatchPhase.playing => Column(
+                        children: [
+                          Expanded(
+                            child: RoomBackground(
+                              tier: p.tier,
+                              dim: true,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                                child: battle(),
+                              ),
                             ),
                           ),
-                          onMenu: () => showSettings(context, p),
-                        ),
-                      Expanded(
-                        child: RoomBackground(
-                          tier: p.tier,
-                          dim: true,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                            child: switch (match.phase) {
-                              MatchPhase.searching => versus(),
-                              MatchPhase.playing => battle(),
-                              MatchPhase.finished => result(),
-                            },
-                          ),
-                        ),
+                        ],
                       ),
-                    ],
+                    },
                   ),
                 ),
-              ),
-              if (_momentPower != null)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: AnimatedBuilder(
-                      animation: _momentFx,
-                      builder: (context, _) => PowerMoment(
-                        power: _momentPower!,
-                        t: _momentFx.value,
+                if (_momentPower != null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: AnimatedBuilder(
+                        animation: _momentFx,
+                        builder: (context, _) => PowerMoment(
+                          power: _momentPower!,
+                          t: _momentFx.value,
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
     return kFrameProbeEnabled ? FrameTimeOverlay(child: content) : content;
   }
 
-  Widget versus() => ListView(
-    padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-    children: [
-      Center(
-        child: _ModeChip(icon: _modeIcons[modeIndex], text: modeName),
-      ),
-      const SizedBox(height: 9),
-      label(match.isOnline ? 'PRIETEN ONLINE' : 'ANTRENAMENT OFFLINE', size: 24),
-      const SizedBox(height: 3),
-      label(
-        match.isOnline
-            ? 'Meci prieteni • provocare 1v1'
-            : 'Adversar bot • ±75 trofee',
-        size: 13,
-        color: _muted,
-      ),
-      const SizedBox(height: 18),
-      Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: _FighterCard(
-                  tag: 'TU',
-                  avatar: CatAvatar(p, size: 48),
-                  name: p.name,
-                  detail: '${p.trophies} trofee',
-                ),
-              ),
-              const SizedBox(width: 56),
-              Expanded(
-                child: _FighterCard(
-                  tag: match.isOnline ? 'PRIETEN' : 'BOT',
-                  avatar: _opponentAvatar(48),
-                  name: match.botName,
-                  detail:
-                      '${match.botLevelName} • ${match.botTrophies} trofee',
-                ),
-              ),
-            ],
-          ),
-          AnimatedBuilder(
-            animation: fx,
-            builder: (context, _) => Transform.scale(
-              scale: 1 + 0.07 * fx.value,
-              child: const _VsBadge(size: 66),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 14),
-      if (match.isEngine && match.opponent == null && !match.isOnline)
-        _botLevelPicker(),
-      if (match.isEngine && match.opponent == null && !match.isOnline)
-        const SizedBox(height: 10),
-      _rewardsPanel(),
-      const SizedBox(height: 14),
-      _searching(),
-      const SizedBox(height: 14),
-      ArenaButton(text: 'RENUNȚĂ', danger: true, onPressed: surrender),
-      const SizedBox(height: 4),
-    ],
-  );
-
-  Widget _rewardsPanel() => panel(
-    Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            sprite('icon_trophy', size: 26),
-            const SizedBox(width: 8),
-            const Flexible(
-              child: Text(
-                'RECOMPENSE',
-                style: TextStyle(
-                  color: Color(0xff8a5a3b),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        _rewardLine('icon_trophy', 'Victorie', '+30 trofee'),
-        _rewardLine('icon_paw_coin', 'Bonus', '+150 lăbuțe'),
-        const SizedBox(height: 6),
-        const Text(
-          'Egalitate: 0 trofee • Înfrângere: -25 trofee',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Color(0xff8a6242),
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _rewardLine(String icon, String key, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2.5),
-    child: Row(
-      children: [
-        sprite(icon, size: 24),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            key,
-            style: const TextStyle(
-              color: ink,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Color(0xff9a5b23),
-            fontSize: 13.5,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _searching() => AnimatedBuilder(
-    animation: fx,
-    builder: (context, _) {
-      Widget dot(int i) {
-        final wave = 0.5 + 0.5 * math.sin((fx.value * 2 - i * 0.33) * math.pi);
-        return Transform.translate(
-          offset: Offset(0, -3 * wave),
-          child: Opacity(
-            opacity: 0.3 + 0.7 * wave,
-            child: Container(
-              width: 9,
-              height: 9,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: gold,
-                boxShadow: [BoxShadow(color: Color(0x66ffc63c), blurRadius: 6)],
-              ),
-            ),
-          ),
-        );
-      }
-
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var i = 0; i < 3; i++) ...[
-                dot(i),
-                if (i < 2) const SizedBox(width: 9),
-              ],
-            ],
-          ),
-          const SizedBox(height: 9),
-          label(
-            match.isOnline ? 'Se pregătește meciul...' : 'Se caută adversarul...',
-            size: 15,
-            color: _muted,
-          ),
-        ],
-      );
-    },
+  /// The searching phase reuses the VS [MatchupScene] so moving from the
+  /// pre-match page into the match reads as a single continuous screen.
+  Widget versus() => MatchupScene(
+    english: p.english,
+    modeText: match.isOnline ? 'PRIETEN ONLINE' : 'ANTRENAMENT OFFLINE',
+    playerName: p.name,
+    playerTrophies: p.trophies,
+    playerBadge: p.english ? 'YOU' : 'TU',
+    playerPortrait: duelCatArt(p, size: 118),
+    opponentName: match.botName,
+    opponentTrophies: match.botTrophies,
+    opponentBadge: match.isOnline ? 'PRIETEN' : 'BOT',
+    opponentPortrait: Center(child: _opponentAvatar(84)),
+    opponentSubtitle: match.isOnline
+        ? 'Prieten'
+        : match.opponent == null
+        ? null
+        : match.botLevelName,
+    statusText: match.isOnline
+        ? 'Se pregătește meciul...'
+        : 'Se caută adversarul...',
+    cancelKey: const ValueKey('match-cancel'),
+    cancelText: 'RENUNȚĂ',
+    onCancel: surrender,
+    middle: match.isEngine && match.opponent == null && !match.isOnline
+        ? _botLevelPicker()
+        : null,
+    pulse: fx,
   );
 
   /// Opponent avatar: the friend's cat loadout for online duels, the
@@ -640,8 +477,7 @@ class _MatchScreenState extends State<MatchScreen>
   /// opponent's is purple with a paw icon. The active side's ring pulses.
   /// Emote bubbles sit beside the portraits.
   Widget _versusHeader() {
-    final enginePlaying =
-        match.isEngine && match.phase == MatchPhase.playing;
+    final enginePlaying = match.isEngine && match.phase == MatchPhase.playing;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
@@ -670,17 +506,14 @@ class _MatchScreenState extends State<MatchScreen>
               onTap: _opponentDetails,
               child: _PortraitPlate(
                 avatar: _opponentAvatar(50),
-                name: match.isOnline
-                    ? match.botName
-                    : '${match.botName} · BOT',
+                name: match.isOnline ? match.botName : '${match.botName} · BOT',
                 score: match.botScore,
                 charge: match.botCharge,
                 ringColor: const Color(0xff9d6bff),
                 accentColor: const Color(0xffc9a6ff),
                 meterColor: const Color(0xff9d6bff),
                 iconSprite: 'icon_paw_coin',
-                active:
-                    enginePlaying && !match.playerTurn && !match.isFlagged,
+                active: enginePlaying && !match.playerTurn && !match.isFlagged,
                 emote: opponentEmote,
                 pulse: fx,
               ),
@@ -711,23 +544,17 @@ class _MatchScreenState extends State<MatchScreen>
             const SizedBox(height: 8),
             label(match.botName, size: 18),
             const SizedBox(height: 2),
-            label(
-              online != null ? 'PRIETEN' : 'BOT',
-              size: 12,
-              color: _muted,
-            ),
+            label(online != null ? 'PRIETEN' : 'BOT', size: 12, color: _muted),
             const SizedBox(height: 10),
-            _StatRow(
-              icon: 'icon_trophy',
-              text: '${match.botTrophies} trofee',
-            ),
+            _StatRow(icon: 'icon_trophy', text: '${match.botTrophies} trofee'),
             if (online != null)
               _StatRow(
-                icon: powers[online.opponent.power
-                    .clamp(0, powers.length - 1)],
+                icon: powers[online.opponent.power.clamp(0, powers.length - 1)],
                 text:
-                    powerNames[online.opponent.power
-                        .clamp(0, powerNames.length - 1)],
+                    powerNames[online.opponent.power.clamp(
+                      0,
+                      powerNames.length - 1,
+                    )],
               )
             else if (match.opponent != null)
               _StatRow(
@@ -917,101 +744,74 @@ class _MatchScreenState extends State<MatchScreen>
     ),
   );
 
-  Widget _scoreStrip() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 4),
-    child: Row(
-      children: [
-        Expanded(
-          child: _ScoreChip(
-            avatar: CatAvatar(p, size: 36),
-            name: p.name,
-            score: match.playerScore,
-          ),
-        ),
-        const SizedBox(width: 6),
-        const _VsBadge(size: 32),
-        const SizedBox(width: 6),
-        Expanded(
-          child: _ScoreChip(
-            avatar: _opponentAvatar(36),
-            name: match.isOnline
-                ? match.botName
-                : '${match.botName} · BOT',
-            score: match.botScore,
-          ),
-        ),
-      ],
-    ),
-  );
-
   Widget _board() {
     final hint = match.hintSwap;
     return LayoutBuilder(
-    builder: (context, constraints) {
-      final side = constraints.biggest.shortestSide;
-      return Center(
-        child: Container(
-          width: side,
-          height: side,
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xffa06a45), Color(0xff63432f)],
-            ),
-            border: Border.all(color: ink, width: 2.5),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x66000000),
-                offset: Offset(0, 5),
-                blurRadius: 10,
+      builder: (context, constraints) {
+        final side = constraints.biggest.shortestSide;
+        return Center(
+          child: Container(
+            width: side,
+            height: side,
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xffa06a45), Color(0xff63432f)],
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(13),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: BoardView(
-                    key: _boardKey,
-                    initial: match.initialSnapshot,
-                    onSwapAttempt: match.tryMove,
-                    onEvent: _onBoardEvent,
-                    onIdle: match.onBoardIdle,
-                    inputEnabled: match.acceptingInput,
-                    active: match.phase != MatchPhase.finished,
-                    suspended: match.paused,
-                    hintCells: hint == null ? null : {hint.$1, hint.$2},
-                  ),
+              border: Border.all(color: ink, width: 2.5),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66000000),
+                  offset: Offset(0, 5),
+                  blurRadius: 10,
                 ),
-                if (opponentEmote.isNotEmpty)
-                  Positioned(
-                    left: 6,
-                    top: 6,
-                    child: IgnorePointer(child: _EmoteBubble(opponentEmote)),
-                  ),
-                if (emote.isNotEmpty)
-                  Positioned(
-                    right: 6,
-                    top: 6,
-                    child: IgnorePointer(child: _EmoteBubble(emote)),
-                  ),
-                // Small cat button, bottom-right corner: preset emotes.
-                Positioned(
-                  right: 6,
-                  bottom: 6,
-                  child: _EmoteCatButton(onTap: emotes),
-                ),
-                _tutorialOverlay(),
               ],
             ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(13),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: BoardView(
+                      key: _boardKey,
+                      initial: match.initialSnapshot,
+                      onSwapAttempt: match.tryMove,
+                      onEvent: _onBoardEvent,
+                      onIdle: match.onBoardIdle,
+                      inputEnabled: match.acceptingInput,
+                      active: match.phase != MatchPhase.finished,
+                      suspended: match.paused,
+                      hintCells: hint == null ? null : {hint.$1, hint.$2},
+                    ),
+                  ),
+                  if (opponentEmote.isNotEmpty)
+                    Positioned(
+                      left: 6,
+                      top: 6,
+                      child: IgnorePointer(child: _EmoteBubble(opponentEmote)),
+                    ),
+                  if (emote.isNotEmpty)
+                    Positioned(
+                      right: 6,
+                      top: 6,
+                      child: IgnorePointer(child: _EmoteBubble(emote)),
+                    ),
+                  // Small cat button, bottom-right corner: preset emotes.
+                  Positioned(
+                    right: 6,
+                    bottom: 6,
+                    child: _EmoteCatButton(onTap: emotes),
+                  ),
+                  _tutorialOverlay(),
+                ],
+              ),
+            ),
           ),
-        ),
-      );
-    },
+        );
+      },
     );
   }
 
@@ -1047,9 +847,8 @@ class _MatchScreenState extends State<MatchScreen>
               ),
               if (full)
                 BoxShadow(
-                  color: const Color(
-                    0xffffc63c,
-                  ).withValues(alpha: 0.3 + 0.3 * fx.value),
+                  color: const Color(0xffffc63c)
+                      .withValues(alpha: 0.3 + 0.3 * fx.value),
                   blurRadius: 10 + 10 * fx.value,
                   spreadRadius: 1,
                 ),
@@ -1079,7 +878,10 @@ class _MatchScreenState extends State<MatchScreen>
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.6,
                         shadows: [
-                          Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
+                          Shadow(
+                            color: Color(0x66000000),
+                            offset: Offset(0, 1),
+                          ),
                         ],
                       ),
                     ),
@@ -1130,6 +932,10 @@ class _MatchScreenState extends State<MatchScreen>
     );
   }
 
+  /// Full-bleed result scene like the reference win/lose pages: room art
+  /// behind, warm tint for victory / cool tint for defeat, big cartoon
+  /// title, the cat front and centre with the golden fish on a win, the
+  /// stakes panel and the two actions.
   Widget result() {
     final aborted = match.abortReason != null;
     final flagged = match.isFlagged;
@@ -1137,85 +943,173 @@ class _MatchScreenState extends State<MatchScreen>
     final win = outcome > 0;
     final loss = outcome < 0;
     final draw = !win && !loss;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+    final title = aborted
+        ? (flagged ? 'REZULTAT INVALIDAT' : 'MECI ÎNTRERUPT')
+        : win
+        ? 'VICTORIE!'
+        : loss
+        ? 'ÎNFRÂNGERE'
+        : 'EGALITATE';
+    final titleColor = loss ? const Color(0xff9fd4ff) : gold;
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Center(
-          child: AnimatedBuilder(
-            animation: fx,
-            builder: (context, _) => Transform.scale(
-              scale: win || draw || aborted ? 1 + 0.03 * fx.value : 1,
-              child: _ResultEmblem(win: win, draw: draw || aborted),
+        arenaImage(
+          'bg_living_room',
+          fit: BoxFit.cover,
+          fallback: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xff241d3f), Color(0xff3a2a5e)],
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        label(
-          aborted
-              ? (flagged ? 'REZULTAT INVALIDAT' : 'MECI ÎNTRERUPT')
-              : win
-              ? 'VICTORIE!'
-              : loss
-              ? 'ÎNFRÂNGERE'
-              : 'EGALITATE',
-          size: 30,
-        ),
-        if (aborted) ...[
-          const SizedBox(height: 4),
-          label(_abortText(match.abortReason!), size: 13, color: _muted),
-        ],
-        const SizedBox(height: 2),
-        label(
-          '${match.playerScore} — ${match.botScore}',
-          size: 24,
-          color: gold,
-        ),
-        if (match.isEngine) ...[
-          const SizedBox(height: 2),
-          label(
-            'vs ${match.botName} (${match.isOnline ? 'PRIETEN' : 'BOT'}) • '
-            '${match.turnsPerPlayer} turnuri',
-            size: 12,
-            color: _muted,
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: loss
+                  ? const [
+                      Color(0xd91d2f5e),
+                      Color(0xa61d2f5e),
+                      Color(0xe6141f42),
+                    ]
+                  : const [
+                      Color(0xc23d2a12),
+                      Color(0x8f3d2a12),
+                      Color(0xe62a1a0c),
+                    ],
+            ),
           ),
-        ],
-        const SizedBox(height: 14),
-        // Defeat stays calm and minimal: no score strip, no chest.
-        if (!loss) ...[
-          _scoreStrip(),
-          const SizedBox(height: 12),
-        ],
-        if (aborted)
-          _abortRewards()
-        else if (match.isOnline && match.rewardsPending)
-          _pendingRewards()
-        else if (match.isOnline && !match.rewardsCounted)
-          _deniedRewards()
-        else
-          _resultRewards(win, loss),
-        const SizedBox(height: 12),
-        if (!aborted && !match.isOnline)
-          ArenaButton(
-            text: 'REVANȘĂ',
-            green: true,
-            spriteName: 'btn_play_paw',
-            onPressed: match.isEngine
-                ? match.rematch
-                : () => Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          MatchScreen(player: p, mode: widget.mode),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Column(
+              children: [
+                const SizedBox(height: 14),
+                AnimatedBuilder(
+                  animation: fx,
+                  builder: (context, child) => Transform.scale(
+                    scale: win || draw || aborted ? 1 + 0.04 * fx.value : 1,
+                    child: child,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: titleColor,
+                        fontSize: 40,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        shadows: [
+                          Shadow(
+                            color: loss
+                                ? const Color(0xff12254a)
+                                : const Color(0xff6b3a12),
+                            offset: const Offset(0, 3),
+                          ),
+                          const Shadow(
+                            color: Color(0xaa000000),
+                            offset: Offset(0, 6),
+                            blurRadius: 12,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                ),
+                if (aborted) ...[
+                  const SizedBox(height: 4),
+                  label(
+                    _abortText(match.abortReason!),
+                    size: 13,
+                    color: _muted,
+                  ),
+                ],
+                const SizedBox(height: 4),
+                label(
+                  '${match.playerScore} — ${match.botScore}',
+                  size: 26,
+                  color: Colors.white,
+                ),
+                if (match.isEngine) ...[
+                  const SizedBox(height: 2),
+                  label(
+                    'vs ${match.botName} (${match.isOnline ? 'PRIETEN' : 'BOT'}) • '
+                    '${match.turnsPerPlayer} turnuri',
+                    size: 12,
+                    color: _muted,
+                  ),
+                ],
+                const Spacer(),
+                SizedBox(
+                  height: 200,
+                  child: Stack(
+                    alignment: Alignment.bottomCenter,
+                    clipBehavior: Clip.none,
+                    children: [
+                      duelCatArt(p, size: 190),
+                      if (win)
+                        Positioned(
+                          right: 4,
+                          bottom: 34,
+                          child: Transform.rotate(
+                            angle: .12,
+                            child: arenaImage(
+                              'trophy_gold_fish',
+                              height: 74,
+                              fit: BoxFit.contain,
+                              fallback: sprite('icon_trophy', size: 64),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                if (aborted)
+                  _abortRewards()
+                else if (match.isOnline && match.rewardsPending)
+                  _pendingRewards()
+                else if (match.isOnline && !match.rewardsCounted)
+                  _deniedRewards()
+                else
+                  _resultRewards(win, loss),
+                const SizedBox(height: 12),
+                if (!aborted && !match.isOnline)
+                  ArenaButton(
+                    text: 'REVANȘĂ',
+                    green: true,
+                    spriteName: 'btn_play_paw',
+                    onPressed: match.isEngine
+                        ? match.rematch
+                        : () => Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  MatchScreen(player: p, mode: widget.mode),
+                            ),
+                          ),
+                  ),
+                ArenaButton(
+                  text: 'ACASĂ',
+                  secondary: true,
+                  onPressed: () => Navigator.pop(context),
+                ),
+                const SizedBox(height: 4),
+                label(modeName, size: 11, color: _faint),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
-        ArenaButton(
-          text: 'ACASĂ',
-          secondary: true,
-          onPressed: () => Navigator.pop(context),
         ),
-        const SizedBox(height: 6),
-        label(modeName, size: 12, color: _faint),
       ],
     );
   }
@@ -1225,8 +1119,7 @@ class _MatchScreenState extends State<MatchScreen>
       'Verificarea meciului a eșuat — meci neverificat, fără recompense.',
     OnlineAbort.connectionLost =>
       'Conexiunea s-a pierdut — meci anulat, fără recompense.',
-    OnlineAbort.surrendered =>
-      'Ai părăsit meciul — fără recompense.',
+    OnlineAbort.surrendered => 'Ai părăsit meciul — fără recompense.',
   };
 
   Widget _abortRewards() => panel(
@@ -1277,195 +1170,107 @@ class _MatchScreenState extends State<MatchScreen>
     ),
   );
 
-  /// Rewards panel: win/draw show the full stakes plus the chest and the
-  /// player's cat; a defeat stays clean and calm — just the trophy change.
+  /// Wooden rewards board like the reference result pages: on a win the
+  /// two columns list trophies and paws; a defeat stays calm — a single
+  /// '-25 Trofee' row, matching the contract stakes exactly.
   Widget _resultRewards(bool win, bool loss) {
-    if (loss) {
-      return panel(
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            sprite('icon_trophy', size: 30),
-            const SizedBox(width: 9),
-            const Text(
-              '-25 Trofee',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: ink,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xff8a5a34), Color(0xff6b422a), Color(0xff54311f)],
         ),
-      );
-    }
-    return panel(
-      Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              sprite('icon_trophy', size: 30),
-              const SizedBox(width: 9),
-              Flexible(
-                child: Text(
-                  win ? '+30 Trofee • +150 Lăbuțe' : '0 Trofee',
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xffd9a05f), width: 2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x55000000),
+            offset: Offset(0, 4),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: loss
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                sprite('icon_trophy', size: 30),
+                const SizedBox(width: 9),
+                const Text(
+                  '-25 Trofee',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: ink,
+                  style: TextStyle(
+                    color: Color(0xffffd0c4),
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              sprite('icon_chest', size: 62),
-              const SizedBox(width: 14),
-              CatAvatar(p, size: 82),
-            ],
+              ],
+            )
+          : win
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _rewardColumn('icon_trophy', '+30', 'TROFEE'),
+                Container(
+                  width: 1.4,
+                  height: 40,
+                  color: const Color(0x66d9a05f),
+                ),
+                _rewardColumn('icon_paw_coin', '+150', 'LĂBUȚE'),
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                sprite('icon_trophy', size: 30),
+                const SizedBox(width: 9),
+                const Text(
+                  '0 Trofee',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xfff0d9b0),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _rewardColumn(String icon, String value, String caption) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          sprite(icon, size: 26),
+          const SizedBox(width: 7),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Color(0xffffe28b),
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              shadows: [Shadow(color: Color(0x55000000), offset: Offset(0, 1))],
+            ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ModeChip extends StatelessWidget {
-  const _ModeChip({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xff7a4a32), Color(0xff5d3a2c)],
+      const SizedBox(height: 2),
+      Text(
+        caption,
+        style: const TextStyle(
+          color: Color(0xfff0d9b0),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.4,
+        ),
       ),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: gold, width: 1.5),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x5545312d),
-          offset: Offset(0, 2),
-          blurRadius: 6,
-        ),
-      ],
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: gold),
-        const SizedBox(width: 7),
-        Text(
-          text.toUpperCase(),
-          style: const TextStyle(
-            color: cream,
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.3,
-            shadows: [Shadow(color: Color(0x66000000), offset: Offset(0, 1))],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _FighterCard extends StatelessWidget {
-  const _FighterCard({
-    required this.tag,
-    required this.avatar,
-    required this.name,
-    required this.detail,
-  });
-  final String tag, name, detail;
-  final Widget avatar;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xe66b4636), Color(0xe64e322b)],
-      ),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0x66ffc63c), width: 1.4),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x55000000),
-          offset: Offset(0, 4),
-          blurRadius: 8,
-        ),
-      ],
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
-          decoration: BoxDecoration(
-            color: gold,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: ink, width: 1.2),
-          ),
-          child: Text(
-            tag,
-            style: const TextStyle(
-              color: ink,
-              fontSize: 9,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.6,
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        avatar,
-        const SizedBox(height: 6),
-        Text(
-          name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: cream,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w800,
-            shadows: [Shadow(color: Color(0x66000000), offset: Offset(0, 1))],
-          ),
-        ),
-        const SizedBox(height: 3),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            sprite('icon_trophy', size: 14),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                detail,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: gold,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
+    ],
   );
 }
 
@@ -1537,84 +1342,6 @@ class _VsBadge extends StatelessWidget {
               letterSpacing: 1,
               height: 1,
             ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _ScoreChip extends StatelessWidget {
-  const _ScoreChip({
-    required this.avatar,
-    required this.name,
-    required this.score,
-  });
-  final Widget avatar;
-  final String name;
-  final int score;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xd66b4636), Color(0xd64e322b)],
-      ),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0x66ffc63c), width: 1.2),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x44000000),
-          offset: Offset(0, 2),
-          blurRadius: 5,
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        avatar,
-        const SizedBox(width: 7),
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: cream,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  shadows: [
-                    Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 1),
-              SizedBox(
-                width: double.infinity,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '$score',
-                    style: const TextStyle(
-                      color: gold,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(color: Color(0x66000000), offset: Offset(0, 1)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ],
@@ -1923,7 +1650,11 @@ class _CatFacePainter extends CustomPainter {
     );
     // Nose + smile.
     final nose = Paint()..color = const Color(0xffb0607a);
-    canvas.drawCircle(Offset(c.dx, c.dy + size.height * 0.10), size.width * 0.05, nose);
+    canvas.drawCircle(
+      Offset(c.dx, c.dy + size.height * 0.10),
+      size.width * 0.05,
+      nose,
+    );
   }
 
   @override
@@ -2196,59 +1927,6 @@ class _EmoteBubble extends StatelessWidget {
   );
 }
 
-class _ResultEmblem extends StatelessWidget {
-  const _ResultEmblem({required this.win, required this.draw});
-  final bool win, draw;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = win
-        ? const [Color(0xfffff3c4), gold, Color(0xffe8961f)]
-        : draw
-        ? const [Color(0xfff2e2c4), Color(0xffd9b98a), Color(0xffc4a06e)]
-        : const [Color(0xffc9806a), Color(0xffa5553f), Color(0xff7c3a2e)];
-    final icon = win
-        ? 'icon_trophy'
-        : draw
-        ? 'emote_love'
-        : 'emote_angry';
-    return Container(
-      width: 118,
-      height: 118,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: colors,
-        ),
-        border: Border.all(color: ink, width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: win ? const Color(0x66ffc63c) : const Color(0x44000000),
-            blurRadius: win ? 26 : 12,
-            offset: win ? Offset.zero : const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Container(
-          width: 92,
-          height: 92,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const RadialGradient(
-              colors: [Color(0xfffff8e0), Color(0xfff0d6a0)],
-            ),
-            border: Border.all(color: const Color(0x66b57f4e), width: 1.5),
-          ),
-          child: Center(child: sprite(icon, size: 60)),
-        ),
-      ),
-    );
-  }
-}
-
 class _EmoteCard extends StatelessWidget {
   const _EmoteCard({
     required this.spriteName,
@@ -2311,7 +1989,8 @@ class PowerMoment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Fade in fast, hold, fade out over the last third.
-    final opacity = (t / 0.12).clamp(0.0, 1.0) * ((1 - t) / 0.3).clamp(0.0, 1.0);
+    final opacity =
+        (t / 0.12).clamp(0.0, 1.0) * ((1 - t) / 0.3).clamp(0.0, 1.0);
     if (opacity <= 0) return const SizedBox.shrink();
     return Opacity(
       opacity: opacity,
@@ -2320,7 +1999,9 @@ class PowerMoment extends StatelessWidget {
         builder: (context, constraints) => Stack(
           fit: StackFit.expand,
           children: [
-            CustomPaint(painter: _MomentPainter(power: power, t: t)),
+            CustomPaint(
+              painter: _MomentPainter(power: power, t: t),
+            ),
             // Power banner centred inside the frame: emblem + title in a
             // framed pill, with real margins — nothing clips the edges.
             Positioned(
@@ -2329,9 +2010,12 @@ class PowerMoment extends StatelessWidget {
               right: 14,
               child: Center(
                 child: Transform.scale(
-                  scale: 0.6 + 0.5 * Curves.easeOutBack.transform(
-                    (t / 0.25).clamp(0.0, 1.0),
-                  ),
+                  scale:
+                      0.6 +
+                      0.5 *
+                          Curves.easeOutBack.transform(
+                            (t / 0.25).clamp(0.0, 1.0),
+                          ),
                   child: _PowerBanner(power: power),
                 ),
               ),
@@ -2468,9 +2152,8 @@ class _CatRunner extends StatelessWidget {
                   width: catSize * (0.5 + i * 0.2),
                   height: 5,
                   decoration: BoxDecoration(
-                    color: const Color(0xffffe08a).withValues(
-                      alpha: 0.7 * (1 - u),
-                    ),
+                    color: const Color(0xffffe08a)
+                        .withValues(alpha: 0.7 * (1 - u)),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -2586,7 +2269,8 @@ class _MomentPainter extends CustomPainter {
           final path = Path();
           for (var s = 0; s <= 40; s++) {
             final u = s / 40;
-            final ang = arm * math.pi * 2 / 3 + u * math.pi * 3 + t * math.pi * 4;
+            final ang =
+                arm * math.pi * 2 / 3 + u * math.pi * 3 + t * math.pi * 4;
             final rad = r * (0.5 - 0.42 * u) * (1 - t * 0.25);
             final pt = c + Offset(math.cos(ang), math.sin(ang)) * rad;
             if (s == 0) {
@@ -2595,9 +2279,8 @@ class _MomentPainter extends CustomPainter {
               path.lineTo(pt.dx, pt.dy);
             }
           }
-          paint.color = const Color(0xffb46bff).withValues(
-            alpha: 0.8 * (1 - t * 0.5),
-          );
+          paint.color = const Color(0xffb46bff)
+              .withValues(alpha: 0.8 * (1 - t * 0.5));
           canvas.drawPath(path, paint);
         }
         paint.style = PaintingStyle.fill;
@@ -2610,15 +2293,15 @@ class _MomentPainter extends CustomPainter {
         final beam = Paint()
           ..color = const Color(0xffff3b30).withValues(alpha: 0.5)
           ..strokeWidth = r * 0.008;
-        canvas.drawLine(
-          Offset(dotX, 0),
-          Offset(dotX, size.height),
-          beam,
-        );
+        canvas.drawLine(Offset(dotX, 0), Offset(dotX, size.height), beam);
         final dot = Paint()
           ..color = const Color(0xffff5040).withValues(alpha: 0.95)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
-        canvas.drawCircle(Offset(dotX, size.height * (0.3 + 0.4 * sweep)), r * 0.05, dot);
+        canvas.drawCircle(
+          Offset(dotX, size.height * (0.3 + 0.4 * sweep)),
+          r * 0.05,
+          dot,
+        );
     }
   }
 

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import 'app_dialogs.dart';
 import 'cat_avatar.dart';
-import 'catalog.dart';
 import 'profile.dart';
 import 'shell/friend_room.dart';
 import 'shell/house_tour.dart';
@@ -148,8 +147,9 @@ class LobbyScreen extends StatelessWidget {
     );
   }
 
-  /// Slim trophy progress strip: current/next threshold, a thumbnail of the
-  /// room being unlocked and the milestone chest. Taps open the house tour.
+  /// Full-width trophy bar like the reference lobby: the value sits inside
+  /// the bar, the next-room thumbnail + milestone chest overlap the right
+  /// end and the room name hangs underneath. Taps open the house tour.
   Widget _progressStrip() {
     final current = houseRoomForTrophies(player.trophies);
     final index = houseRooms.indexOf(current);
@@ -162,169 +162,162 @@ class LobbyScreen extends StatelessWidget {
     final thumb = next == null
         ? _roomBackgrounds[index]
         : _roomBackgrounds[index + 1];
+    final roomName = next == null
+        ? (english ? 'All rooms' : 'Toate camerele')
+        : english
+        ? houseRoomDisplayNamesEn[index + 1]
+        : houseRoomDisplayNames[index + 1];
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           key: const ValueKey('trophy-progress'),
           onTap: onRoad,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xff8a6242), Color(0xff6b4634)],
-              ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: gold, width: 1.6),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x55000000),
-                  offset: Offset(0, 3),
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: SizedBox(
-                    width: 38,
-                    height: 38,
-                    child: arenaImage(
-                      thumb,
-                      fit: BoxFit.cover,
-                      fallback: Container(
-                        color: const Color(0xff5d3a2c),
-                        child: const Icon(
-                          Icons.home_rounded,
-                          color: gold,
-                          size: 22,
-                        ),
+          borderRadius: BorderRadius.circular(14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: const Color(0xff3d2733),
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(color: gold, width: 2),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x55000000),
+                            offset: Offset(0, 2),
+                            blurRadius: 6,
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
+                      child: Stack(
+                        alignment: Alignment.center,
                         children: [
-                          Flexible(
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: FractionallySizedBox(
+                                widthFactor: ratio == 0 ? 0.015 : ratio,
+                                heightFactor: 1,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: _goldGradient,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
                             child: Text(
                               '${player.trophies} / $end',
                               maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: cream,
-                                fontSize: 15,
+                                color: Colors.white,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w900,
                                 shadows: [
                                   Shadow(
-                                    color: Color(0x66000000),
+                                    color: Color(0xcc20130e),
                                     offset: Offset(0, 1),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              next == null
-                                  ? (english ? 'ALL ROOMS' : 'TOATE CAMERELE')
-                                  : english
-                                  ? 'NEXT: ${houseRoomDisplayNamesEn[index + 1]} @ ${next.threshold} • ~${((next.threshold - player.trophies) / 30).ceil()} W'
-                                  : 'URM.: ${houseRoomDisplayNames[index + 1]} LA ${next.threshold} • ~${((next.threshold - player.trophies) / 30).ceil()} VIC.',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xffe8c9a0),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
                         ],
                       ),
-                      const SizedBox(height: 5),
-                      Container(
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: const Color(0xff432c33),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: ink, width: 1.2),
-                        ),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: FractionallySizedBox(
-                            widthFactor: ratio,
-                            heightFactor: 1,
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                gradient: _goldGradient,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: arenaImage(
+                            thumb,
+                            fit: BoxFit.cover,
+                            fallback: Container(
+                              color: const Color(0xff5d3a2c),
+                              child: const Icon(
+                                Icons.home_rounded,
+                                color: gold,
+                                size: 20,
                               ),
                             ),
                           ),
+                        ),
+                      ),
+                      Positioned(
+                        right: -4,
+                        top: -6,
+                        child: arenaImage(
+                          'milestone_chest',
+                          width: 30,
+                          height: 30,
+                          fallback: sprite('icon_chest', size: 30),
                         ),
                       ),
                     ],
                   ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 2, right: 2),
+                child: Text(
+                  roomName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: cream,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    shadows: [
+                      Shadow(color: Color(0xcc20130e), offset: Offset(0, 1)),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 8),
-                arenaImage(
-                  'milestone_chest',
-                  width: 34,
-                  height: 34,
-                  fallback: sprite('icon_chest', size: 34),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  /// The player's cat standing in the middle of the room.
+  /// The player's cat standing alone in the middle of the room — big and
+  /// centred like the reference lobby, no name/power pills underneath.
   Widget _catScene(BuildContext context, {bool compact = false}) {
-    final height = compact ? 170.0 : 205.0;
+    final height = compact ? 190.0 : 280.0;
     final catAsset = switch (player.cat) {
       'Tzuki' => 'cat_tzuki',
       'Bubble' => 'cat_bubble',
+      'Custom' => 'cat_custom',
       _ => null,
     };
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: height + 8,
-          child: catAsset == null
-              ? CatCharacter(player, height: height)
-              : arenaImage(
-                  catAsset,
-                  height: height,
-                  fit: BoxFit.contain,
-                  fallback: CatCharacter(player, height: height),
-                ),
-        ),
-        const SizedBox(height: 2),
-        label(player.cat, size: 24),
-        _PowerPill(
-          powerNames[player.cat == 'Tzuki'
-              ? 0
-              : player.cat == 'Bubble'
-              ? 1
-              : player.power],
-        ),
-      ],
+    return SizedBox(
+      height: height,
+      child: catAsset == null
+          ? CatCharacter(player, height: height)
+          : arenaImage(
+              catAsset,
+              height: height,
+              fit: BoxFit.contain,
+              fallback: CatCharacter(player, height: height),
+            ),
     );
   }
 
@@ -1015,45 +1008,4 @@ class _LeaderboardPanelState extends State<_LeaderboardPanel> {
       ),
     );
   }
-}
-
-class _PowerPill extends StatelessWidget {
-  const _PowerPill(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(top: 6),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-    constraints: const BoxConstraints(maxWidth: 380),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        colors: [Color(0xff7a4a32), Color(0xff5d3a2c)],
-      ),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: gold, width: 1.5),
-      boxShadow: const [
-        BoxShadow(color: Color(0x5545312d), offset: Offset(0, 3)),
-      ],
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.bolt, color: gold, size: 18),
-        const SizedBox(width: 7),
-        Flexible(
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: cream,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
 }

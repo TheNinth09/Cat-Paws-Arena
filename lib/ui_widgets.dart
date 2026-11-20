@@ -677,14 +677,14 @@ class ArenaBottomBar extends StatelessWidget {
       Icons.event,
     ];
 
-    // Per-tab tile colours like the reference bar: each side tab is its own
-    // chunky coloured tile; the selected one gets a gold frame and glow.
+    // Segmented light-blue bar like the reference: every side tab is a
+    // frosted glass tile on the blue band; the selected one brightens.
     const tileStyles = [
-      (Color(0xff7a3329), Color(0xffef7a68)), // MAGAZIN
-      (Color(0xff6b4423), Color(0xffcb8b28)), // PISICI
+      (Color(0x38ffffff), Color(0xff4a86b0)), // MAGAZIN
+      (Color(0x38ffffff), Color(0xff4a86b0)), // PISICI
       (Color(0xff000000), Color(0xff000000)), // LUPTĂ (centre button)
-      (Color(0xff274a73), Color(0xff5f96d4)), // ECHIPĂ
-      (Color(0xff46296b), Color(0xffa259e6)), // EVENIMENTE
+      (Color(0x38ffffff), Color(0xff4a86b0)), // ECHIPĂ
+      (Color(0x38ffffff), Color(0xff4a86b0)), // EVENIMENTE
     ];
 
     Widget tileIcon(int i) {
@@ -708,14 +708,18 @@ class ArenaBottomBar extends StatelessWidget {
             fallback: Icon(
               icons[i],
               size: 23,
-              color: selected == i ? gold : const Color(0xffd8b48f),
+              color: selected == i
+                  ? const Color(0xff0f3a5c)
+                  : const Color(0xff4a7ba0),
             ),
           );
         default:
           return Icon(
             icons[i],
             size: 23,
-            color: selected == i ? gold : const Color(0xffd8b48f),
+            color: selected == i
+                ? const Color(0xff0f3a5c)
+                : const Color(0xff4a7ba0),
           );
       }
     }
@@ -758,19 +762,21 @@ class ArenaBottomBar extends StatelessWidget {
                             ),
                             borderRadius: BorderRadius.circular(13),
                             border: Border.all(
-                              color: selected == i ? gold : tileStyles[i].$2,
-                              width: selected == i ? 2.4 : 1.6,
+                              color: selected == i
+                                  ? const Color(0xff1d5f96)
+                                  : tileStyles[i].$2,
+                              width: selected == i ? 2.2 : 1.4,
                             ),
                             boxShadow: selected == i
                                 ? const [
                                     BoxShadow(
-                                      color: Color(0x88ffc63c),
-                                      blurRadius: 9,
+                                      color: Color(0x661d5f96),
+                                      blurRadius: 8,
                                     ),
                                   ]
                                 : const [
                                     BoxShadow(
-                                      color: Color(0x5520130e),
+                                      color: Color(0x331d3f5e),
                                       offset: Offset(0, 2),
                                       blurRadius: 3,
                                     ),
@@ -789,7 +795,7 @@ class ArenaBottomBar extends StatelessWidget {
                                 color: const Color(0xffe2433a),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: const Color(0xff7c4e37),
+                                  color: Colors.white,
                                   width: 1.5,
                                 ),
                               ),
@@ -805,7 +811,9 @@ class ArenaBottomBar extends StatelessWidget {
                         child: Text(
                           labels[i],
                           style: TextStyle(
-                            color: selected == i ? gold : tileStyles[i].$2,
+                            color: selected == i
+                                ? const Color(0xff0f3a5c)
+                                : const Color(0xff2a5a7e),
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 0.3,
@@ -837,12 +845,14 @@ class ArenaBottomBar extends StatelessWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xff7c4e37), Color(0xff54342a)],
+                  colors: [Color(0xffaad6ef), Color(0xff6da5cc)],
                 ),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(20),
                 ),
-                border: const Border(top: BorderSide(color: gold, width: 2)),
+                border: const Border(
+                  top: BorderSide(color: Color(0xff3f7ba8), width: 2),
+                ),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x5520130e),
@@ -880,36 +890,33 @@ class ArenaBottomBar extends StatelessWidget {
                   child: InkWell(
                     key: const ValueKey('nav-2'),
                     onTap: () => onSelected(2),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(18),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
-                          width: 58,
+                          width: 60,
                           height: 58,
                           child: Stack(
                             children: [
                               Positioned.fill(
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
+                                    borderRadius: BorderRadius.circular(18),
                                     gradient: const LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
                                       colors: [
-                                        Color(0xfffff6bd),
-                                        gold,
-                                        Color(0xffe8a01f),
+                                        Color(0xffffb066),
+                                        Color(0xfff27a2e),
+                                        Color(0xffd9542a),
                                       ],
                                     ),
-                                    border: Border.all(
-                                      color: const Color(0xff8f5f14),
-                                      width: 2.5,
-                                    ),
+                                    border: Border.all(color: gold, width: 2.5),
                                     boxShadow: const [
                                       BoxShadow(
-                                        color: Color(0x66ffc63c),
-                                        blurRadius: 18,
+                                        color: Color(0x66f27a2e),
+                                        blurRadius: 14,
                                       ),
                                       BoxShadow(
                                         color: Color(0x6620130e),
@@ -921,14 +928,14 @@ class ArenaBottomBar extends StatelessWidget {
                                 ),
                               ),
                               const Positioned(
-                                top: 6,
-                                left: 14,
-                                right: 14,
-                                height: 13,
+                                top: 4,
+                                left: 8,
+                                right: 8,
+                                height: 14,
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(10),
+                                      top: Radius.circular(12),
                                     ),
                                     gradient: LinearGradient(
                                       begin: Alignment.topCenter,
@@ -954,8 +961,8 @@ class ArenaBottomBar extends StatelessWidget {
                               labels[2],
                               style: TextStyle(
                                 color: selected == 2
-                                    ? gold
-                                    : const Color(0xffe8c9a0),
+                                    ? const Color(0xff0f3a5c)
+                                    : const Color(0xff2a5a7e),
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0.3,
