@@ -10,8 +10,8 @@ End state: a cat owner plays a short, fair duel as their own cat, against a frie
 
 ## Agreed decisions
 
-1. Timed-turn duels on separate boards, same seed for both players. Each turn gives the active player up to 30 seconds of free swaps; a player may end a turn early. A match is a fixed number of turns per player (default 5 each). Obstacles earned during a turn land on the opponent's board at the start of their next turn. Boxes break on adjacent matches. Each cat brings one equal-strength power (chosen in the cat editor) whose meter charges to 100% from matches and is fired by tapping the meter. Higher score wins; equal score is a draw. Stakes: +30 trophies win, 0 draw, -25 loss.
-2. Flat points per piece, no cascade multiplier. Colour count (5 or 6) and the rainbow rule are configurable.
+1. Timed-turn duels on one shared 7×7 board, same seed for both players. Each turn gives the active player up to 15 seconds of free swaps; the clock auto-ends the turn. A match is 3 turns per player (6 total). Obstacles earned during a turn land on the shared board at the start of the opponent's next turn (max 4 boxes per turn); a box breaks in one hit on an adjacent match or special blast. Each cat brings one equal-strength power (chosen in the cat editor) whose meter charges to 100% in ~20 cleared pieces and is fired by tapping the meter. Higher score wins; equal score is a draw. Stakes: +30 trophies win, 0 draw, -25 loss.
+2. Scoring: +10 per cleared piece, +40 per broken box, +50 per created special; each cascade wave multiplies piece points by +0.5× (x1.0 → x1.5 → x2.0…). Colour count (5 or 6) and the rainbow rule are configurable.
 3. Friends use six-character codes; house cats are labelled bots. No ranked play against strangers.
 4. Three free powers of equal strength; none is sold.
 5. Cosmetic bundles use LEI prices. Paws are earned in play and never sold. No ads.

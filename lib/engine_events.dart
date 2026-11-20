@@ -218,11 +218,12 @@ class EngineViewAdapter {
               ),
             );
           }
-        case engine.ObstacleBroken(:final player, :final cells):
+        case engine.ObstacleBroken(:final player, :final cells, :final points):
           out.add(
             ObstacleBroken(
               player: _vp(player),
               cells: [for (final c in cells) _idx(c)],
+              points: points,
             ),
           );
         case engine.PowerCharged(:final player)

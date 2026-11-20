@@ -316,7 +316,7 @@ class MatchConfig {
 /// replace round/move counters, [EndTurnMove] and [TurnEnded] replace
 /// per-move turn consumption and [RoundEnded], powers fire from a shared
 /// 0..100 meter and always queue cardboard boxes.
-const int kEngineVersion = 4;
+const int kEngineVersion = 5;
 
 /// Maximum pending obstacles queued for one player. Obstacles earned beyond
 /// this cap are discarded (the oldest queued obstacles are kept).
@@ -326,13 +326,25 @@ const int kMaxPendingObstacles = 12;
 /// from cleared pieces up to this hard cap — it can never exceed 100.
 const int kPowerMeterMax = 100;
 
-/// Charge gained per cleared piece, in percent. Two points per piece means
-/// a full meter takes about fifty cleared pieces — roughly one power per
-/// match for an average player.
-const int kChargePerPiece = 2;
+/// Charge gained per cleared piece, in percent. Five percent per piece
+/// means a full meter takes about twenty cleared pieces — roughly one
+/// power per turn for an active player (contract).
+const int kChargePerPiece = 5;
 
-/// Points awarded per cleared piece. Flat scoring: no cascade multiplier.
+/// Points awarded per cleared piece before the cascade multiplier.
 const int kPointsPerPiece = 10;
+
+/// Points per cardboard box broken (adjacent match or special blast).
+const int kPointsPerBox = 40;
+
+/// Points awarded when a match creates a special piece.
+const int kPointsPerSpecialCreate = 50;
+
+/// Maximum cardboard boxes one player may earn for the opponent during a
+/// single turn, from every source combined (cascade combos, special
+/// pairs, powers). The pending queue is empty when a turn starts, so the
+/// queue length doubles as the per-turn counter.
+const int kMaxObstaclesPerTurn = 4;
 
 /// Cardboard boxes every power queues for the opponent. All three powers
 /// are equal strength: same obstacle count, same meter cost.
@@ -728,11 +740,17 @@ final class ObstacleLanded extends GameEvent {
 }
 
 /// Obstacles consumed: boxes broken by adjacent clears and yarn locks
-/// released because their piece was cleared.
+/// released because their piece was cleared. [points] is the score
+/// awarded for the broken boxes (`kPointsPerBox` each).
 final class ObstacleBroken extends GameEvent {
   final PlayerSlot player;
   final List<CellPos> cells;
-  const ObstacleBroken({required this.player, required this.cells});
+  final int points;
+  const ObstacleBroken({
+    required this.player,
+    required this.cells,
+    this.points = 0,
+  });
 }
 
 /// Power charge changed by [amount] (a signed delta). Emitted only when

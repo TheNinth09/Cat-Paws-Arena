@@ -66,12 +66,12 @@ Use stable player identifiers such as `PlayerSlot.first` and `PlayerSlot.second`
 
 Legal actions include a valid swap and an explicitly supported power action. A power must consume the agreed resource according to engine rules, not bypass move limits unless the config explicitly says so. The engine owns when a power may be used; UI owns button availability and animation.
 
-### Turn and obstacle semantics (revised: timed turns replace 3-moves/5-rounds)
+### Turn and obstacle semantics (revised: shared board, rapid turns)
 
-- Both players play the same seed/config, but each has an independent board state.
-- A match alternates turns. Each turn gives the active player up to `turnSeconds` (default 30) of free swaps; the player may end the turn early with an explicit end-turn action. A match lasts `turnsPerPlayer` turns each (default 5). All swaps and power activations inside a turn are individual log entries, replayed and hash-verified exactly as before.
-- Scores accumulate across the whole match. Flat points per piece, no cascade multiplier. Colour count and rainbow behavior are config-visible.
-- Obstacles (boxes) break on adjacent matches. Obstacles earned during a turn are queued for the opponent and appear at the start of that opponent's next turn. Define maximum queue size, placement selection, collision behavior, and effects on move legality. Do not drop or duplicate obstacles during replay.
+- Both players share one 7×7 board — every accepted move mutates the same grid the opponent then plays on (Match Masters style).
+- A match alternates turns. Each turn gives the active player up to `turnSeconds` (15) of free swaps; the clock auto-ends the turn at zero, letting a cascade already in flight finish. A match lasts `turnsPerPlayer` turns each (3). All swaps and power activations inside a turn are individual log entries, replayed and hash-verified exactly as before.
+- Scores accumulate across the whole match: +10 per cleared piece, +40 per broken box, +50 per created special. Cascade waves multiply piece points by an extra +0.5× per wave (x1.0 → x1.5 → x2.0…). Colour count and rainbow behavior are config-visible.
+- Obstacles (boxes) break in one hit on adjacent matches or special blasts. Obstacles earned during a turn are queued for the opponent (max `kMaxObstaclesPerTurn` = 4 per turn) and land at the start of that opponent's next turn with a short impact animation. Define maximum queue size, placement selection, collision behavior, and effects on move legality. Do not drop or duplicate obstacles during replay.
 - Each cat brings exactly one equal-strength power chosen in the cat editor (zoomies / shadow pounce / laser chase). The meter charges from matches to a 100% cap; firing is a logged power action triggered by the player tapping the full meter. Powers may send obstacles to the opponent's board and/or clear own cells; strengths stay equal.
 - After both players finish their turns, produce a win/loss/draw result and final hashes. Stakes: +30 trophies win, 0 draw, -25 loss. Scores alone are not proof of fairness; the event log and hashes must agree.
 
@@ -90,7 +90,7 @@ Every event is immutable and contains the fields below. Field names may be adjus
 | `Refilled` | `player`, `cell`, `piece`; deterministic new piece |
 | `ObstacleQueued` | `player`, `sourceRound`, `count`; obstacle earned for opponent's next round |
 | `ObstacleLanded` | `player`, `cells`; obstacles appearing at round start |
-| `ObstacleBroken` | `player`, `cells`; cleared/consumed obstacles |
+| `ObstacleBroken` | `player`, `cells`, `points`; cleared/consumed obstacles and the score their break earned |
 | `PowerCharged` | `player`, `amount`; charge delta or resulting charge, documented consistently |
 | `PowerFired` | `player`, `power`, `cells`, `points`; validated power resolution |
 | `Shuffled` | `player`, `cells`, `reason`; deterministic reshuffle |

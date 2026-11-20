@@ -16,6 +16,7 @@ import 'profile.dart';
 import 'shell/house_tour.dart';
 import 'ui_widgets.dart';
 import 'vs_screen.dart';
+import 'widgets/board_vfx_overlay.dart';
 
 /// Compile-time switch for the frame-time profiling overlay. Build a release
 /// APK/AAB with `--dart-define=CPA_FRAME_PROBE=true` to profile on device.
@@ -112,6 +113,7 @@ class _MatchScreenState extends State<MatchScreen>
   late final AnimationController fx;
   late final DuelAudio _audio;
   late final DuelMusic _music;
+  final _vfx = BoardVfxController();
   int _lastCountdown = -1;
   late final AnimationController _momentFx;
   final _boardKey = GlobalKey<BoardViewState>();
@@ -203,6 +205,7 @@ class _MatchScreenState extends State<MatchScreen>
     _emoteSub?.cancel();
     fx.dispose();
     _momentFx.dispose();
+    _vfx.dispose();
     _audio.dispose();
     p.removeListener(_music.sync);
     match.removeListener(_matchListener);
@@ -212,26 +215,128 @@ class _MatchScreenState extends State<MatchScreen>
     super.dispose();
   }
 
-  /// Countdown warning for the last five seconds of a turn — one tick
+  /// Countdown warning for the last four seconds of a turn — one tick
   /// per second boundary, plus music start/stop when the phase changes.
   void _matchListener() {
     _music.sync();
     final s = match.turnSecondsLeft;
     if (s != _lastCountdown) {
       _lastCountdown = s;
-      if (s > 0 && s <= 5 && match.phase == MatchPhase.playing) {
+      if (s > 0 && s <= 4 && match.phase == MatchPhase.playing) {
         _audio.countdownTick();
       }
     }
   }
 
-  /// Sound + haptic feedback and the full-screen power moment, fired as each
-  /// contract event's animation starts on the board.
+  /// Sound + haptic feedback, the non-blocking board VFX layer and the
+  /// full-screen power moment, fired as each contract event's animation
+  /// starts on the board.
   void _onBoardEvent(BoardEvent event) {
     _audio.play(event);
+    _emitVfx(event);
     if (event is PowerFired) {
       setState(() => _momentPower = event.power);
       _momentFx.forward(from: 0);
+    }
+  }
+
+  /// Maps contract events onto the non-blocking overlay: particles on
+  /// clears, beams on rockets, shockwaves on bombs/copters, the laser
+  /// cross, and floating score labels. Positions arrive as flat cell
+  /// indices; the painter wants (col, row) grid coordinates.
+  void _emitVfx(BoardEvent event) {
+    Offset at(int i) => Offset((i % 7).toDouble(), (i ~/ 7).toDouble());
+    Offset centroid(List<int> cells) {
+      var x = 0.0, y = 0.0;
+      for (final i in cells) {
+        x += i % 7;
+        y += i ~/ 7;
+      }
+      return Offset(x / cells.length, y / cells.length);
+    }
+
+    switch (event) {
+      case Cleared(:final cells, :final points):
+        for (final i in cells.take(10)) {
+          _vfx.emit(BoardVfxEvent(type: BoardVfxType.tilePop, normalizedPos: at(i)));
+        }
+        if (cells.isNotEmpty && points > 0) {
+          _vfx.emit(
+            BoardVfxEvent(
+              type: BoardVfxType.tilePop,
+              normalizedPos: centroid(cells),
+              color: const Color(0x00000000),
+              label: '+$points',
+            ),
+          );
+        }
+      case SpecialFired(:final cells, :final kind, :final points):
+        if (cells.isEmpty) return;
+        final c = centroid(cells);
+        final type = switch (kind) {
+          SpecialKind.lineHorizontal => BoardVfxType.rocketRow,
+          SpecialKind.lineVertical => BoardVfxType.rocketCol,
+          SpecialKind.bomb => BoardVfxType.bombShockwave,
+          SpecialKind.copter => BoardVfxType.bombShockwave,
+          SpecialKind.rainbow => BoardVfxType.zoomiesBurst,
+          SpecialKind.none => BoardVfxType.tilePop,
+        };
+        _vfx.emit(
+          BoardVfxEvent(
+            type: type,
+            normalizedPos: c,
+            label: points > 0 ? '+$points' : null,
+            duration: const Duration(milliseconds: 560),
+          ),
+          shake: kind == SpecialKind.bomb ? 0.5 : 0.25,
+        );
+      case ObstacleBroken(:final cells, :final points):
+        for (final i in cells.take(8)) {
+          _vfx.emit(
+            BoardVfxEvent(
+              type: BoardVfxType.boxBreak,
+              normalizedPos: at(i),
+              color: const Color(0xffd9a05b),
+            ),
+          );
+        }
+        if (cells.isNotEmpty && points > 0) {
+          _vfx.emit(
+            BoardVfxEvent(
+              type: BoardVfxType.boxBreak,
+              normalizedPos: centroid(cells),
+              color: const Color(0x00000000),
+              label: '+$points',
+            ),
+          );
+        }
+      case PowerFired(:final cells, :final power, :final points):
+        if (cells.isEmpty) return;
+        final c = centroid(cells);
+        final type = switch (power) {
+          PowerKind.laserChase => BoardVfxType.laserCross,
+          PowerKind.shadowPounce => BoardVfxType.shadowClaw,
+          PowerKind.zoomies => BoardVfxType.zoomiesBurst,
+        };
+        _vfx.emit(
+          BoardVfxEvent(
+            type: type,
+            normalizedPos: c,
+            label: points > 0 ? '+$points' : null,
+            duration: const Duration(milliseconds: 620),
+          ),
+          shake: 0.4,
+        );
+      case Shuffled():
+        _vfx.emit(
+          BoardVfxEvent(
+            type: BoardVfxType.zoomiesBurst,
+            normalizedPos: const Offset(3, 3),
+            duration: const Duration(milliseconds: 350),
+          ),
+        );
+      default:
+        break;
     }
   }
 
@@ -468,7 +573,7 @@ class _MatchScreenState extends State<MatchScreen>
     opponentName: match.botName,
     opponentTrophies: match.botTrophies,
     // The 'ANTRENAMENT OFFLINE' mode pill above already labels the bot;
-    // the card keeps its name clean — the in-match BOT tag stays.
+    // the card and the in-match HUD keep the name clean (spec §5).
     opponentBadge: match.isOnline ? 'PRIETEN' : '',
     opponentPortrait: Center(child: _opponentAvatar(84)),
     opponentSubtitle: match.isOnline
@@ -551,7 +656,6 @@ class _MatchScreenState extends State<MatchScreen>
               child: _PortraitPlate(
                 avatar: _opponentAvatar(50),
                 name: match.botName,
-                tag: match.isOnline ? 'PRIETEN' : 'BOT',
                 score: match.botScore,
                 charge: match.botCharge,
                 ringColor: const Color(0xff9d6bff),
@@ -841,6 +945,12 @@ class _MatchScreenState extends State<MatchScreen>
                       hintCells: hint == null ? null : {hint.$1, hint.$2},
                     ),
                   ),
+                  // Non-blocking VFX layer: particles, beams, shockwaves
+                  // and floating labels render over the 7×7 grid without
+                  // eating gestures (IgnorePointer inside the widget).
+                  Positioned.fill(
+                    child: BoardVfxOverlay(controller: _vfx),
+                  ),
                   _tutorialOverlay(),
                 ],
               ),
@@ -925,7 +1035,7 @@ class _MatchScreenState extends State<MatchScreen>
                             child: Text(
                               full
                                   ? '${_shortPowerName(idx)} • ACTIVEAZĂ!'
-                                  : '${_shortPowerName(idx)} • $charge%',
+                                  : _shortPowerName(idx),
                               maxLines: 1,
                               style: TextStyle(
                                 color: full
@@ -1505,7 +1615,8 @@ class _TurnPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final urgent = seconds <= 10;
+    // The bar turns red only inside the ticked final stretch (4 s).
+    final urgent = seconds <= 4;
     final color = urgent ? const Color(0xffff9d8f) : gold;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -1552,7 +1663,7 @@ class _PortraitPlate extends StatelessWidget {
   const _PortraitPlate({
     required this.avatar,
     required this.name,
-    this.tag,
+
     required this.score,
     required this.charge,
     required this.ringColor,
@@ -1566,7 +1677,6 @@ class _PortraitPlate extends StatelessWidget {
 
   final Widget avatar;
   final String name;
-  final String? tag;
   final int score;
   final int charge;
   final Color ringColor;
@@ -1664,29 +1774,7 @@ class _PortraitPlate extends StatelessWidget {
                   ],
                 ),
               ),
-              if (tag != null) ...[
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xff3a2418),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: accentColor, width: 1),
-                  ),
-                  child: Text(
-                    tag!,
-                    style: TextStyle(
-                      color: accentColor,
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.4,
-                    ),
-                  ),
-                ),
-              ],
+
             ],
           ),
         ),

@@ -116,7 +116,7 @@ void main() {
           expect(find.byKey(ValueKey('nav-$tab')), findsOneWidget);
         }
         final bar = find.byType(ArenaBottomBar);
-        for (final label in ['SHOP', 'CATS', 'HOME', 'TEAM', 'EVENTS']) {
+        for (final label in ['SHOP', 'CATS', 'FIGHT', 'TEAM', 'EVENTS']) {
           expect(
             find.descendant(of: bar, matching: find.text(label)),
             findsOneWidget,

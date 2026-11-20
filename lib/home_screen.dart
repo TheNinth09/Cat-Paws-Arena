@@ -328,6 +328,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     animation: p,
     builder: (context, _) => Scaffold(
       key: scaffold,
+      extendBodyBehindAppBar: true,
+      extendBody: true,
+      backgroundColor: Colors.transparent,
       // Floating dropdown panel under the hamburger — the reference menus
       // are compact rounded cards, not a full-height drawer.
       endDrawer: Drawer(
@@ -398,7 +401,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         children: [
           Positioned.fill(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
+              duration: const Duration(milliseconds: 220),
               child: KeyedSubtree(
                 key: ValueKey('bg-$tab'),
                 child: arenaImage(

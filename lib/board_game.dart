@@ -298,7 +298,7 @@ class BoardViewState extends State<BoardView>
               from: firstCell,
               to: secondCell,
               start: start,
-              dur: 0.15,
+              dur: 0.11,
             ),
           if (b.piece != null || b.obstacle != null)
             _moveFx(
@@ -309,7 +309,7 @@ class BoardViewState extends State<BoardView>
               from: secondCell,
               to: firstCell,
               start: start,
-              dur: 0.15,
+              dur: 0.11,
             ),
         ];
       case SwapRejected(:final firstCell, :final secondCell):
@@ -324,7 +324,7 @@ class BoardViewState extends State<BoardView>
               piece: a.piece,
               obstacle: a.obstacle,
               start: start,
-              dur: 0.26,
+              dur: 0.16,
             ),
           if (b.piece != null || b.obstacle != null)
             _staticFx(
@@ -334,11 +334,11 @@ class BoardViewState extends State<BoardView>
               piece: b.piece,
               obstacle: b.obstacle,
               start: start,
-              dur: 0.26,
+              dur: 0.16,
             ),
         ];
       case Cleared(:final cells):
-        return _popCells(event, cells, start, 0.18);
+        return _popCells(event, cells, start, 0.14);
       case SpecialCreated(:final cell, :final kind):
         final c = _cells[cell];
         final upgraded = c.piece?.withSpecial(kind);
@@ -429,7 +429,7 @@ class BoardViewState extends State<BoardView>
             from: from,
             to: to,
             start: start,
-            dur: 0.2,
+            dur: 0.16,
             squash: true,
           ),
         ];
@@ -444,7 +444,7 @@ class BoardViewState extends State<BoardView>
             from: cell,
             to: cell,
             start: start,
-            dur: 0.24,
+            dur: 0.18,
             delay: _refillDelay(cell, start),
             squash: true,
           ),
@@ -620,7 +620,7 @@ class BoardViewState extends State<BoardView>
             from: from,
             to: target,
             start: start + i * 0.02,
-            dur: 0.4,
+            dur: 0.3,
             delay: i * 0.012,
           ),
         );
@@ -714,17 +714,17 @@ class BoardViewState extends State<BoardView>
   );
 
   double _slotFor(BoardEvent event) => switch (event) {
-    Swapped() => 0.14,
-    SwapRejected() => 0.26,
-    Cleared() => 0.1,
+    Swapped() => 0.11,
+    SwapRejected() => 0.14,
+    Cleared() => 0.14,
     SpecialCreated() => 0.12,
-    SpecialFired() => 0.12,
+    SpecialFired() => 0.14,
     PowerFired() => 0.14,
-    Fell() => 0.085,
-    Refilled() => 0.085,
+    Fell() => 0.1,
+    Refilled() => 0.1,
     ObstacleLanded() => 0.12,
     ObstacleBroken() => 0.12,
-    Shuffled() => 0.34,
+    Shuffled() => 0.3,
     BoardReset() => 0.55,
     _ => 0.03,
   };
@@ -900,9 +900,10 @@ class BoardViewState extends State<BoardView>
         const Color(0xffffb066),
         15.0,
       ),
-      PowerCharged(:final amount) => amount >= 100
-          ? ('PUTERE MAXIMĂ!', _bannerGold, 17.0)
-          : ('Putere $amount%', _bannerGold, 13.0),
+      Shuffled() => ('AMESTECARE!', _bannerGold, 17.0),
+      // The meter's own bar communicates charge; a floating percentage
+      // over the board was noise the spec asks to remove.
+      PowerCharged() => ('', _bannerGold, 12.0),
       TurnEnded(:final turn, :final scores) => (
         'Tura $turn  •  ${scores.first} – ${scores.second}',
         _mutedBanner,
@@ -1139,7 +1140,7 @@ class _Banner {
   const _Banner(this.event, this.start);
   final BoardEvent event;
   final double start;
-  static const dur = 0.95;
+  static const dur = 0.45;
 }
 
 class _BoardPainter extends CustomPainter {

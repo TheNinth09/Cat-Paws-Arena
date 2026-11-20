@@ -40,6 +40,10 @@ class DuelAudio {
   /// pop/special pitch rises with each step.
   int _cascade = 0;
 
+  /// Specials fired inside the current move: the second and beyond mean
+  /// a special+special combination, which earns the heavy haptic.
+  int _specialsThisMove = 0;
+
   void play(BoardEvent event) {
     if (!_enabled()) return;
     final rate = _rateFor(event);
@@ -49,14 +53,14 @@ class DuelAudio {
     if (h != null && _hapticsEnabled()) _haptics(h);
   }
 
-  /// Last-five-seconds warning — a sharper tick than the falling-piece
-  /// one so the countdown reads as urgent, not as gravity.
+  /// Last-seconds warning — a discrete tick per second while the turn
+  /// clock burns its final stretch (4s), not as urgent as a timer bomb.
   void countdownTick() {
     if (!_enabled()) return;
     _out.play(
-      'generated/audio/sfx_tick.wav',
+      'audio/sfx_timer_tick.wav',
       volume: 0.75,
-      rate: 1.3,
+      rate: 1.1,
     );
     if (_hapticsEnabled()) _haptics(HapticKind.selection);
   }
@@ -72,7 +76,11 @@ class DuelAudio {
         e is MatchEnded ||
         e is ObstacleQueued ||
         e is BoardReset;
-    if (moveStart) _cascade = 0;
+    if (moveStart) {
+      _cascade = 0;
+      _specialsThisMove = 0;
+    }
+    if (e is SpecialFired) _specialsThisMove++;
     if (!clearStep) return 1;
     _cascade = _cascade >= 8 ? 8 : _cascade + 1;
     return 1 + 0.12 * _cascade;
@@ -81,49 +89,64 @@ class DuelAudio {
   ({String asset, double volume, HapticKind? haptic}) _cueFor(BoardEvent e) =>
       switch (e) {
         Swapped() => (
-          asset: 'generated/audio/sfx_swap.wav',
+          asset: 'audio/sfx_swap.wav',
           volume: 0.5,
           haptic: HapticKind.selection,
         ),
         SwapRejected() => (
-          asset: 'generated/audio/sfx_reject.wav',
+          asset: 'audio/sfx_invalid.wav',
           volume: 0.55,
           haptic: HapticKind.medium,
         ),
         Cleared() => (
-          asset: 'generated/audio/sfx_pop.wav',
+          asset: _cascade <= 1
+              ? 'audio/sfx_match.wav'
+              : _cascade == 2
+              ? 'audio/sfx_combo_2.wav'
+              : 'audio/sfx_combo_3.wav',
           volume: 0.6,
           haptic: HapticKind.light,
         ),
         SpecialCreated() => (
-          asset: 'generated/audio/sfx_chime.wav',
+          asset: 'audio/sfx_special_create.wav',
           volume: 0.55,
-          haptic: HapticKind.selection,
-        ),
-        SpecialFired() => (
-          asset: 'generated/audio/sfx_special.wav',
-          volume: 0.6,
           haptic: HapticKind.medium,
+        ),
+        SpecialFired(:final kind) => (
+          asset: switch (kind) {
+            SpecialKind.lineHorizontal || SpecialKind.lineVertical =>
+              'audio/sfx_rocket.wav',
+            SpecialKind.bomb => 'audio/sfx_bomb.wav',
+            SpecialKind.copter => 'audio/sfx_copter.wav',
+            SpecialKind.rainbow => 'audio/sfx_rainbow.wav',
+            SpecialKind.none => 'audio/sfx_match.wav',
+          },
+          volume: 0.65,
+          // Second+ special inside one move = a special+special
+          // combination — the heavy haptic marks the big one.
+          haptic: _specialsThisMove >= 2
+              ? HapticKind.heavy
+              : HapticKind.medium,
         ),
         Fell() => (
           asset: 'generated/audio/sfx_tick.wav',
-          volume: 0.45,
+          volume: 0.35,
           haptic: HapticKind.selection,
         ),
         Refilled() => (
           asset: 'generated/audio/sfx_plip.wav',
-          volume: 0.5,
+          volume: 0.45,
           haptic: HapticKind.selection,
         ),
         ObstacleLanded() => (
-          asset: 'generated/audio/sfx_thud.wav',
-          volume: 0.7,
+          asset: 'audio/sfx_box_break.wav',
+          volume: 0.6,
           haptic: HapticKind.medium,
         ),
         ObstacleBroken() => (
-          asset: 'generated/audio/sfx_crack.wav',
-          volume: 0.6,
-          haptic: HapticKind.medium,
+          asset: 'audio/sfx_box_break.wav',
+          volume: 0.7,
+          haptic: HapticKind.light,
         ),
         ObstacleQueued() => (
           asset: 'generated/audio/sfx_ding.wav',
@@ -135,8 +158,12 @@ class DuelAudio {
           volume: 0.45,
           haptic: HapticKind.selection,
         ),
-        PowerFired() => (
-          asset: 'generated/audio/sfx_power.wav',
+        PowerFired(:final power) => (
+          asset: switch (power) {
+            PowerKind.zoomies => 'audio/sfx_power_zoomies.wav',
+            PowerKind.shadowPounce => 'audio/sfx_power_shadow_pounce.wav',
+            PowerKind.laserChase => 'audio/sfx_power_laser_chase.wav',
+          },
           volume: 0.8,
           haptic: HapticKind.heavy,
         ),
@@ -150,9 +177,11 @@ class DuelAudio {
           volume: 0.7,
           haptic: HapticKind.heavy,
         ),
-        MatchEnded() => (
-          asset: 'generated/audio/sfx_end.wav',
-          volume: 0.8,
+        MatchEnded(:final outcome) => (
+          asset: outcome == MatchOutcome.secondWin
+              ? 'audio/sfx_defeat.wav'
+              : 'audio/sfx_victory.wav',
+          volume: 0.85,
           haptic: HapticKind.heavy,
         ),
         BoardReset() => (
@@ -182,7 +211,7 @@ void _platformHaptics(HapticKind kind) {
 class DuelMusic {
   DuelMusic({
     required this.enabled,
-    this.asset = 'generated/audio/music_battle.wav',
+    this.asset = 'audio/bgm_battle_loop.wav',
     this.volume = 0.32,
   }) : _player = AudioPlayer() {
     unawaited(

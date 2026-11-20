@@ -561,8 +561,8 @@ class ArenaBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labels = english
-        ? const ['SHOP', 'CATS', 'HOME', 'TEAM', 'EVENTS']
-        : const ['MAGAZIN', 'PISICI', 'ACASĂ', 'ECHIPĂ', 'EVENIMENTE'];
+        ? const ['SHOP', 'CATS', 'FIGHT', 'TEAM', 'EVENTS']
+        : const ['MAGAZIN', 'PISICI', 'LUPTĂ', 'ECHIPĂ', 'EVENIMENTE'];
     const icons = [
       Icons.storefront,
       Icons.pets,
@@ -607,68 +607,34 @@ class ArenaBottomBar extends StatelessWidget {
       }
     }
 
-    // Band height 54 + headroom so the raised tiles can pop above it.
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    return SizedBox(
-      height: 84 + bottomInset,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              height: 54 + bottomInset,
-              padding: EdgeInsets.only(bottom: bottomInset),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xff4a7ec2), Color(0xff2c4e85)],
-                ),
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-                border: Border(
-                  top: BorderSide(color: Color(0xff8fb4e0), width: 2),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x5520130e),
-                    offset: Offset(0, -6),
-                    blurRadius: 16,
+    // No background band: the five 3D tiles float directly over the page
+    // art. SafeArea keeps them above the system gesture inset.
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: 86,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (var i = 0; i < 5; i++)
+                Expanded(
+                  flex: i == 2 ? 3 : 2,
+                  child: _NavButton(
+                    key: ValueKey('nav-$i'),
+                    label: labels[i],
+                    centre: i == 2,
+                    active: selected == i,
+                    badge: i == 0 && shopBadge,
+                    haptics: haptics,
+                    onTap: () => onSelected(i),
+                    child: tileIcon(i),
                   ),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
-          Positioned.fill(
-            bottom: bottomInset,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  for (var i = 0; i < 5; i++)
-                    Expanded(
-                      flex: i == 2 ? 3 : 2,
-                      child: _NavButton(
-                        key: ValueKey('nav-$i'),
-                        label: labels[i],
-                        centre: i == 2,
-                        active: selected == i,
-                        badge: i == 0 && shopBadge,
-                        haptics: haptics,
-                        onTap: () => onSelected(i),
-                        child: tileIcon(i),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -708,9 +674,9 @@ class _NavButtonState extends State<_NavButton> {
     final centre = widget.centre;
     final active = widget.active;
     final golden = active || centre;
-    // Tile heights measured from the row bottom: the band occupies its
-    // lower 54 px, so taller tiles protrude above the band's top edge.
-    final h = centre ? 78.0 : (active ? 62.0 : 50.0);
+    // Tile heights measured from the row bottom: the centre LUPTĂ tile
+    // towers over the rest; the active tab rises slightly.
+    final h = centre ? 80.0 : (active ? 64.0 : 54.0);
     return Semantics(
       button: true,
       selected: active,
@@ -741,23 +707,23 @@ class _NavButtonState extends State<_NavButton> {
                             Color(0xffdf931f),
                           ]
                         : const [
-                            Color(0xff5d8cc9),
-                            Color(0xff3a61a0),
-                            Color(0xff2d4c81),
+                            Color(0xffa5764e),
+                            Color(0xff7a5238),
+                            Color(0xff5c3a26),
                           ],
                   ),
                   borderRadius: BorderRadius.circular(centre ? 18 : 14),
                   border: Border.all(
                     color: golden
                         ? const Color(0xff8a4b0f)
-                        : const Color(0xff1d3460),
+                        : const Color(0xff3a2418),
                     width: centre || active ? 2.4 : 2.0,
                   ),
                   boxShadow: [
                     BoxShadow(
                       color: golden
                           ? const Color(0x99ffc63c)
-                          : const Color(0x66101d38),
+                          : const Color(0x6620130e),
                       offset: Offset(0, golden ? 3 : 4),
                       blurRadius: golden ? 10 : 0,
                     ),
@@ -799,7 +765,7 @@ class _NavButtonState extends State<_NavButton> {
                                   style: TextStyle(
                                     color: golden
                                         ? const Color(0xff5d3a2c)
-                                        : const Color(0xffdce9f7),
+                                        : const Color(0xfff3d9a8),
                                     fontSize: centre ? 10.5 : 9,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 0.2,

@@ -201,11 +201,18 @@ final class ObstacleLanded extends BoardEvent {
   final ObstacleKind obstacle;
 }
 
-/// Obstacles cleared or consumed.
+/// Obstacles cleared or consumed. [points] carries the score earned by
+/// the break (boxes directly targeted by a power ride on that power's
+/// [PowerFired.points] instead and report 0 here).
 final class ObstacleBroken extends BoardEvent {
-  const ObstacleBroken({required this.player, required this.cells});
+  const ObstacleBroken({
+    required this.player,
+    required this.cells,
+    this.points = 0,
+  });
   final PlayerSlot player;
   final List<int> cells;
+  final int points;
 }
 
 /// [amount] is the resulting total charge (0..100), documented consistently.

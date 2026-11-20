@@ -205,7 +205,24 @@ void main() {
         waveCleared.cells.where((p) => p.row == 1 && p.col != 3).length,
         greaterThanOrEqualTo(3),
       );
-      expect(waveCleared.points, waveCleared.cells.length * kPointsPerPiece);
+      // Points pay the cleared pieces scaled by the wave's cascade
+      // multiplier (x1.0 + 0.5 per chained wave) plus the flat creation
+      // bonus for every special that wave produced.
+      final at = events.indexOf(waveCleared);
+      var creations = 0;
+      for (var i = at + 1;
+          i < events.length && events[i] is SpecialCreated;
+          i++) {
+        creations++;
+      }
+      expect(
+        [
+          for (var w = 0; w < 8; w++)
+            waveCleared.cells.length * kPointsPerPiece * (2 + w) ~/ 2 +
+                creations * kPointsPerSpecialCreate,
+        ],
+        contains(waveCleared.points),
+      );
       // The special piece exists somewhere on the creator's board.
       expect(findSpecial(state, PlayerSlot.first, kLineColumn), isNonNegative);
     });
@@ -348,20 +365,69 @@ void main() {
     expect(specialAt, isNonNegative, reason: 'special must exist pre-fire');
     final board = state.boardOf(PlayerSlot.first);
 
-    // A special fires when swapped onto a piece of the colour it was
-    // made from. Rebuild the state with a matching piece planted next to
-    // the special (rainbow instead keeps the real piece colour — it
-    // clears whatever colour it touches), then swap.
+    // A non-rainbow special fires when the swap places it inside a run
+    // of 3+ of the colour it was made from. Rebuild the state with a
+    // run planted around the landing cell (rainbow instead keeps the
+    // real piece colour — it clears whatever colour it touches), then
+    // swap.
     final w = board.width, h = board.height;
     final scratch = List<int>.of(board.cells);
     final base = basePieceCode(scratch[specialAt]);
-    final nb = neighbourPiece(board, specialAt);
+    var nb = neighbourPiece(board, specialAt);
     expect(nb, isNonNegative, reason: 'special needs an adjacent piece');
-    final plantColour =
-        specialKindBaseOf(base) == kRainbow
-            ? basePieceCode(scratch[nb])
-            : specialColourOf(base);
-    final cells = List<int>.of(scratch)..[nb] = plantColour;
+    final base2 = specialKindBaseOf(base);
+    var plantColour = basePieceCode(scratch[nb]);
+    var runCells = <int>{nb};
+    if (base2 != kRainbow) {
+      // A non-rainbow special fires when the swap places it inside a
+      // run of 3+ of its own colour. Walk the colour neighbours and
+      // pick a direction where the run can be planted: the special at
+      // nb in the middle (nb-d holds the swapped-away piece, already
+      // planted in its colour) or at the end (nb+d and nb+2d planted).
+      plantColour = specialColourOf(base);
+      bool inLine(int j, int d) =>
+          j >= 0 &&
+          j < scratch.length &&
+          (d.abs() == w ? j % w == nb % w : j ~/ w == nb ~/ w);
+      bool colourAt(int j) {
+        final code = scratch[j];
+        return isColourCode(code) && !isYarnedCode(code);
+      }
+
+      var foundRun = false;
+      const deltas = [-1, 1, -7, 7];
+      for (final d0 in deltas) {
+        final cand = specialAt + d0;
+        if (cand < 0 || cand >= scratch.length || !colourAt(cand)) {
+          continue;
+        }
+        nb = cand;
+        final d = nb - specialAt;
+        // The run {specialAt, nb, nb+d} places the special in the
+        // middle; the swapped-away piece already holds the colour.
+        if (inLine(nb + d, d)) {
+          runCells = {nb, nb + d};
+          foundRun = true;
+          break;
+        }
+      }
+      expect(foundRun, isTrue, reason: 'no room to plant the firing run');
+    }
+    final cells = List<int>.of(scratch);
+    for (final j in runCells) {
+      cells[j] = plantColour;
+    }
+    if (base2 != kRainbow) {
+      // Demote every other non-rainbow special to a plain piece of its
+      // colour so no foreign run can pre-empt our ignition.
+      for (var j = 0; j < cells.length; j++) {
+        if (j != specialAt &&
+            isSpecialCode(cells[j]) &&
+            specialKindBaseOf(cells[j]) != kRainbow) {
+          cells[j] = specialColourOf(cells[j]);
+        }
+      }
+    }
     final swapped = stateWith(
       firstCells: cells,
       secondCells: state.boardOf(PlayerSlot.second).cells,
@@ -486,11 +552,13 @@ void main() {
   });
 
   test('a fired copter strikes one target and is consumed', () {
-    const w = 7, h = 7;
+    const w = 7;
     final copterAt = idx(3, 3), nb = idx(3, 4);
-    // Bare kCopter is a colour-0 copter: it fires when swapped onto a
-    // colour-0 piece planted next to it.
-    final cells = fixture(overrides: {copterAt: kCopter, nb: 0});
+    // Bare kCopter is a colour-0 copter: it fires when the swap lands it
+    // inside a colour-0 run — plant colour 0 at nb and one cell beyond.
+    final cells = fixture(
+      overrides: {copterAt: kCopter, nb: 0, idx(3, 5): 0},
+    );
     final state = stateWith(firstCells: cells);
     final board = state.boardOf(PlayerSlot.first);
     final scratch = List<int>.of(board.cells);
@@ -524,7 +592,9 @@ void main() {
   test('a fired bomb clears a 3x3 area', () {
     const w = 7, h = 7;
     final bombAt = idx(3, 3), nb = idx(3, 4);
-    final cells = fixture(overrides: {bombAt: kBomb, nb: 0});
+    // Bare kBomb is a colour-0 bomb: the swap must land it inside a
+    // colour-0 run — plant colour 0 at nb and one cell beyond.
+    final cells = fixture(overrides: {bombAt: kBomb, nb: 0, idx(3, 5): 0});
     final state = stateWith(firstCells: cells);
     final board = state.boardOf(PlayerSlot.first);
     final scratch = List<int>.of(board.cells);
@@ -815,12 +885,16 @@ void main() {
     // No boxes on the fixture board: cells are the two converted pieces.
     expect(fired.cells, posListOf(7, converted.toSet()));
     expect(fired.points, 0);
+    // The contract detonates both fresh specials on the spot — their
+    // score rides on SpecialFired/ObstacleBroken events, not PowerFired.
+    expect(res.value.events.whereType<SpecialFired>(), isNotEmpty);
     final queued = res.value.events.whereType<ObstacleQueued>().toList();
     expect(queued, hasLength(1));
     expect(queued.single.player, PlayerSlot.second);
     expect(queued.single.sourceTurn, 1);
-    expect(queued.single.count, kPowerObstacleCount);
-    expect(st.pendingObstacles[1], hasLength(kPowerObstacleCount));
+    // Sabotage through the shared special path: 1–2 boxes.
+    expect(queued.single.count, inInclusiveRange(1, 2));
+    expect(st.pendingObstacles[1].length, queued.single.count);
     // The meter was spent to zero, then partially refilled by the clears.
     expect(
       res.value.events
@@ -837,11 +911,13 @@ void main() {
           .where((e) =>
               e is Cleared && e.player == PlayerSlot.first ||
               e is SpecialFired && e.player == PlayerSlot.first ||
-              e is PowerFired && e.player == PlayerSlot.first)
+              e is PowerFired && e.player == PlayerSlot.first ||
+              e is ObstacleBroken && e.player == PlayerSlot.first)
           .fold<int>(0, (a, e) => a + switch (e) {
                 Cleared c => c.points,
                 SpecialFired f => f.points,
                 PowerFired f => f.points,
+                ObstacleBroken b => b.points,
                 _ => 0,
               }),
     );
@@ -874,7 +950,7 @@ void main() {
     expect(st_pendingBoxes(res.value.state), kPowerObstacleCount);
   });
 
-  test('laser chase clears a row-column cross and sends two boxes', () {
+  test('laser chase clears the most valuable row-column cross', () {
     final cells = fixture();
     final s = stateWith(
       firstCells: cells,
@@ -883,11 +959,28 @@ void main() {
     );
     expectCleanFixture(cells);
 
-    // Replicate the deterministic pick: one random row + one random
-    // column, cleared as a cross.
-    final rng = GameRandom.fromState(s.rngState[PlayerSlot.first.index]);
-    final row = rng.nextInt(7);
-    final col = rng.nextInt(7);
+    // Replicate the deterministic pick: the pivot whose cross holds the
+    // most boxes (x3) and pieces (x1), ties to the lowest index.
+    var best = -1, row = 0, col = 0;
+    for (var j = 0; j < cells.length; j++) {
+      final r = j ~/ 7, c = j % 7;
+      var n = 0;
+      for (var cc = 0; cc < 7; cc++) {
+        final cell = cells[r * 7 + cc];
+        n += isBoxCode(cell) ? 3 : cell != kCellEmpty ? 1 : 0;
+      }
+      for (var rr = 0; rr < 7; rr++) {
+        final cell = cells[rr * 7 + c];
+        n += isBoxCode(cell) ? 3 : cell != kCellEmpty ? 1 : 0;
+      }
+      final pivot = cells[j];
+      n -= isBoxCode(pivot) ? 3 : pivot != kCellEmpty ? 1 : 0;
+      if (n > best) {
+        best = n;
+        row = r;
+        col = c;
+      }
+    }
     final expected = <int>{
       for (var c = 0; c < 7; c++)
         if (isPieceCode(cells[row * 7 + c]) || isBoxCode(cells[row * 7 + c]))
@@ -964,6 +1057,7 @@ void main() {
           if (e is Cleared && e.player == p) return a + e.points;
           if (e is SpecialFired && e.player == p) return a + e.points;
           if (e is PowerFired && e.player == p) return a + e.points;
+          if (e is ObstacleBroken && e.player == p) return a + e.points;
           return a;
         });
     expect(pointsFor(PlayerSlot.first), state.scores[0]);

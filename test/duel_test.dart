@@ -338,15 +338,22 @@ void main() {
     audio.play(const Swapped(player: PlayerSlot.first, firstCell: 2, secondCell: 3));
     audio.play(const Cleared(player: PlayerSlot.first, cells: [3], points: 10));
     final pops = out.plays
-        .where((p) => p.asset == 'generated/audio/sfx_pop.wav')
+        .where((p) => p.asset == 'audio/sfx_match.wav')
         .map((p) => p.rate)
         .toList();
-    expect(pops, hasLength(3));
+    expect(pops, hasLength(2));
     expect(pops[0], closeTo(1.12, 1e-9));
-    expect(pops[1], closeTo(1.24, 1e-9));
-    expect(pops[2], closeTo(1.12, 1e-9));
+    expect(pops[1], closeTo(1.12, 1e-9));
+    // The second clear in the chain plays the combo cue instead.
+    final combos = out.plays
+        .where((p) => p.asset == 'audio/sfx_combo_2.wav')
+        .map((p) => p.rate)
+        .toList();
+    expect(combos, hasLength(1));
+    expect(combos.single, closeTo(1.24, 1e-9));
+    // A horizontal line special maps to the rocket cue.
     final specials = out.plays
-        .where((p) => p.asset == 'generated/audio/sfx_special.wav')
+        .where((p) => p.asset == 'audio/sfx_rocket.wav')
         .map((p) => p.rate)
         .toList();
     expect(specials, hasLength(1));
@@ -419,7 +426,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(find.text('2 cutii următoare!'), findsOneWidget);
-    expect(find.text('PUTERE MAXIMĂ!'), findsOneWidget);
+    // The charge banner was removed — the meter bar communicates it.
+    expect(find.text('PUTERE MAXIMĂ!'), findsNothing);
     expect(find.text('Tura 1  •  5 – 3'), findsOneWidget);
     expect(find.text('VICTORIE!'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -928,7 +936,9 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
-    await tester.tap(find.textContaining('BOT').first);
+    // No BOT tag beside the name anymore — tapping the portrait plate
+    // (the name text sits inside its gesture area) opens the details.
+    await tester.tap(find.text('Pisi Fundal').first);
     await tester.pump(const Duration(milliseconds: 300));
     // The popup shows match-provided details only: BOT label + trophies.
     expect(find.byType(AlertDialog), findsOneWidget);
@@ -1058,9 +1068,15 @@ void main() {
     expect(find.text('Greu'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(milliseconds: 100));
-    // Match screen: portrait header carries the bot label.
-    expect(find.textContaining('BOT'), findsWidgets);
+    // Match screen: the portrait header keeps the name clean — the bot
+    // label lives on the details popup (tap the opponent name).
+    expect(find.textContaining('BOT'), findsNothing);
     expect(find.textContaining('Tura 1'), findsWidgets);
+    await tester.tap(find.text('Vulpița').first);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('BOT'), findsWidgets);
+    await tester.tapAt(Offset.zero);
+    await tester.pump(const Duration(milliseconds: 300));
     // Surrender to the result screen.
     await tester.tap(find.text('Renunță'));
     await tester.pump(const Duration(milliseconds: 300));
@@ -1130,9 +1146,13 @@ void main() {
     expect(find.text('Greu'), findsNothing);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(milliseconds: 100));
-    // Match screen keeps the opponent labelled.
+    // Match screen keeps the opponent labelled — the name plate is
+    // clean; the BOT tag is on the details popup, not beside the name.
     expect(find.textContaining('Misu'), findsWidgets);
-    expect(find.textContaining('BOT'), findsWidgets);
+    expect(find.textContaining('BOT'), findsNothing);
+    await tester.tap(find.text('Misu').first);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('BOT'), findsWidgets);
   });
 
   testWidgets('rematch restarts the duel with a fresh seed', (tester) async {

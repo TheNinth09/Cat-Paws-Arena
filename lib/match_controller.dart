@@ -353,8 +353,8 @@ class ArenaMatchController extends ChangeNotifier {
   int get botTurnsLeft =>
       _state?.turnsLeft(_opponentSlot) ?? 0;
 
-  /// Turns per player from the match config (5 in the agreed duel).
-  int get turnsPerPlayer => _state?.config.turnsPerPlayer ?? 5;
+  /// Turns per player from the match config (3 in the agreed duel).
+  int get turnsPerPlayer => _state?.config.turnsPerPlayer ?? 3;
 
   /// True while the local player holds the turn.
   bool get playerTurn =>
@@ -426,6 +426,9 @@ class ArenaMatchController extends ChangeNotifier {
     if (phase != MatchPhase.playing || paused || _busy) return false;
     if (!isEngine) return true;
     if (_state == null || _state!.isFinished) return false;
+    // The 15 s clock hit zero: playerInput is closed; a cascade already
+    // in flight finishes draining, then the turn ends (spec §3).
+    if (_turnTicksLeft <= 0) return false;
     if (isOnline) {
       final s = online!.session;
       // Input only when the shadow state is caught up with the session —
@@ -443,6 +446,9 @@ class ArenaMatchController extends ChangeNotifier {
     if (phase != MatchPhase.playing || paused) return false;
     if (!isEngine) return true;
     if (_state == null || _state!.isFinished || isFlagged) return false;
+    // Turn clock expired — no new swaps, even while the last cascade
+    // still animates (spec §3).
+    if (_turnTicksLeft <= 0) return false;
     if (isOnline) {
       final s = online!.session;
       return s.isMyTurn && _onlineCursor == s.movesApplied;

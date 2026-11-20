@@ -338,21 +338,24 @@ bool swappablePair(MutableBoard board, int a, int b) {
 
 /// Whether swapping [a] and [b] is productive under the Royal Kingdom
 /// rules: two specials always combine, a rainbow swapped onto a colour
-/// clears that colour, a non-rainbow special fires when swapped onto a
-/// piece of the colour it was made from, a special never merges with any
-/// other plain piece, and every other pair is only productive when the
-/// swap forms a colour match.
+/// clears that colour, and a non-rainbow special may swap with a plain
+/// piece only when the swap forms a match of 3+ of the special's colour
+/// (the special counts as a piece of that colour and detonates inside
+/// the match). Every other pair is only productive when the swap forms
+/// a colour match.
 bool productiveSwap(MutableBoard board, int a, int b) {
   final ca = board.cells[a];
   final cb = board.cells[b];
   final aSpec = isSpecialCode(ca), bSpec = isSpecialCode(cb);
   if (aSpec && bSpec) return true;
   if (aSpec || bSpec) {
-    final s = aSpec ? ca : cb;
-    final other = aSpec ? cb : ca;
+    final sIdx = aSpec ? a : b;
+    final oIdx = aSpec ? b : a;
+    final s = board.cells[sIdx];
+    final other = board.cells[oIdx];
     if (specialKindBaseOf(s) == kRainbow) return isColourCode(other);
-    return isColourCode(other) &&
-        specialColourOf(s) == basePieceCode(other);
+    if (!isColourCode(other)) return false;
+    return formsSpecialColourMatch(board, sIdx, oIdx);
   }
   board.cells[a] = cb;
   board.cells[b] = ca;
@@ -360,6 +363,70 @@ bool productiveSwap(MutableBoard board, int a, int b) {
   board.cells[a] = ca;
   board.cells[b] = cb;
   return found;
+}
+
+/// Probe for the special+normal rule: simulate the swap with the special
+/// (at [sIdx]) standing in as a piece of the colour it was made from, and
+/// report whether any matched group of that colour would result. The
+/// plain piece (at [oIdx]) must be a regular colour.
+bool formsSpecialColourMatch(MutableBoard board, int sIdx, int oIdx) {
+  final s = board.cells[sIdx];
+  final other = board.cells[oIdx];
+  final colour = specialColourOf(s);
+  board.cells[sIdx] = other;
+  board.cells[oIdx] = colour;
+  final ok = scanMatches(board).any((g) => g.colour == colour);
+  board.cells[sIdx] = s;
+  board.cells[oIdx] = other;
+  return ok;
+}
+
+/// Non-rainbow specials currently sitting inside a run of 3+ pieces of
+/// the colour they were made from — they count as that colour and
+/// detonate as part of the match. Index list, row-major.
+List<int> specialsInColourRuns(MutableBoard board) {
+  final w = board.width;
+  final h = board.height;
+  final cells = board.cells;
+
+  /// Whether [code] joins a run of [colour]: a plain piece of that
+  /// colour or another non-rainbow special made from it.
+  bool member(int code, int colour) {
+    if (isColourCode(code)) return basePieceCode(code) == colour;
+    if (!isSpecialCode(code)) return false;
+    return specialKindBaseOf(code) != kRainbow &&
+        specialColourOf(code) == colour;
+  }
+
+  final out = <int>[];
+  for (var i = 0; i < cells.length; i++) {
+    final code = cells[i];
+    if (!isSpecialCode(code) || specialKindBaseOf(code) == kRainbow) {
+      continue;
+    }
+    final colour = specialColourOf(code);
+    final r = i ~/ w, c = i % w;
+    var span = 1;
+    for (var cc = c - 1; cc >= 0 && member(cells[r * w + cc], colour); cc--) {
+      span++;
+    }
+    for (var cc = c + 1; cc < w && member(cells[r * w + cc], colour); cc++) {
+      span++;
+    }
+    if (span >= 3) {
+      out.add(i);
+      continue;
+    }
+    span = 1;
+    for (var rr = r - 1; rr >= 0 && member(cells[rr * w + c], colour); rr--) {
+      span++;
+    }
+    for (var rr = r + 1; rr < h && member(cells[rr * w + c], colour); rr++) {
+      span++;
+    }
+    if (span >= 3) out.add(i);
+  }
+  return out;
 }
 
 /// Whether [board] has at least one legal move.
