@@ -579,23 +579,23 @@ class ArenaBottomBar extends StatelessWidget {
       switch (i) {
         case 0:
           return CustomPaint(
-            size: const Size(22, 22),
+            size: const Size(30, 30),
             painter: _ShopIconPainter(selected: active),
           );
         case 1:
           return CustomPaint(
-            size: const Size(22, 22),
+            size: const Size(30, 30),
             painter: _CatsIconPainter(selected: active),
           );
         case 2:
-          return sprite('btn_play_paw', size: 28);
+          return sprite('btn_play_paw', size: 42);
         case 3:
         case 4:
           return arenaImage(
             i == 3 ? 'icon_team' : 'icon_events',
-            width: 22,
-            height: 22,
-            fallback: Icon(icons[i], size: 21, color: iconColor),
+            width: 30,
+            height: 30,
+            fallback: Icon(icons[i], size: 27, color: iconColor),
           );
         default:
           return Icon(icons[i], size: 21, color: iconColor);
@@ -605,7 +605,7 @@ class ArenaBottomBar extends StatelessWidget {
     // Band height 54 + headroom so the raised tiles can pop above it.
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return SizedBox(
-      height: 74 + bottomInset,
+      height: 84 + bottomInset,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -705,7 +705,7 @@ class _NavButtonState extends State<_NavButton> {
     final golden = active || centre;
     // Tile heights measured from the row bottom: the band occupies its
     // lower 54 px, so taller tiles protrude above the band's top edge.
-    final h = centre ? 68.0 : (active ? 58.0 : 42.0);
+    final h = centre ? 78.0 : (active ? 62.0 : 50.0);
     return Semantics(
       button: true,
       selected: active,
