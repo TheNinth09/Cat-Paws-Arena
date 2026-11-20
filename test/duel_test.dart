@@ -1050,8 +1050,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: MatchScreen(player: p, mode: 0, botLevel: 2)),
     );
-    // VS screen: BOT tag, house-cat name and difficulty chip.
-    expect(find.text('BOT'), findsWidgets);
+    // VS screen: the offline-practice pill labels the bot, the card
+    // carries only the cat's name and the difficulty chip.
+    expect(find.text('ANTRENAMENT OFFLINE'), findsWidgets);
     expect(find.text('Vulpița'), findsWidgets);
     expect(find.text('Greu'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
@@ -1122,9 +1123,9 @@ void main() {
     expect(m.botName, 'Misu');
     expect(m.botTrophies, 45);
     expect(m.botLevel, 1); // level 7 -> medium bucket
-    // VS screen: cat name, BOT label, no difficulty chips.
+    // VS screen: cat name, offline-practice label, no difficulty chips.
     expect(find.text('Misu'), findsWidgets);
-    expect(find.textContaining('BOT'), findsWidgets);
+    expect(find.text('ANTRENAMENT OFFLINE'), findsWidgets);
     expect(find.text('Greu'), findsNothing);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(milliseconds: 100));

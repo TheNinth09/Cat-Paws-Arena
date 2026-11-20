@@ -54,26 +54,6 @@ class ProfileScreen extends StatelessWidget {
                     _statsGrid(),
                     const SizedBox(height: 12),
                     _section(
-                      title: english ? 'ACHIEVEMENTS' : 'REALIZĂRI',
-                      iconAsset: 'icon_achievements',
-                      iconFallback: Icons.military_tech_rounded,
-                      child: _comingSoon(
-                        english
-                            ? 'Achievement badges are not tracked yet — the section arrives with a real data source.'
-                            : 'Insignele de realizare nu sunt încă urmărite — secțiunea apare când există o sursă de date.',
-                      ),
-                    ),
-                    _section(
-                      title: 'BANDAJE',
-                      iconAsset: 'icon_bandages',
-                      iconFallback: Icons.healing_rounded,
-                      child: _comingSoon(
-                        english
-                            ? 'No bandage cosmetics exist yet — this space stays empty until they ship.'
-                            : 'Nu există încă bandaje cosmetice — spațiul rămâne gol până apar.',
-                      ),
-                    ),
-                    _section(
                       title: english ? 'EMOTES' : 'EMOTE-URI',
                       spriteName: 'emote_laugh',
                       iconFallback: Icons.emoji_emotions_rounded,
@@ -538,41 +518,6 @@ class ProfileScreen extends StatelessWidget {
     ),
   );
 
-  /// Honest placeholder: labelled, never pretends to hold real items.
-  Widget _comingSoon(String text) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-    decoration: BoxDecoration(
-      color: const Color(0xfff2e6d0),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-        color: const Color(0xffd9b98c),
-        width: 1.2,
-        style: BorderStyle.solid,
-      ),
-    ),
-    child: Row(
-      children: [
-        const Icon(
-          Icons.hourglass_empty_rounded,
-          color: Color(0xffa08d77),
-          size: 22,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: Color(0xff8a6a52),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              height: 1.35,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
 
   /// The preset emote set that actually ships in the duel UI — shown as
   /// the player's emote collection (preset-only by contract).

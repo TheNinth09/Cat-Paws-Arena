@@ -158,7 +158,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Meniu'));
     await tester.pumpAndSettle();
-    expect(find.text(studioName), findsOneWidget);
+    // The studio/game header was removed — the list starts directly.
     for (final item in [
       'Daily reward',
       'Friends',
@@ -494,7 +494,7 @@ void main() {
     expect(find.text('-25'), findsOneWidget);
     expect(find.text('INFRANGERE'), findsOneWidget);
     expect(find.text('Se pregătește arena...'), findsOneWidget);
-    expect(find.text('BOT'), findsWidgets);
+    expect(find.text('ANTRENAMENT OFFLINE'), findsWidgets);
     await tester.pump(const Duration(seconds: 4));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.byType(MatchScreen), findsOneWidget);
@@ -547,11 +547,8 @@ void main() {
     expect(find.text('LĂBUȚE'), findsOneWidget);
     expect(find.text('COSMETICE'), findsOneWidget);
     expect(find.text('1234'), findsOneWidget);
-    // Organised sections — every one labelled, placeholders where honest.
-    // Lower sections need a scroll because the list builds lazily.
-    for (final section in ['REALIZĂRI', 'BANDAJE']) {
-      expect(find.text(section), findsOneWidget);
-    }
+    // Organised sections — the placeholder rows were cleaned up; the
+    // real content sections stay labelled and scroll into view.
     final profileScroll = find
         .descendant(
           of: find.byType(ProfileScreen),

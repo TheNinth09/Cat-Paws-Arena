@@ -52,9 +52,6 @@ class LobbyScreen extends StatelessWidget {
   /// SARCINI → daily reward row jumps to the shop tab.
   final VoidCallback onShop;
 
-  String get _bgAsset =>
-      _roomBackgrounds[player.tier.clamp(0, _roomBackgrounds.length - 1)];
-
   bool get english => player.english;
 
   void _offline(BuildContext context) {
@@ -126,15 +123,8 @@ class LobbyScreen extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            arenaImage(
-              _bgAsset,
-              fit: BoxFit.cover,
-              fallback: RoomBackground(
-                tier: player.tier,
-                child: const SizedBox.expand(),
-              ),
-            ),
-            // Legibility scrim so text and buttons stay readable over the art.
+            // The page art lives on HomeScreen's crossfading background;
+            // the lobby only keeps a scrim so text stays readable.
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(

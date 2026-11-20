@@ -111,6 +111,8 @@ class _MatchScreenState extends State<MatchScreen>
   late final ArenaMatchController match;
   late final AnimationController fx;
   late final DuelAudio _audio;
+  late final DuelMusic _music;
+  int _lastCountdown = -1;
   late final AnimationController _momentFx;
   final _boardKey = GlobalKey<BoardViewState>();
   Timer? emoteTimer;
@@ -168,6 +170,10 @@ class _MatchScreenState extends State<MatchScreen>
       });
     });
     _audio = DuelAudio(enabled: () => p.sfx, hapticsEnabled: () => p.haptics);
+    _music = DuelMusic(enabled: () => p.music);
+    p.addListener(_music.sync);
+    match.addListener(_matchListener);
+    _music.sync();
     _momentFx = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -182,6 +188,7 @@ class _MatchScreenState extends State<MatchScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     match.pause(background: state != AppLifecycleState.resumed);
+    _music.setBackgrounded(state != AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       // Catch up on opponent moves and match-record changes missed while
       // the app was suspended (the 20 s poll covers the rest).
@@ -197,9 +204,25 @@ class _MatchScreenState extends State<MatchScreen>
     fx.dispose();
     _momentFx.dispose();
     _audio.dispose();
+    p.removeListener(_music.sync);
+    match.removeListener(_matchListener);
+    _music.dispose();
     WidgetsBinding.instance.removeObserver(this);
     match.dispose();
     super.dispose();
+  }
+
+  /// Countdown warning for the last five seconds of a turn — one tick
+  /// per second boundary, plus music start/stop when the phase changes.
+  void _matchListener() {
+    _music.sync();
+    final s = match.turnSecondsLeft;
+    if (s != _lastCountdown) {
+      _lastCountdown = s;
+      if (s > 0 && s <= 5 && match.phase == MatchPhase.playing) {
+        _audio.countdownTick();
+      }
+    }
   }
 
   /// Sound + haptic feedback and the full-screen power moment, fired as each
@@ -229,7 +252,12 @@ class _MatchScreenState extends State<MatchScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            sprite('emote_angry', size: 62),
+            arenaImage(
+              'emote_surprised',
+              width: 62,
+              height: 62,
+              fallback: sprite('emote_angry', size: 62),
+            ),
             const SizedBox(height: 8),
             Text(
               match.isOnline
@@ -364,13 +392,32 @@ class _MatchScreenState extends State<MatchScreen>
                       MatchPhase.playing => Column(
                         children: [
                           Expanded(
-                            child: RoomBackground(
-                              tier: p.tier,
-                              dim: true,
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                                child: battle(),
-                              ),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                arenaImage(
+                                  'bg_arena_battle',
+                                  fit: BoxFit.cover,
+                                  fallback: RoomBackground(
+                                    tier: p.tier,
+                                    child: const SizedBox.expand(),
+                                  ),
+                                ),
+                                const DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: Color(0x6620130e),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    8,
+                                    6,
+                                    8,
+                                    8,
+                                  ),
+                                  child: battle(),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -410,7 +457,9 @@ class _MatchScreenState extends State<MatchScreen>
     playerPortrait: duelCatArt(p, size: 118),
     opponentName: match.botName,
     opponentTrophies: match.botTrophies,
-    opponentBadge: match.isOnline ? 'PRIETEN' : 'BOT',
+    // The 'ANTRENAMENT OFFLINE' mode pill above already labels the bot;
+    // the card keeps its name clean — the in-match BOT tag stays.
+    opponentBadge: match.isOnline ? 'PRIETEN' : '',
     opponentPortrait: Center(child: _opponentAvatar(84)),
     opponentSubtitle: match.isOnline
         ? 'Prieten'

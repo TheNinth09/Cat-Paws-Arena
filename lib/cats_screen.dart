@@ -547,13 +547,8 @@ class _CatsScreenState extends State<CatsScreen> {
   Widget build(BuildContext context) => Stack(
     fit: StackFit.expand,
     children: [
-      // Cozy library backdrop that matches the creator-screen reference:
-      // the real room art when bundled, with a soft scrim for legibility.
-      arenaImage(
-        'bg_living_room',
-        fit: BoxFit.cover,
-        fallback: const SizedBox.shrink(),
-      ),
+      // Cozy library backdrop lives on HomeScreen's crossfading page
+      // background (`bg_cats`); a soft scrim keeps the UI legible.
       const DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(

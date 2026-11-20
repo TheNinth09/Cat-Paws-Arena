@@ -115,6 +115,40 @@ class _ProfileEditorState extends State<_ProfileEditor> {
         borderSide: BorderSide(color: color, width: width),
       );
 
+  /// The three cartoon portraits plus the photo slot — one row of round
+  /// chips under the big preview. Picking a chip clears a custom photo.
+  Widget _avatarChip(String cat) {
+    final p = widget.player;
+    final active = p.photo == null && p.cat == cat;
+    return GestureDetector(
+      onTap: () {
+        p.cat = cat;
+        p.photo = null;
+        p.save();
+      },
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: active ? gold : const Color(0xffd9b98c),
+            width: active ? 3 : 1.4,
+          ),
+          boxShadow: [
+            if (active)
+              const BoxShadow(
+                color: Color(0x66ffc63c),
+                blurRadius: 8,
+                spreadRadius: 1,
+              ),
+          ],
+        ),
+        child: ClipOval(child: catPortrait(cat, size: 50)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.player,
@@ -123,17 +157,18 @@ class _ProfileEditorState extends State<_ProfileEditor> {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Big round preview of the active avatar (photo or portrait).
           Center(
             child: Container(
               padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(26),
-                gradient: const LinearGradient(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [Color(0xffffe9bd), Color(0xffd9a86a)],
                 ),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
                     color: Color(0x443c241a),
                     offset: Offset(0, 4),
@@ -141,11 +176,57 @@ class _ProfileEditorState extends State<_ProfileEditor> {
                   ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(21),
-                child: catPortrait(p.cat, size: 96),
+              child: ClipOval(
+                child: SizedBox(
+                  width: 104,
+                  height: 104,
+                  child: playerAvatarArt(p, size: 104),
+                ),
               ),
             ),
+          ),
+          const SizedBox(height: 14),
+          // Quick selector: the three cartoon portraits + a photo slot.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final cat in ['Tzuki', 'Bubble', 'Custom']) ...[
+                _avatarChip(cat),
+                const SizedBox(width: 10),
+              ],
+              GestureDetector(
+                onTap: () async {
+                  final image = await ImagePicker().pickImage(
+                    source: ImageSource.gallery,
+                    maxWidth: 256,
+                    maxHeight: 256,
+                    imageQuality: 75,
+                  );
+                  if (image == null) return;
+                  final bytes = await image.readAsBytes();
+                  if (!mounted) return;
+                  p.photo = base64Encode(bytes);
+                  p.save();
+                },
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xfffff3d6),
+                    border: Border.all(
+                      color: p.photo != null ? gold : const Color(0xffd9b98c),
+                      width: p.photo != null ? 3 : 1.4,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.photo_camera_rounded,
+                    size: 22,
+                    color: Color(0xff8a6242),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           TextField(
@@ -161,42 +242,31 @@ class _ProfileEditorState extends State<_ProfileEditor> {
               focusedBorder: fieldBorder(const Color(0xffc98f3f), width: 1.6),
             ),
           ),
-          const SizedBox(height: 10),
-          ArenaButton(
-            text: 'SALVEAZĂ',
-            green: true,
-            onPressed: () {
-              if (name.text.trim().isNotEmpty) {
-                p.name = name.text.trim();
-                p.save();
-                Navigator.pop(context);
-              }
-            },
-          ),
-          ArenaButton(
-            text: 'FOTOGRAFIE',
-            secondary: true,
-            onPressed: () async {
-              final image = await ImagePicker().pickImage(
-                source: ImageSource.gallery,
-                maxWidth: 256,
-                maxHeight: 256,
-                imageQuality: 75,
-              );
-              if (image == null) return;
-              final bytes = await image.readAsBytes();
-              if (!mounted) return;
-              p.photo = base64Encode(bytes);
-              p.save();
-            },
-          ),
-          ArenaButton(
-            text: 'AVATAR PISICĂ',
-            secondary: true,
-            onPressed: () {
-              p.photo = null;
-              p.save();
-            },
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: ArenaButton(
+                  text: 'ANULEAZĂ',
+                  secondary: true,
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ArenaButton(
+                  text: 'SALVEAZĂ',
+                  green: true,
+                  onPressed: () {
+                    if (name.text.trim().isNotEmpty) {
+                      p.name = name.text.trim();
+                      p.save();
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+              ),
+            ],
           ),
         ],
       );

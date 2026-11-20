@@ -110,6 +110,15 @@ class _HomeState extends State<Home> {
     return box.localToGlobal(Offset.zero) + box.size.center(Offset.zero);
   }
 
+  /// Dedicated full-bleed art per tab — crossfaded on every switch.
+  static const _pageBgs = [
+    'bg_shop', // MAGAZIN
+    'bg_cats', // PISICI
+    'bg_battle_lobby', // LUPTĂ
+    'bg_team', // ECHIPĂ
+    'bg_events', // EVENIMENTE
+  ];
+
   /// Hamburger menu entries — the hub shortcuts plus settings, styled like
   /// the reference dropdown menus. Every entry opens a real surface.
   static const _menuItems = [
@@ -291,57 +300,22 @@ class _HomeState extends State<Home> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Color(0xff8a5c3e), Color(0xff5d3a2c)],
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.pets,
-                              size: 20,
-                              color: gold,
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6, top: 4),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 18,
+                              color: Color(0xff8a5a3b),
                             ),
                           ),
-                          const SizedBox(width: 9),
-                          const Expanded(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  studioName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 15,
-                                    color: ink,
-                                  ),
-                                ),
-                                Text(
-                                  appName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Color(0xff8a5a3b),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                     for (final item in _menuItems)
@@ -359,61 +333,81 @@ class _HomeState extends State<Home> {
           ),
         ),
       ),
-      body: SafeArea(
-        bottom: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 540),
-            child: Column(
-              children: [
-                PlayerHud(
-                  avatar: playerAvatarArt(p, size: 46),
-                  name: p.name,
-                  trophies: p.trophies,
-                  coins: p.coins,
-                  trophyBadgeKey: _trophyBadgeKey,
-                  coinBadgeKey: _coinBadgeKey,
-                  onProfile: openProfile,
-                  onRoad: openHouseTour,
-                  onShop: () => select(0),
-                  onMenu: () => scaffold.currentState!.openEndDrawer(),
-                ),
-                Expanded(
-                  child: RoomBackground(
+      // Full-bleed page art climbs under the status bar; only the four
+      // floating HUD elements sit inside the safe area on top of it.
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: KeyedSubtree(
+                key: ValueKey('bg-$tab'),
+                child: arenaImage(
+                  _pageBgs[tab],
+                  fit: BoxFit.cover,
+                  fallback: RoomBackground(
                     tier: p.tier,
-                    child: PageView(
-                      controller: pages,
-                      onPageChanged: (index) => setState(() => tab = index),
-                      children: [
-                        ShopScreen(
-                          player: p,
-                          onUnavailable: unavailable,
-                          onMessage: (title, message) =>
-                              showAppDialog(context, title, Text(message)),
-                        ),
-                        CatsScreen(player: p, onShop: () => select(0)),
-                        LobbyScreen(
-                          player: p,
-                          onBattle: startBattle,
-                          onRoad: openHouseTour,
-                          onShop: () => select(0),
-                        ),
-                        TeamScreen(player: p, onUnavailable: unavailable),
-                        EventsScreen(player: p, onUnavailable: unavailable),
-                      ],
-                    ),
+                    child: const SizedBox.expand(),
                   ),
                 ),
-                ArenaBottomBar(
-                  selected: tab,
-                  onSelected: select,
-                  english: p.english,
-                  shopBadge: p.dailyReady,
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+          SafeArea(
+            bottom: false,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 540),
+                child: Column(
+                  children: [
+                    PlayerHud(
+                      avatar: playerAvatarArt(p, size: 46),
+                      name: p.name,
+                      trophies: p.trophies,
+                      coins: p.coins,
+                      trophyBadgeKey: _trophyBadgeKey,
+                      coinBadgeKey: _coinBadgeKey,
+                      onProfile: openProfile,
+                      onRoad: openHouseTour,
+                      onShop: () => select(0),
+                      onMenu: () => scaffold.currentState!.openEndDrawer(),
+                    ),
+                    Expanded(
+                      child: PageView(
+                        controller: pages,
+                        onPageChanged: (index) => setState(() => tab = index),
+                        children: [
+                          ShopScreen(
+                            player: p,
+                            onUnavailable: unavailable,
+                            onMessage: (title, message) =>
+                                showAppDialog(context, title, Text(message)),
+                          ),
+                          CatsScreen(player: p, onShop: () => select(0)),
+                          LobbyScreen(
+                            player: p,
+                            onBattle: startBattle,
+                            onRoad: openHouseTour,
+                            onShop: () => select(0),
+                          ),
+                          TeamScreen(player: p, onUnavailable: unavailable),
+                          EventsScreen(player: p, onUnavailable: unavailable),
+                        ],
+                      ),
+                    ),
+                    ArenaBottomBar(
+                      selected: tab,
+                      onSelected: select,
+                      english: p.english,
+                      shopBadge: p.dailyReady,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     ),
   );

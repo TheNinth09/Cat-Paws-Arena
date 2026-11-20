@@ -133,14 +133,18 @@ class _VsScreenState extends State<VsScreen>
   Widget build(BuildContext context) => Scaffold(
     body: MatchupScene(
       english: english,
-      modeText: english ? '1v1 DUEL' : 'DUEL 1v1',
+      modeText: widget.opponent.badge == 'BOT'
+          ? (english ? 'OFFLINE PRACTICE' : 'ANTRENAMENT OFFLINE')
+          : (english ? 'ONLINE FRIEND' : 'PRIETEN ONLINE'),
       playerName: p.name,
       playerTrophies: p.trophies,
       playerBadge: english ? 'YOU' : 'TU',
       playerPortrait: duelCatArt(p, size: 118),
       opponentName: widget.opponent.name,
       opponentTrophies: widget.opponent.trophies,
-      opponentBadge: widget.opponent.badge,
+      // House cats stay labelled via the mode text; the card chip stays
+      // clean — no 'BOT' tag on the matchup page.
+      opponentBadge: widget.opponent.badge == 'BOT' ? '' : widget.opponent.badge,
       opponentPortrait: widget.opponent.avatar,
       opponentSubtitle: widget.opponent.subtitle,
       statusText: english
@@ -475,26 +479,27 @@ class _MatchupCard extends StatelessWidget {
             ],
           ),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-          decoration: BoxDecoration(
-            color: badgeColor,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: border, width: 1.4),
-            boxShadow: const [
-              BoxShadow(color: Color(0x55000000), offset: Offset(0, 2)),
-            ],
-          ),
-          child: Text(
-            badge,
-            style: TextStyle(
-              color: badgeInk,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
+        if (badge.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            decoration: BoxDecoration(
+              color: badgeColor,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: border, width: 1.4),
+              boxShadow: const [
+                BoxShadow(color: Color(0x55000000), offset: Offset(0, 2)),
+              ],
+            ),
+            child: Text(
+              badge,
+              style: TextStyle(
+                color: badgeInk,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
             ),
           ),
-        ),
       ],
     );
   }

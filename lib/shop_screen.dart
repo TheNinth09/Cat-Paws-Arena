@@ -171,11 +171,6 @@ class _ShopScreenState extends State<ShopScreen> {
     final ownsDeal = ownsOffer(_dailyDeal);
     return Stack(
       children: [
-        const Positioned.fill(
-          child: RepaintBoundary(
-            child: CustomPaint(painter: _ShopBackdropPainter()),
-          ),
-        ),
         ListView(
           key: const PageStorageKey('shop-scroll'),
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
@@ -725,99 +720,6 @@ String _pawPrice(int v) => v >= 1000
     ? '${v ~/ 1000},${(v % 1000).toString().padLeft(3, '0')}'
     : '$v';
 
-/// Market-stall backdrop for the shop: a scalloped striped awning at
-/// the top, warm wall, and wooden floor — opaque so it replaces the
-/// shared room art only on this page.
-class _ShopBackdropPainter extends CustomPainter {
-  const _ShopBackdropPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final paint = Paint()..style = PaintingStyle.fill;
-
-    // Wall.
-    canvas.drawRect(
-      Offset.zero & size,
-      paint
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xfff0d9b2), Color(0xffe3bd8d)],
-        ).createShader(Offset.zero & size),
-    );
-
-    // Floor (bottom ~15%) with plank seams.
-    final floorTop = h * 0.86;
-    final floor = Rect.fromLTWH(0, floorTop, w, h - floorTop);
-    paint.shader = const LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Color(0xffb87a4c), Color(0xff8a5533)],
-    ).createShader(floor);
-    canvas.drawRect(floor, paint);
-    paint.shader = null;
-    paint.color = const Color(0x338a5533);
-    for (var y = floorTop + 26.0; y < h; y += 26) {
-      canvas.drawRect(Rect.fromLTWH(0, y, w, 2), paint);
-    }
-    // Baseboard where wall meets floor.
-    paint.color = const Color(0xffc98d5a);
-    canvas.drawRect(Rect.fromLTWH(0, floorTop - 8, w, 10), paint);
-    paint.color = const Color(0xff8a5533);
-    canvas.drawRect(Rect.fromLTWH(0, floorTop - 9, w, 2), paint);
-
-    // Awning: hanging canopy with stripes and a scalloped edge.
-    const awnH = 62.0;
-    const stripeW = 46.0;
-    final awnPath = Path()
-      ..moveTo(0, 0)
-      ..lineTo(w, 0)
-      ..lineTo(w, awnH)
-      ..lineTo(0, awnH)
-      ..close();
-    canvas.save();
-    canvas.clipPath(awnPath);
-    for (var i = 0; i * stripeW < w + stripeW; i++) {
-      paint.color = i.isEven
-          ? const Color(0xffd95440)
-          : const Color(0xfffff0d0);
-      canvas.drawRect(
-        Rect.fromLTWH(i * stripeW, 0, stripeW, awnH),
-        paint,
-      );
-    }
-    canvas.restore();
-    // Scallops hanging below the awning edge.
-    for (var i = 0; i * stripeW < w + stripeW; i++) {
-      paint.color = i.isEven
-          ? const Color(0xffd95440)
-          : const Color(0xfffff0d0);
-      canvas.drawCircle(
-        Offset(i * stripeW + stripeW / 2, awnH),
-        stripeW / 2,
-        paint,
-      );
-    }
-    // Awning outline + soft shadow under the canopy.
-    paint.color = const Color(0xff8a3a28);
-    canvas.drawRect(Rect.fromLTWH(0, awnH - 2.5, w, 3), paint);
-    canvas.drawRect(
-      Rect.fromLTWH(0, awnH + 20, w, 14),
-      paint
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0x33623a20), Color(0x00623a20)],
-        ).createShader(Rect.fromLTWH(0, awnH + 20, w, 14)),
-    );
-    paint.shader = null;
-  }
-
-  @override
-  bool shouldRepaint(_ShopBackdropPainter old) => false;
-}
 
 class _OfferBadge extends StatelessWidget {
   const _OfferBadge(this.text);

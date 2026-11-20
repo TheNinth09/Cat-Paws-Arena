@@ -49,6 +49,18 @@ class DuelAudio {
     if (h != null && _hapticsEnabled()) _haptics(h);
   }
 
+  /// Last-five-seconds warning — a sharper tick than the falling-piece
+  /// one so the countdown reads as urgent, not as gravity.
+  void countdownTick() {
+    if (!_enabled()) return;
+    _out.play(
+      'generated/audio/sfx_tick.wav',
+      volume: 0.75,
+      rate: 1.3,
+    );
+    if (_hapticsEnabled()) _haptics(HapticKind.selection);
+  }
+
   double _rateFor(BoardEvent e) {
     final clearStep = e is Cleared || e is SpecialFired;
     final moveStart =
@@ -163,12 +175,83 @@ void _platformHaptics(HapticKind kind) {
   unawaited(f.catchError((Object _) {}));
 }
 
+/// Looping battle-music bed (`generated/audio/music_battle.wav`,
+/// synthesized in-house). One dedicated [AudioPlayer] with game audio
+/// focus; honours the player's Music toggle live and pauses when the
+/// app is backgrounded.
+class DuelMusic {
+  DuelMusic({required this.enabled}) : _player = AudioPlayer() {
+    unawaited(
+      _player.setAudioContext(
+        AudioContext(
+          android: AudioContextAndroid(
+            usageType: AndroidUsageType.game,
+            contentType: AndroidContentType.music,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+        ),
+      ),
+    );
+    unawaited(_player.setReleaseMode(ReleaseMode.loop));
+  }
+
+  /// Whether the player's Music setting is on — read on every [sync].
+  final bool Function() enabled;
+
+  final AudioPlayer _player;
+  bool _started = false;
+  bool _backgrounded = false;
+
+  /// Call on every state change — starts the loop when music is enabled
+  /// and a duel is active, pauses it when disabled or backgrounded.
+  void sync() {
+    final want = enabled() && !_backgrounded;
+    if (want && !_started) {
+      _started = true;
+      unawaited(
+        _player.play(
+          AssetSource('generated/audio/music_battle.wav'),
+          volume: 0.32,
+        ).catchError((Object _) {}),
+      );
+    } else if (!want && _started) {
+      _started = false;
+      unawaited(_player.pause().catchError((Object _) {}));
+    }
+  }
+
+  void setBackgrounded(bool value) {
+    _backgrounded = value;
+    sync();
+  }
+
+  Future<void> dispose() async {
+    _started = false;
+    await _player.stop().catchError((Object _) {});
+    await _player.dispose();
+  }
+}
+
 /// Pool of [AudioPlayer]s so overlapping cues (staggered clears) do not cut
 /// each other off; round-robin picks the next free voice.
 class _AudioPlayersOutput implements SfxOutput {
   _AudioPlayersOutput() {
     for (var i = 0; i < 4; i++) {
-      _players.add(AudioPlayer());
+      final p = AudioPlayer();
+      // Transient focus: short cues duck the music bed instead of
+      // pausing it or fighting for the stream.
+      unawaited(
+        p.setAudioContext(
+          AudioContext(
+            android: AudioContextAndroid(
+              usageType: AndroidUsageType.game,
+              contentType: AndroidContentType.sonification,
+              audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+            ),
+          ),
+        ),
+      );
+      _players.add(p);
     }
   }
 

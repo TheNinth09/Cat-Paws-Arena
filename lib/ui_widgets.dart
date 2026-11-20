@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 const ink = Color(0xff51312d),
     cream = Color(0xffffedbb),
@@ -560,6 +561,10 @@ class PlayerHud extends StatelessWidget {
   );
 }
 
+/// Bottom navigation as a row of tactile 3D buttons — same warm
+/// gradient, thick dark-brown rim, top gloss and drop shadow as the
+/// shop/creator [ArenaButton]s. The active tab lifts with a gold glow;
+/// the centre LUPTĂ button is bigger and uses the primary orange fill.
 class ArenaBottomBar extends StatelessWidget {
   const ArenaBottomBar({
     super.key,
@@ -586,27 +591,18 @@ class ArenaBottomBar extends StatelessWidget {
       Icons.event,
     ];
 
-    // Segmented light-blue bar like the reference: every side tab is a
-    // frosted glass tile on the blue band; the selected one brightens.
-    const tileStyles = [
-      (Color(0x38ffffff), Color(0xff4a86b0)), // MAGAZIN
-      (Color(0x38ffffff), Color(0xff4a86b0)), // PISICI
-      (Color(0xff000000), Color(0xff000000)), // LUPTĂ (centre button)
-      (Color(0x38ffffff), Color(0xff4a86b0)), // ECHIPĂ
-      (Color(0x38ffffff), Color(0xff4a86b0)), // EVENIMENTE
-    ];
-
     Widget tileIcon(int i) {
+      final active = selected == i;
       switch (i) {
         case 0:
           return CustomPaint(
-            size: const Size(24, 24),
-            painter: _ShopIconPainter(selected: selected == i),
+            size: const Size(22, 22),
+            painter: _ShopIconPainter(selected: active),
           );
         case 1:
           return CustomPaint(
-            size: const Size(24, 24),
-            painter: _CatsIconPainter(selected: selected == i),
+            size: const Size(22, 22),
+            painter: _CatsIconPainter(selected: active),
           );
         case 2:
           return sprite('btn_play_paw', size: 26);
@@ -614,138 +610,28 @@ class ArenaBottomBar extends StatelessWidget {
         case 4:
           return arenaImage(
             i == 3 ? 'icon_team' : 'icon_events',
-            width: 24,
-            height: 24,
+            width: 22,
+            height: 22,
             fallback: Icon(
               icons[i],
-              size: 23,
-              color: selected == i
-                  ? const Color(0xff0f3a5c)
-                  : const Color(0xff4a7ba0),
+              size: 21,
+              color: active ? const Color(0xff5d3a2c) : const Color(0xff8a6242),
             ),
           );
         default:
           return Icon(
             icons[i],
-            size: 23,
-            color: selected == i
-                ? const Color(0xff0f3a5c)
-                : const Color(0xff4a7ba0),
+            size: 21,
+            color: active ? const Color(0xff5d3a2c) : const Color(0xff8a6242),
           );
       }
     }
 
-    Widget navItem(int i) => Expanded(
-      child: Semantics(
-        button: true,
-        selected: i == selected,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: ValueKey('nav-$i'),
-            onTap: () => onSelected(i),
-            child: SizedBox.expand(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          height: 40,
-                          width: 46,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Color.lerp(
-                                  tileStyles[i].$1,
-                                  Colors.white,
-                                  0.16,
-                                )!,
-                                tileStyles[i].$1,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(13),
-                            border: Border.all(
-                              color: selected == i
-                                  ? const Color(0xff1d5f96)
-                                  : tileStyles[i].$2,
-                              width: selected == i ? 2.2 : 1.4,
-                            ),
-                            boxShadow: selected == i
-                                ? const [
-                                    BoxShadow(
-                                      color: Color(0x661d5f96),
-                                      blurRadius: 8,
-                                    ),
-                                  ]
-                                : const [
-                                    BoxShadow(
-                                      color: Color(0x331d3f5e),
-                                      offset: Offset(0, 2),
-                                      blurRadius: 3,
-                                    ),
-                                  ],
-                          ),
-                          child: tileIcon(i),
-                        ),
-                        if (i == 0 && shopBadge)
-                          Positioned(
-                            right: -4,
-                            top: -4,
-                            child: Container(
-                              width: 11,
-                              height: 11,
-                              decoration: BoxDecoration(
-                                color: const Color(0xffe2433a),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 1.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    SizedBox(
-                      height: 12,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          labels[i],
-                          style: TextStyle(
-                            color: selected == i
-                                ? const Color(0xff0f3a5c)
-                                : const Color(0xff2a5a7e),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    // All five tabs are identical frosted tiles on the blue band; the
-    // band itself absorbs the system inset so nothing shows beneath it.
+    // The blue band carries over from the segmented reference; the band
+    // itself absorbs the system inset so nothing shows beneath it.
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Container(
-      height: 66 + bottomInset,
+      height: 72 + bottomInset,
       padding: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -765,12 +651,194 @@ class ArenaBottomBar extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        child: Row(children: [for (var i = 0; i < 5; i++) navItem(i)]),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 8, 6, 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (var i = 0; i < 5; i++)
+                Expanded(
+                  flex: i == 2 ? 3 : 2,
+                  child: _NavButton(
+                    key: ValueKey('nav-$i'),
+                    label: labels[i],
+                    centre: i == 2,
+                    active: selected == i,
+                    badge: i == 0 && shopBadge,
+                    onTap: () => onSelected(i),
+                    child: tileIcon(i),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
+/// One tactile 3D nav button: cream→caramel gradient, thick cocoa rim,
+/// glossy top edge and a hard bottom shadow. Pressing scales it down
+/// with a selection haptic; the active tab floats up with a gold glow
+/// and the centre LUPTĂ button keeps the primary orange fill.
+class _NavButton extends StatefulWidget {
+  const _NavButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    required this.child,
+    this.centre = false,
+    this.active = false,
+    this.badge = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final Widget child;
+  final bool centre, active, badge;
+
+  @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final centre = widget.centre;
+    final active = widget.active;
+    final h = centre ? 52.0 : 44.0;
+    final lift = active ? 4.0 : 0.0;
+    return Semantics(
+      button: true,
+      selected: active,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        transform: Matrix4.translationValues(0, -lift, 0),
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        child: AnimatedScale(
+          scale: _pressed ? 0.92 : 1,
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOut,
+          child: Stack(
+            clipBehavior: Clip.none,
+            fit: StackFit.expand,
+            children: [
+              Container(
+                height: h,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: centre
+                        ? const [
+                            Color(0xfffff6b8),
+                            Color(0xffffe08a),
+                            gold,
+                            Color(0xffdf931f),
+                          ]
+                        : active
+                            ? const [
+                                Color(0xfffff3d0),
+                                Color(0xffffe9ad),
+                                Color(0xfff0cd7e),
+                                Color(0xffd9a854),
+                              ]
+                            : const [
+                                Color(0xfffff6df),
+                                Color(0xfff3ddb0),
+                                Color(0xffe0bd7f),
+                                Color(0xffc99f5f),
+                              ],
+                  ),
+                  borderRadius: BorderRadius.circular(centre ? 17 : 14),
+                  border: Border.all(
+                    color: active
+                        ? const Color(0xff8a4b0f)
+                        : const Color(0xff5d3a2c),
+                    width: centre || active ? 2.4 : 2.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: active
+                          ? const Color(0x99ffc63c)
+                          : const Color(0x5520130e),
+                      offset: Offset(0, active ? 3 : 4),
+                      blurRadius: active ? 10 : 0,
+                    ),
+                    if (active)
+                      const BoxShadow(
+                        color: Color(0x44fff3c4),
+                        offset: Offset(0, -1),
+                        blurRadius: 6,
+                      ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: widget.onTap,
+                    onHighlightChanged: (v) {
+                      if (v) HapticFeedback.selectionClick();
+                      if (mounted) setState(() => _pressed = v);
+                    },
+                    borderRadius: BorderRadius.circular(centre ? 17 : 14),
+                    splashColor: Colors.white.withValues(alpha: .45),
+                    highlightColor: Colors.white.withValues(alpha: .10),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(child: widget.child),
+                        SizedBox(
+                          height: centre ? 12 : 10,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              widget.label,
+                              style: TextStyle(
+                                color: centre || active
+                                    ? const Color(0xff5d3a2c)
+                                    : const Color(0xff7a5232),
+                                fontSize: centre ? 10.5 : 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.2,
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x66ffffff),
+                                    offset: Offset(0, -0.6),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.badge)
+                Positioned(
+                  right: -2,
+                  top: -3,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: const Color(0xffe2433a),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.6),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 /// Storefront glyph for the shop tab: scalloped striped awning over a
 /// little stall. Drawn from shapes so it stays crisp at any size.
 class _ShopIconPainter extends CustomPainter {
