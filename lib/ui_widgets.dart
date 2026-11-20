@@ -296,8 +296,6 @@ class PlayerHud extends StatelessWidget {
     required this.onRoad,
     required this.onShop,
     required this.onMenu,
-    this.onFriends,
-    this.onAccount,
     this.trophyBadgeKey,
     this.coinBadgeKey,
   });
@@ -305,10 +303,6 @@ class PlayerHud extends StatelessWidget {
   final String name;
   final int trophies, coins;
   final VoidCallback onProfile, onRoad, onShop, onMenu;
-
-  /// Optional hub shortcuts shown as small glossy circles next to the
-  /// hamburger (the match screen leaves them null).
-  final VoidCallback? onFriends, onAccount;
 
   /// Optional keys so a victory-flight overlay can find the badge centers.
   final Key? trophyBadgeKey, coinBadgeKey;
@@ -417,83 +411,16 @@ class PlayerHud extends StatelessWidget {
     ],
   );
 
-  /// Small glossy circle button used for the top-right hub shortcuts
-  /// (friends, account) — same warm-glass language as the pills.
-  Widget _hubCircle(
-    String asset,
-    IconData fallback,
-    VoidCallback tap, {
-    String? tooltip,
-    Key? key_,
-  }) {
-    final circle = Container(
-      width: 34,
-      height: 34,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xcc8a5c3e), Color(0xcc6e432e)],
-        ),
-        border: Border.fromBorderSide(
-          BorderSide(color: Color(0x66ffe9bd), width: 1.6),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x33000000),
-            offset: Offset(0, 2),
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      foregroundDecoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0x40ffffff), Color(0x00ffffff)],
-          stops: [0, 0.45],
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: tap,
-          customBorder: const CircleBorder(),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: arenaImage(
-              asset,
-              fit: BoxFit.contain,
-              fallback: Icon(fallback, color: gold, size: 19),
-            ),
-          ),
-        ),
-      ),
-    );
-    final wrapped = tooltip == null
-        ? circle
-        : Tooltip(message: tooltip, child: circle);
-    return KeyedSubtree(key: key_, child: wrapped);
-  }
-
   @override
   Widget build(BuildContext context) => DecoratedBox(
+    // Frameless bar: only the avatar, pills and menu button float over the
+    // room — a faint top scrim keeps them readable without a visible strip.
     decoration: const BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xff96684c), Color(0xff6b4234)],
+        colors: [Color(0x3d20130e), Color(0x0020130e)],
       ),
-      border: Border(bottom: BorderSide(color: gold, width: 2)),
-      boxShadow: [
-        BoxShadow(
-          color: Color(0x55432118),
-          offset: Offset(0, 4),
-          blurRadius: 12,
-        ),
-      ],
     ),
     child: Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -584,24 +511,6 @@ class PlayerHud extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 5),
-          if (onFriends != null)
-            _hubCircle(
-              'icon_friends',
-              Icons.people_alt_rounded,
-              onFriends!,
-              tooltip: 'Prieteni',
-              key_: const ValueKey('hub-friends'),
-            ),
-          if (onFriends != null) const SizedBox(width: 4),
-          if (onAccount != null)
-            _hubCircle(
-              'icon_cloud_account',
-              Icons.account_circle_rounded,
-              onAccount!,
-              tooltip: 'Cont',
-              key_: const ValueKey('hub-account'),
-            ),
-          if (onAccount != null) const SizedBox(width: 4),
           Tooltip(
             message: 'Meniu',
             child: Container(
@@ -699,6 +608,8 @@ class ArenaBottomBar extends StatelessWidget {
             size: const Size(24, 24),
             painter: _CatsIconPainter(selected: selected == i),
           );
+        case 2:
+          return sprite('btn_play_paw', size: 26);
         case 3:
         case 4:
           return arenaImage(
@@ -830,160 +741,31 @@ class ArenaBottomBar extends StatelessWidget {
       ),
     );
 
-    return SizedBox(
-      height: 76,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 64,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xffaad6ef), Color(0xff6da5cc)],
-                ),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-                border: const Border(
-                  top: BorderSide(color: Color(0xff3f7ba8), width: 2),
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x5520130e),
-                    offset: Offset(0, -6),
-                    blurRadius: 16,
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    for (var i = 0; i < 5; i++)
-                      if (i == 2)
-                        const Expanded(child: SizedBox.shrink())
-                      else
-                        navItem(i),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Semantics(
-                button: true,
-                selected: selected == 2,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    key: const ValueKey('nav-2'),
-                    onTap: () => onSelected(2),
-                    borderRadius: BorderRadius.circular(18),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 60,
-                          height: 58,
-                          child: Stack(
-                            children: [
-                              Positioned.fill(
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(18),
-                                    gradient: const LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Color(0xffffb066),
-                                        Color(0xfff27a2e),
-                                        Color(0xffd9542a),
-                                      ],
-                                    ),
-                                    border: Border.all(color: gold, width: 2.5),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Color(0x66f27a2e),
-                                        blurRadius: 14,
-                                      ),
-                                      BoxShadow(
-                                        color: Color(0x6620130e),
-                                        offset: Offset(0, 4),
-                                        blurRadius: 0,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const Positioned(
-                                top: 4,
-                                left: 8,
-                                right: 8,
-                                height: 14,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(12),
-                                    ),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Color(0x80ffffff),
-                                        Color(0x00ffffff),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Center(child: sprite('btn_play_paw', size: 36)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        SizedBox(
-                          height: 13,
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              labels[2],
-                              style: TextStyle(
-                                color: selected == 2
-                                    ? const Color(0xff0f3a5c)
-                                    : const Color(0xff2a5a7e),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.3,
-                                shadows: const [
-                                  Shadow(
-                                    color: Color(0x66000000),
-                                    offset: Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+    // All five tabs are identical frosted tiles on the blue band; the
+    // band itself absorbs the system inset so nothing shows beneath it.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return Container(
+      height: 66 + bottomInset,
+      padding: EdgeInsets.only(bottom: bottomInset),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xffaad6ef), Color(0xff6da5cc)],
+        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border(top: BorderSide(color: Color(0xff3f7ba8), width: 2)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x5520130e),
+            offset: Offset(0, -6),
+            blurRadius: 16,
           ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Row(children: [for (var i = 0; i < 5; i++) navItem(i)]),
       ),
     );
   }

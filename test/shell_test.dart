@@ -406,12 +406,7 @@ void main() {
     expect(find.byKey(const ValueKey('lobby-fight')), findsOneWidget);
     expect(find.text('ONLINE ROOM'), findsNothing);
     expect(find.text('CAMERĂ ONLINE'), findsNothing);
-    for (final hub in [
-      'hub-friends',
-      'hub-ranks',
-      'hub-account',
-      'hub-quests',
-    ]) {
+    for (final hub in ['hub-ranks', 'hub-quests']) {
       expect(find.byKey(ValueKey(hub)), findsOneWidget);
     }
     expect(find.text('CADOU ZILNIC'), findsNothing);
@@ -924,7 +919,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-2')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('hub-friends')));
+    await tester.tap(find.byTooltip('Meniu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Prieteni'));
     await tester.pumpAndSettle();
     expect(find.text('Cameră de prieten'), findsOneWidget);
     expect(find.text('CREEAZĂ CAMERĂ'), findsOneWidget);

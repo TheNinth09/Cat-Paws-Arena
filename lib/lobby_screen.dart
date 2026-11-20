@@ -85,35 +85,44 @@ class LobbyScreen extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         // Compact when the *page viewport* (not the full screen) is short or
-        // text is scaled up — the scene and controls then scroll instead of
-        // overflowing.
+        // text is scaled up — the cat shrinks and the cluster scrolls as a
+        // last resort instead of overflowing.
         final compact = constraints.maxHeight < 620 || textScale > 1.3;
-        final content = compact
-            ? ListView(
-                key: const PageStorageKey('lobby-scroll'),
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                children: [
-                  _progressStrip(),
-                  const SizedBox(height: 4),
-                  _catScene(context, compact: true),
-                  const SizedBox(height: 6),
-                  _controls(context),
-                ],
-              )
-            : Column(
-                children: [
-                  _progressStrip(),
-                  // Foreground: the cat stands at floor level,
-                  // not floating mid-room.
-                  Expanded(
-                    child: Align(
+        final content = Column(
+          children: [
+            _progressStrip(),
+            // The whole foreground cluster — cat, mode chip and the LUPTĂ
+            // row — anchors to the bottom of the room like the reference.
+            // A ListView (which fills its space) would pin it to the top,
+            // so scrolling kicks in only when the viewport can't fit the
+            // cluster.
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, area) {
+                  final cluster = Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _catScene(context, compact: compact),
+                      _controls(context),
+                    ],
+                  );
+                  final needed = compact ? 340.0 : 445.0;
+                  if (area.maxHeight >= needed) {
+                    return Align(
                       alignment: Alignment.bottomCenter,
-                      child: _catScene(context),
-                    ),
-                  ),
-                  _controls(context),
-                ],
-              );
+                      child: cluster,
+                    );
+                  }
+                  return ListView(
+                    key: const PageStorageKey('lobby-scroll'),
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+                    children: [cluster],
+                  );
+                },
+              ),
+            ),
+          ],
+        );
         return Stack(
           fit: StackFit.expand,
           children: [

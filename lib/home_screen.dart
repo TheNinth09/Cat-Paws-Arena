@@ -360,6 +360,7 @@ class _HomeState extends State<Home> {
         ),
       ),
       body: SafeArea(
+        bottom: false,
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
@@ -376,9 +377,6 @@ class _HomeState extends State<Home> {
                   onRoad: openHouseTour,
                   onShop: () => select(0),
                   onMenu: () => scaffold.currentState!.openEndDrawer(),
-                  onFriends: () =>
-                      showFriendRoom(context, english: p.english, player: p),
-                  onAccount: () => showAccount(context, p),
                 ),
                 Expanded(
                   child: RoomBackground(
