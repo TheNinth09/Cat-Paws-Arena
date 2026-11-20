@@ -1332,16 +1332,14 @@ class _BoardPainter extends CustomPainter {
         canvas.translate(-cx, -cy);
       }
       if (piece.special != SpecialKind.none) {
-        // Pulsing glow behind the special tile, tinted by the colour it
-        // was made from — that colour is what it combines with. Rainbow
-        // keeps the neutral icy halo. Two stacked alpha circles cost two
-        // fills; the old per-frame RadialGradient shader allocation is
-        // gone.
-        final glow = switch (piece.special) {
-          SpecialKind.rainbow => const Color(0xff9fd7ff),
-          _ when piece.kind < _gemColors.length => _gemColors[piece.kind],
-          _ => const Color(0xfffff3c4),
-        };
+        // Pulsing glow behind the special tile — a uniform warm gold:
+        // specials fire on any swap now, so tinting by source colour
+        // implied a rule that no longer exists. Rainbow keeps the icy
+        // halo. Two stacked alpha circles cost two fills; no shader
+        // allocation per frame.
+        final glow = piece.special == SpecialKind.rainbow
+            ? const Color(0xff9fd7ff)
+            : const Color(0xffffd76a);
         final glowR = s * 0.6 * (1 + 0.07 * math.sin(now * 5));
         canvas.drawCircle(
           rect.center,
@@ -1402,28 +1400,6 @@ class _BoardPainter extends CustomPainter {
       if (piece.special != SpecialKind.none && specialImg == null) {
         _drawSpecialBadge(canvas, rect, piece.special, alpha);
         _drawSpecialMark(canvas, rect, piece.special, alpha, now);
-      }
-      // Colour chip on non-rainbow specials: the colour it was made from
-      // is the colour it combines with.
-      if (piece.special != SpecialKind.none &&
-          piece.special != SpecialKind.rainbow &&
-          piece.kind < _gemColors.length) {
-        final d = s * 0.22;
-        final c = Offset(
-          rect.right - d * 0.42,
-          rect.bottom - d * 0.42,
-        );
-        canvas.drawCircle(
-          c,
-          d * 0.52,
-          Paint()..color = const Color(0xff20130e).withValues(alpha: alpha),
-        );
-        canvas.drawCircle(
-          c,
-          d * 0.38,
-          Paint()
-            ..color = _gemColors[piece.kind].withValues(alpha: alpha),
-        );
       }
       if (rotates) canvas.restore();
     }

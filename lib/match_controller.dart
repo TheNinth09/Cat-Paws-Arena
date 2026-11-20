@@ -929,7 +929,7 @@ class ArenaMatchController extends ChangeNotifier {
         paused) {
       return;
     }
-    _botTimer = Timer(botMoveDelay ?? _botPace, () {
+    _botTimer = Timer(botMoveDelay ?? _botPace, () async {
       _botTimer = null;
       if (_disposed) return;
       final cur = _state;
@@ -950,7 +950,18 @@ class ArenaMatchController extends ChangeNotifier {
       if (_botMovesThisTurn >= 40 || turnSecondsLeft <= 3) {
         move = const engine.EndTurnMove();
       } else {
-        move = _bot!.choose(cur);
+        move = await _bot!.choose(cur);
+        // choose() yields the event loop between evaluations — the
+        // clock may have ended the turn or the match meanwhile. Never
+        // apply a move computed against a stale state.
+        if (_disposed ||
+            paused ||
+            !identical(_state, cur) ||
+            cur.isFinished ||
+            cur.activePlayer != engine.PlayerSlot.second) {
+          if (!_disposed) _maybeBotTurn();
+          return;
+        }
         _botMovesThisTurn++;
       }
       _applyEngine(move, isPlayerMove: false);

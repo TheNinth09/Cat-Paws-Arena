@@ -139,15 +139,16 @@ EngineResult<MoveResult> _applySwap(
   final bothSpecial = aSpec && bSpec;
   bool isRainbow(int code) =>
       isSpecialCode(code) && specialKindBaseOf(code) == kRainbow;
-  // A special never merges with a plain piece: it fires through a
-  // special+special combo or through the rainbow paw touching the
-  // colour it should clear. A non-rainbow special may swap with a plain
-  // piece only when the swap forms a match of 3+ of the special's
-  // colour — the special then detonates inside that match.
+  // Special activation, the classic match-3 way: two specials always
+  // combine, a rainbow paw swapped onto a colour clears that colour,
+  // and any other special swapped onto a plain colour piece detonates
+  // where it lands. When the swap happens to drop the special inside a
+  // match of its own colour it detonates inside that match instead.
   final rainbowOnColour =
       (isRainbow(ca) && isColourCode(cb)) ||
       (isRainbow(cb) && isColourCode(ca));
   var specialMatchSwap = false;
+  var specialDirectFire = false;
   if (!bothSpecial && !rainbowOnColour && (aSpec || bSpec)) {
     final sIdx = aSpec ? a : b;
     final oIdx = aSpec ? b : a;
@@ -157,8 +158,9 @@ EngineResult<MoveResult> _applySwap(
       specialMatchSwap =
           isColourCode(other) &&
           formsSpecialColourMatch(board, sIdx, oIdx);
+      specialDirectFire = !specialMatchSwap && isColourCode(other);
     }
-    if (!specialMatchSwap) {
+    if (!specialMatchSwap && !specialDirectFire) {
       final first = a < b ? a : b;
       final second = a < b ? b : a;
       return EngineOk(
@@ -178,7 +180,7 @@ EngineResult<MoveResult> _applySwap(
       );
     }
   }
-  final fires = bothSpecial || rainbowOnColour;
+  final fires = bothSpecial || rainbowOnColour || specialDirectFire;
 
   // Simulate the swap to test productivity.
   board.cells[a] = cb;
@@ -221,7 +223,7 @@ EngineResult<MoveResult> _applySwap(
 
   if (bothSpecial) {
     _fireCombo(work, slot, first, second);
-  } else if (rainbowOnColour) {
+  } else if (rainbowOnColour || specialDirectFire) {
     _fireSwapSpecials(work, slot, first, second);
   }
   _resolveMatches(work, slot);

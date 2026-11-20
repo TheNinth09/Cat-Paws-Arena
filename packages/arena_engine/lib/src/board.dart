@@ -338,11 +338,9 @@ bool swappablePair(MutableBoard board, int a, int b) {
 
 /// Whether swapping [a] and [b] is productive under the Royal Kingdom
 /// rules: two specials always combine, a rainbow swapped onto a colour
-/// clears that colour, and a non-rainbow special may swap with a plain
-/// piece only when the swap forms a match of 3+ of the special's colour
-/// (the special counts as a piece of that colour and detonates inside
-/// the match). Every other pair is only productive when the swap forms
-/// a colour match.
+/// clears that colour, and a non-rainbow special swapped with any plain
+/// colour piece detonates where it lands. Every other pair is only
+/// productive when the swap forms a colour match.
 bool productiveSwap(MutableBoard board, int a, int b) {
   final ca = board.cells[a];
   final cb = board.cells[b];
@@ -354,8 +352,7 @@ bool productiveSwap(MutableBoard board, int a, int b) {
     final s = board.cells[sIdx];
     final other = board.cells[oIdx];
     if (specialKindBaseOf(s) == kRainbow) return isColourCode(other);
-    if (!isColourCode(other)) return false;
-    return formsSpecialColourMatch(board, sIdx, oIdx);
+    return isColourCode(other);
   }
   board.cells[a] = cb;
   board.cells[b] = ca;

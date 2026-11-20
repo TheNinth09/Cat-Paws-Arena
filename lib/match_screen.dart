@@ -808,6 +808,7 @@ class _MatchScreenState extends State<MatchScreen>
     final texts = [
       'Prima ta luptă! Ai 30 de secunde pe rând — tura se termină singură.',
       'Schimbă două piese alăturate de aceeași culoare. Urmează indicatorul auriu!',
+      'Piesele cu auriu sunt speciale — trage-le peste ORICE piesă vecină ca să detoneze!',
       'Când bara de putere e plină, atinge-o ca s-o declanșezi!',
     ];
     final text = texts[match.playerMoves.clamp(0, texts.length - 1)];

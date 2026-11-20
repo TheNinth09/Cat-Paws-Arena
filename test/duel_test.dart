@@ -1646,17 +1646,21 @@ void main() {
       expect(out.state.scores[0], greaterThan(0));
     });
 
-    test('special + off-colour swap without a match is rejected', () {
+    test('a special fires when swapped onto any adjacent piece', () {
       final cells = checker();
-      cells[0] = board.kBomb; // colour-0 bomb next to a colour-1 piece
+      cells[0] = board.kBomb; // bomb next to an off-colour piece
       final st = stateWithCells(cells);
       final res = engine.applyMove(
         st,
         engine.SwapMove(firstCell: pos(0), secondCell: pos(1)),
       );
       final out = (res as engine.EngineOk<engine.MoveResult>).value;
-      expect(out.events.single, isA<engine.SwapRejected>());
-      expect(out.hashAfter, out.hashBefore);
+      expect(
+        out.events.whereType<engine.SpecialFired>().isNotEmpty,
+        isTrue,
+        reason: 'any swap onto a colour piece detonates the special',
+      );
+      expect(out.state.scores[0], greaterThan(0));
     });
 
     test('rocket + rocket combo clears a full cross', () {

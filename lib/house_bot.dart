@@ -20,7 +20,14 @@ class HouseBot {
   final int level;
   final Random _rng;
 
-  engine.Move choose(engine.MatchState state) {
+  /// Picks the next move. Async because levels 1/2 evaluate every legal
+  /// move with a full `applyMove` — ~35 cascade resolutions back to back
+  /// would stall the UI thread for hundreds of ms (the reported 2-FPS
+  /// drops). The loop yields the event loop whenever ~12 ms of work
+  /// accrues so frames keep rendering while the bot thinks. The pick
+  /// order and RNG consumption are unchanged, so results stay
+  /// deterministic per [seed].
+  Future<engine.Move> choose(engine.MatchState state) async {
     final legal = engine.legalMoves(state);
     if (legal is! engine.EngineOk<List<engine.Move>>) {
       // The engine guarantees EndTurnMove exists while the match runs;
@@ -39,11 +46,17 @@ class HouseBot {
     }
     var best = playable.first;
     var bestScore = -1e18;
+    final clock = Stopwatch()..start();
+    var sliceStart = 0;
     for (final m in playable) {
       final s = _evaluate(state, m);
       if (s > bestScore || (s == bestScore && _rng.nextBool())) {
         bestScore = s;
         best = m;
+      }
+      if (clock.elapsedMilliseconds - sliceStart >= 12) {
+        await Future<void>.delayed(Duration.zero);
+        sliceStart = clock.elapsedMilliseconds;
       }
     }
     return best;
