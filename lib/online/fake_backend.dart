@@ -106,7 +106,7 @@ class FakeCloud implements CloudStore, MatchStore {
       hostUid: room.hostUid,
       guestUid: guestUid,
       seed: _random.nextInt(1 << 31),
-      config: MatchConfig(
+      config: MatchConfig.frenzy(
         firstPower: PowerKind.values[room.power.clamp(0, 2)],
         secondPower: PowerKind.values[power.clamp(0, 2)],
       ).fingerprint,

@@ -128,9 +128,10 @@ service cloud.firestore {
 
     // The agreed timed-turn duel fingerprint; the loadout part names each
     // player's chosen power (MatchConfig.fingerprint in the engine).
-    // v4 = 2x2 squares create copters (kEngineVersion bump in the engine).
+    // v6 = Variant B "Frenzy": simultaneous 60 s duel, 15 s Fever x2.
     function duelFingerprint(p1, p2) {
-      return 'v4|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:'
+      return 'v6|7x7|c5|t1/60s|sim=true/60s/f15|rainbow:clearOneColour'
+        + '|powers:threeFreeEqual|loadout:'
         + powerName(p1) + '/' + powerName(p2);
     }
 
@@ -150,7 +151,7 @@ service cloud.firestore {
         && d.config == duelFingerprint(
             ('power1' in d) ? d.power1 : 0,
             ('power2' in d) ? d.power2 : 0)
-        && d.engineVersion == 4
+        && d.engineVersion == 6
         && d.contractVersion == 1
         && exists(roomPath)
         && !existsAfter(roomPath)
@@ -192,16 +193,23 @@ service cloud.firestore {
     }
 
     // Move.toJson() from arena_engine; no strings except enum names.
+    // Simultaneous (Frenzy) swaps/powers may name their slot in `player`;
+    // `tick` is the host-written clock second of a simultaneous match.
     function validMove(m) {
       return m is map && (
-        (m.kind == 'swap' && exactKeys(m, ['kind', 'a', 'b'])
-          && validCell(m.a) && validCell(m.b))
+        (m.kind == 'swap'
+          && m.keys().hasAll(['kind', 'a', 'b'])
+          && m.keys().hasOnly(['kind', 'a', 'b', 'player'])
+          && validCell(m.a) && validCell(m.b)
+          && (!('player' in m) || m.player in ['first', 'second']))
         || (m.kind == 'power'
           && m.keys().hasAll(['kind', 'power'])
-          && m.keys().hasOnly(['kind', 'power', 'row'])
+          && m.keys().hasOnly(['kind', 'power', 'row', 'player'])
           && m.power in ['zoomies', 'shadowPounce', 'laserChase']
-          && (!('row' in m) || inRange(m.row, 7)))
-        || (m.kind == 'endTurn' && exactKeys(m, ['kind'])));
+          && (!('row' in m) || inRange(m.row, 7))
+          && (!('player' in m) || m.player in ['first', 'second']))
+        || (m.kind == 'endTurn' && exactKeys(m, ['kind']))
+        || (m.kind == 'tick' && exactKeys(m, ['kind'])));
     }
 
     function hash16(h) {

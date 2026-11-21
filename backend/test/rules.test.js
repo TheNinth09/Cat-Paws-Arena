@@ -82,8 +82,8 @@ async function hostRoom(code = 'ABC234', uid = 'host') {
 const matchFields = {
   seed: 12345,
   config:
-    'v4|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
-  engineVersion: 4,
+    'v6|7x7|c5|t1/60s|sim=true/60s/f15|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
+  engineVersion: 6,
   contractVersion: 1,
 };
 
@@ -317,7 +317,7 @@ describe('match sync', () => {
     const batch = writeBatch(g);
     batch.set(doc(g, 'matches', matchIdOf('ABC234', room)), {
       roomCode: 'ABC234', hostUid: 'host', guestUid: 'guest', createdAt: serverTimestamp(),
-      ...matchFields, config: 'v4|9x9|c6|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
+      ...matchFields, config: 'v6|9x9|c6|t1/60s|sim=true/60s/f15|rainbow:clearOneColour|powers:threeFreeEqual|loadout:zoomies/zoomies',
     });
     batch.delete(doc(g, 'rooms', 'ABC234'));
     await assertFails(batch.commit());
@@ -332,7 +332,7 @@ describe('match sync', () => {
       ...matchFields,
       power1: 1, power2: 2,
       config:
-        'v4|7x7|c5|t5/30s|rainbow:clearOneColour|powers:threeFreeEqual|loadout:shadowPounce/laserChase',
+        'v6|7x7|c5|t1/60s|sim=true/60s/f15|rainbow:clearOneColour|powers:threeFreeEqual|loadout:shadowPounce/laserChase',
     };
     const batch = writeBatch(g);
     batch.set(doc(g, 'matches', id), data);
@@ -357,6 +357,29 @@ describe('match sync', () => {
     await assertSucceeds(put('host', id, 0, move(0, 'host', 'first')));
     await assertSucceeds(
       put('host', id, 1, move(1, 'host', 'first', { kind: 'endTurn' })),
+    );
+  });
+
+  test('frenzy moves: player-tagged swaps, powers and host ticks', async () => {
+    const id = await seedMatch();
+    await assertSucceeds(
+      put('host', id, 0, move(0, 'host', 'first', { ...swap, player: 'first' })),
+    );
+    await assertSucceeds(
+      put('guest', id, 1, move(1, 'guest', 'second', { ...swap, player: 'second' })),
+    );
+    await assertSucceeds(
+      put('host', id, 2, move(2, 'host', 'first', { kind: 'tick' })),
+    );
+    await assertSucceeds(
+      put('guest', id, 3, move(3, 'guest', 'second', { kind: 'power', power: 'zoomies', player: 'second' })),
+    );
+    // A bad player tag or an unknown field is still rejected.
+    await assertFails(
+      put('guest', id, 4, move(4, 'guest', 'second', { ...swap, player: 'me' })),
+    );
+    await assertFails(
+      put('host', id, 4, move(4, 'host', 'first', { kind: 'tick', note: 'x' })),
     );
   });
 

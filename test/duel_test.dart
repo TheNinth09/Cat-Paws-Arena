@@ -905,26 +905,33 @@ void main() {
     expect(state.isFinished, isTrue);
   });
 
-  /// Plays a local engine duel to the result: up to [swapsPerTurn] swaps
-  /// per turn, then ends the turn programmatically; the house bot paces
-  /// itself on a zero delay.
+  /// Plays a local engine duel to the result. Frenzy matches run a shared
+  /// 60-second clock: each pump advances a second of match time, the
+  /// player tries a swap whenever input is open and the house bot plays
+  /// in parallel on a zero delay.
   Future<void> driveLocalMatch(
     WidgetTester tester,
     ArenaMatchController m, {
     int swapsPerTurn = 4,
   }) async {
     m.botMoveDelay = Duration.zero;
-    var guard = 0, swaps = 0;
+    var guard = 0;
     while (m.phase == MatchPhase.playing && guard++ < 900) {
-      if (m.playerTurn) {
+      if (m.isFrenzy) {
         final legal = m.legalSwaps;
-        if (swaps < swapsPerTurn && legal.isNotEmpty && m.acceptingInput) {
+        if (legal.isNotEmpty && m.acceptingInput) {
           m.tryMove(legal.first.$1, legal.first.$2);
-          swaps++;
+        }
+        // One pumped second = one engine TickMove on the shared clock.
+        await tester.pump(const Duration(seconds: 1));
+      } else if (m.playerTurn) {
+        final legal = m.legalSwaps;
+        if (legal.isNotEmpty && m.acceptingInput) {
+          m.tryMove(legal.first.$1, legal.first.$2);
         } else {
           m.endTurn();
-          swaps = 0;
         }
+        await tester.pump(const Duration(milliseconds: 5));
       } else {
         await tester.pump(const Duration(milliseconds: 10));
       }
@@ -933,7 +940,7 @@ void main() {
     expect(m.phase, MatchPhase.finished, reason: 'match did not finish');
   }
 
-  testWidgets('engine duel plays three timed turns per player to a result', (
+  testWidgets('engine frenzy duel plays 60 simultaneous seconds to a result', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -946,25 +953,28 @@ void main() {
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
     expect(m.isEngine, isTrue);
-    expect(m.turn, 1);
+    expect(m.isFrenzy, isTrue);
+    // One shared 60-second clock, no turns: both sides always hold play.
+    expect(m.matchSecondsLeft, 60);
+    expect(m.turnSecondsLeft, 60);
     expect(m.playerTurn, isTrue);
-    expect(m.turnSecondsLeft, greaterThan(0));
-    expect(m.turnSecondsLeft, lessThanOrEqualTo(30));
-    expect(m.playerTurnsLeft, 3);
-    expect(m.botTurnsLeft, 3);
-    // End the first turn early: the turn flips to the bot.
+    expect(m.opponentTurn, isFalse);
+    // endTurn is a no-op in Frenzy — only the clock ends the match.
     m.endTurn();
     await tester.pump(const Duration(milliseconds: 50));
-    expect(m.turn, 2);
-    expect(m.playerTurn, isFalse);
-    // Drive the rest of the match to a scored result.
-    await driveLocalMatch(tester, m);
+    expect(m.phase, MatchPhase.playing);
+    expect(m.playerTurn, isTrue);
+    // The clock ticks down in real time.
+    await tester.pump(const Duration(seconds: 5));
+    expect(m.matchSecondsLeft, lessThan(60));
+    // Fast-forward the rest: the shared clock settles the result.
+    m.debugEndActiveTurn();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(m.phase, MatchPhase.finished);
     expect(m.result, isNotNull);
-    // Three turns each = six turn boundaries minimum.
-    expect(m.turn, greaterThanOrEqualTo(5));
   });
 
-  testWidgets('battle UI shows the turn clock and has no GATA button', (
+  testWidgets('battle UI shows the frenzy clock and has no GATA button', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -979,12 +989,11 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
-    // No end-early control: the 30 s timer owns turn boundaries.
+    // No end-early control: the 60 s clock owns the match end.
     expect(find.text('GATA'), findsNothing);
-    // Turn banner, round badge and seconds are visible in the HUD.
-    expect(find.text('1/3'), findsWidgets);
-    expect(find.textContaining('s'), findsWidgets);
-    expect(find.text('TURA TA'), findsOneWidget);
+    // The tug-of-war HUD shows the mm:ss countdown, no turn banner.
+    expect(find.text('01:00'), findsWidgets);
+    expect(find.text('TURA TA'), findsNothing);
     m.dispose();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -1017,24 +1026,24 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('turn clock auto-ends an idle turn', (tester) async {
+  testWidgets('frenzy clock ends an idle match at 00:00', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final p = Player(await SharedPreferences.getInstance());
     final m = ArenaMatchController(p, 0, botLevel: 0, seed: 7);
     addTearDown(m.dispose);
     m.eventSink = (_) => m.onBoardIdle();
-    // Slow bot pacing keeps the turn on the bot after the auto-end.
+    // Slow bot pacing: the bot still plays in parallel during the 60 s.
     m.botMoveDelay = const Duration(seconds: 10);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(m.phase, MatchPhase.playing);
-    expect(m.turn, 1);
-    // Let the 30-second clock run out without input.
-    await tester.pump(const Duration(seconds: 31));
+    expect(m.matchSecondsLeft, 60);
+    // Let the shared clock run out without any player input.
+    await tester.pump(const Duration(seconds: 61));
     await tester.pump(const Duration(milliseconds: 50));
-    // The turn ended by itself and play moved to the bot.
-    expect(m.turn, 2);
-    expect(m.playerTurn, isFalse);
+    // The match ended by itself at 00:00 — no turns to flip.
+    expect(m.matchSecondsLeft, 0);
+    expect(m.phase, MatchPhase.finished);
     // Dispose inline: the pending-timer invariant runs before teardown.
     m.dispose();
   });
@@ -1139,7 +1148,7 @@ void main() {
     // Match screen: the portrait header keeps the name clean — the bot
     // label lives on the details popup (tap the opponent name).
     expect(find.textContaining('BOT'), findsNothing);
-    expect(find.text('1/3'), findsWidgets);
+    expect(find.text('01:00'), findsWidgets);
     await tester.tap(find.text('Vulpița').first);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('BOT'), findsWidgets);
@@ -1149,7 +1158,7 @@ void main() {
     await surrenderFromBattle(tester);
     expect(find.textContaining('BOT'), findsWidgets);
     expect(find.textContaining('Vulpița'), findsWidgets);
-    expect(find.textContaining('3 turnuri'), findsOneWidget);
+    expect(find.textContaining('FRENZY 60s'), findsOneWidget);
   });
 
   testWidgets('first-match tutorial guides three moves then persists', (
@@ -1293,6 +1302,30 @@ void main() {
   ) async {
     var guard = 0, stalls = 0;
     var aSwaps = 0, bSwaps = 0, aTurn = -1, bTurn = -1;
+    if (a.isFrenzy) {
+      // Frenzy: both clients swap whenever input is open and the host's
+      // one-second ticker writes the shared clock into the move log.
+      // Each pumped second is one engine TickMove — the match ends at
+      // 00:00 and both finals settle through the usual watch path.
+      while ((a.phase == MatchPhase.playing ||
+              b.phase == MatchPhase.playing) &&
+          guard++ < 150) {
+        if (a.myTurnInput) {
+          final s = a.legalSwaps;
+          if (s.isNotEmpty) a.tryMove(s.first.$1, s.first.$2);
+        }
+        if (b.myTurnInput) {
+          final s = b.legalSwaps;
+          if (s.isNotEmpty) b.tryMove(s.first.$1, s.first.$2);
+        }
+        await tester.pump(const Duration(seconds: 1));
+      }
+      // Let finals propagate through watchMatch and rewards settle.
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      return;
+    }
     while ((a.phase == MatchPhase.playing ||
             b.phase == MatchPhase.playing) &&
         guard++ < 900) {

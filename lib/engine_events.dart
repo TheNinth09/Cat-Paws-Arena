@@ -117,11 +117,36 @@ class EngineViewAdapter {
 
   /// Adapts [result] into view events for the human's board. Only events
   /// acting on [localSlot] are kept, plus round/match meta events.
-  /// [before] is the pre-move state (unused today, kept for symmetry).
+  /// In Frenzy matches each slot has its own 7x7 board: the opponent's
+  /// grid events never touch our cells and are dropped here — except
+  /// [engine.ObstacleQueued], which doubles as the "boxes flying at us"
+  /// signal for the tug-of-war HUD. [before] is the pre-move state
+  /// (unused today, kept for symmetry).
   List<BoardEvent> adaptMove(engine.MoveResult result, {engine.MatchState? before}) {
     final out = <BoardEvent>[];
     final state = result.state;
+    final frenzy = state.config.simultaneous;
     for (final e in result.events) {
+      if (frenzy) {
+        final actor = switch (e) {
+          engine.Swapped(:final player) ||
+          engine.SwapRejected(:final player) ||
+          engine.Cleared(:final player) ||
+          engine.SpecialCreated(:final player) ||
+          engine.SpecialFired(:final player) ||
+          engine.Fell(:final player) ||
+          engine.Refilled(:final player) ||
+          engine.ObstacleLanded(:final player) ||
+          engine.ObstacleBroken(:final player) ||
+          engine.PowerCharged(:final player) ||
+          engine.PowerFired(:final player) ||
+          engine.Shuffled(:final player) => player,
+          _ => null,
+        };
+        // Only our own board animates; ObstacleQueued stays visible for
+        // both slots (opponent-earned boxes are incoming sabotage).
+        if (actor != null && actor != localSlot) continue;
+      }
       switch (e) {
         case engine.Swapped(:final player, :final firstCell, :final secondCell):
           out.add(
@@ -186,11 +211,18 @@ class EngineViewAdapter {
               piece: BoardPiece(id: _nextId++, kind: piece.clamp(0, 5)),
             ),
           );
-        case engine.ObstacleQueued(:final player, :final sourceTurn, :final count)
-            when player == localSlot:
+        case engine.ObstacleQueued(:final player)
+            when !frenzy && player != localSlot:
+          // Classic turns: the opponent's earned boxes are private to
+          // them until they land; no view event.
+          break;
+        case engine.ObstacleQueued(:final player, :final sourceTurn, :final count):
+          // Classic: player == localSlot (guarded above). Frenzy: both
+          // slots surface — our queued boxes read as "sent", theirs as
+          // "incoming" on the tug-of-war HUD.
           out.add(
             ObstacleQueued(
-              player: _viewPlayer,
+              player: _vp(player),
               sourceTurn: sourceTurn,
               count: count,
             ),

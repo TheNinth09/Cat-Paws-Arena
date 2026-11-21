@@ -467,6 +467,18 @@ void main() {
       );
     }
 
+    /// Picks one legal move for [s]'s own slot in a simultaneous match —
+    /// legalMoves already tags it with `player`, so _accept on the other
+    /// phone validates the sender.
+    Move? frenzyMove(MatchSession s) {
+      final legal = legalMoves(s.state, player: s.slot);
+      if (legal is! EngineOk<List<Move>>) return null;
+      for (final m in legal.value) {
+        if (m is SwapMove) return m;
+      }
+      return null;
+    }
+
     Future<void> playOut(
       MatchSession host,
       MatchSession guest,
@@ -474,6 +486,21 @@ void main() {
       ArenaBot b,
     ) async {
       var guard = 0;
+      if (host.state.config.simultaneous) {
+        // Frenzy: both phones play in parallel on their own boards and
+        // the host writes one TickMove per loop — the shared 60-second
+        // clock ends the match.
+        while (!host.isOver && host.flag == null && guard++ < 200) {
+          final hm = frenzyMove(host);
+          if (hm != null) await host.play(hm);
+          final gm = frenzyMove(guest);
+          if (gm != null) await guest.play(gm);
+          await host.play(const TickMove());
+          await guest.refresh();
+          await host.refresh();
+        }
+        return;
+      }
       while (!host.isOver && host.flag == null && guard++ < 200) {
         final mover = host.isMyTurn ? host : guest;
         final bot = identical(mover, host) ? a : b;
@@ -503,8 +530,7 @@ void main() {
 
     test('a tampered move log is rejected and the match flagged', () async {
       final (cloud, host, guest) = await start(3);
-      final bot = botForLevel(HouseCatLevel.medium);
-      await host.play(bot.chooseMove(host.state));
+      await host.play(frenzyMove(host)!);
       final real = cloud.moveLog[host.matchId]!.first;
       cloud.tamperMove(
         host.matchId,
@@ -524,7 +550,7 @@ void main() {
       expect(cloud.matchRecords[host.matchId]!.flag, MatchFlag.hashMismatch);
       expect(guest.counts, isFalse);
       await expectLater(
-        guest.play(bot.chooseMove(guest.state)),
+        guest.play(frenzyMove(guest)!),
         throwsA(
           isA<MatchException>().having(
             (e) => e.code,
@@ -535,11 +561,16 @@ void main() {
       );
     });
 
-    test('a move out of turn is flagged', () async {
+    test('a move naming the other player is flagged', () async {
       final (cloud, host, guest) = await start(4);
-      final bot = botForLevel(HouseCatLevel.easy, 1);
-      final move = bot.chooseMove(guest.state);
-      final res = applyMove(guest.state, move) as EngineOk<MoveResult>;
+      // Frenzy equivalent of out-of-turn: the guest writes a move tagged
+      // `player: first` — acting for the host's board, not their own.
+      final legal =
+          legalMoves(host.state, player: PlayerSlot.first)
+              as EngineOk<List<Move>>;
+      final move =
+          legal.value.firstWhere((m) => m is SwapMove) as SwapMove;
+      final res = applyMove(host.state, move) as EngineOk<MoveResult>;
       await cloud.appendMove(
         host.matchId,
         MoveRecord(
@@ -560,10 +591,11 @@ void main() {
       final a = botForLevel(HouseCatLevel.hard),
           b = botForLevel(HouseCatLevel.medium);
       for (var i = 0; i < 4; i++) {
-        final mover = host.isMyTurn ? host : guest;
-        await mover.play(
-          (identical(mover, host) ? a : b).chooseMove(mover.state),
-        );
+        // Frenzy: both sides may always move — alternate explicitly so
+        // each phone writes two moves.
+        final mover = i.isEven ? host : guest;
+        final move = frenzyMove(mover);
+        if (move != null) await mover.play(move);
         await (identical(mover, host) ? guest : host).refresh();
       }
       expect(host.isOver, isFalse);
@@ -598,7 +630,7 @@ void main() {
 
     test('a move whose sender was anonymized later still replays', () async {
       final (cloud, host, guest) = await start(5);
-      await host.play(botForLevel(HouseCatLevel.medium).chooseMove(host.state));
+      await host.play(frenzyMove(host)!);
       final real = cloud.moveLog[host.matchId]!.first;
       cloud.tamperMove(
         host.matchId,
@@ -622,15 +654,12 @@ void main() {
       final (_, host, guest) = await start(9);
       final seen = <int>[];
       final sub = host.watch().listen((m) => seen.add(m.index));
-      final bot = botForLevel(HouseCatLevel.medium);
-      await host.play(bot.chooseMove(host.state));
-      // The bot may pass the turn itself; end it explicitly otherwise.
-      if (host.isMyTurn) await host.play(const EndTurnMove());
+      await host.play(frenzyMove(host)!);
       await pumpEventQueue();
       final hostMoves = host.movesApplied;
       expect(host.deadline, isNotNull);
       await guest.refresh();
-      await guest.play(bot.chooseMove(guest.state));
+      await guest.play(frenzyMove(guest)!);
       await pumpEventQueue();
       expect(host.movesApplied, hostMoves + 1);
       expect(host.flag, isNull);
@@ -649,7 +678,7 @@ void main() {
       );
       final host = await MatchSession.open(cloud, joined.matchId, 'host');
       final guest = await MatchSession.open(cloud, joined.matchId, 'guest');
-      await host.play(botForLevel(HouseCatLevel.medium).chooseMove(host.state));
+      await host.play(frenzyMove(host)!);
       await host.refresh();
       await expectLater(
         guest.claimForfeit(),

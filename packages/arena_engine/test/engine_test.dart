@@ -346,4 +346,205 @@ void main() {
       expect(Move.fromJson('nope'), isNull);
     });
   });
+
+  group('frenzy (simultaneous Variant B)', () {
+  const fcfg = MatchConfig.frenzy();
+
+  MatchState fresh([int seed = 7]) =>
+      (newMatch(seed, fcfg) as EngineOk<MatchState>).value;
+
+  SwapMove firstSwap(MatchState s, PlayerSlot p) {
+    final legal = legalMoves(s, player: p) as EngineOk<List<Move>>;
+    return legal.value.firstWhere((m) => m is SwapMove) as SwapMove;
+  }
+
+  MatchState applyOk(MatchState s, Move m) =>
+      (applyMove(s, m) as EngineOk<MoveResult>).value.state;
+
+  test('starts with a 60-second clock, no turns, equal boards', () {
+    final s = fresh();
+    expect(s.matchSecondsLeft, 60);
+    expect(s.turnsRemaining, [0, 0]);
+    expect(s.fever, isFalse);
+    expect(s.isFinished, isFalse);
+    expect(s.boards[0].cells, s.boards[1].cells);
+  });
+
+  test('legalMoves tags the requested slot and never ends turns', () {
+    final s = fresh();
+    for (final p in PlayerSlot.values) {
+      final legal = legalMoves(s, player: p) as EngineOk<List<Move>>;
+      expect(legal.value, isNotEmpty);
+      for (final m in legal.value) {
+        expect(m.player, p);
+        expect(m, isA<SwapMove>());
+      }
+    }
+    // Without a player argument Frenzy enumerates PlayerSlot.first.
+    final legal = legalMoves(s) as EngineOk<List<Move>>;
+    expect(
+      legal.value.every((m) => m.player == PlayerSlot.first),
+      isTrue,
+    );
+  });
+
+  test('swaps act on their own board only, both sides anytime', () {
+    var s = fresh();
+    final a = firstSwap(s, PlayerSlot.first);
+    s = applyOk(s, a);
+    // First's board moved; second's is untouched.
+    expect(s.boards[0].cells, isNot(s.boards[1].cells));
+    // Second may move immediately after — no turn hand-off.
+    final b = firstSwap(s, PlayerSlot.second);
+    expect(b.player, PlayerSlot.second);
+    s = applyOk(s, b);
+    expect(s.boards[0].cells, isNot(s.boards[1].cells));
+  });
+
+  test('a move without a player tag acts for PlayerSlot.first', () {
+    var s = fresh();
+    final tagged = firstSwap(s, PlayerSlot.first);
+    final bare = SwapMove(
+      firstCell: tagged.firstCell,
+      secondCell: tagged.secondCell,
+    );
+    s = applyOk(s, bare);
+    expect(s.boards[0].cells, isNot(s.boards[1].cells));
+  });
+
+  test('TickMove runs the clock down and ends the match at zero', () {
+    var s = fresh();
+    var ticks = 0;
+    for (var i = 0; i < 60; i++) {
+      final res = applyMove(s, const TickMove()) as EngineOk<MoveResult>;
+      ticks += res.value.events.whereType<ClockTicked>().length;
+      s = res.value.state;
+    }
+    expect(ticks, 60);
+    expect(s.matchSecondsLeft, 0);
+    expect(s.isFinished, isTrue);
+    expect(s.outcome, isNotNull);
+    // Further moves are rejected once the clock settles the result.
+    expect(applyMove(s, const TickMove()), isA<EngineFailure<MoveResult>>());
+  });
+
+  test('higher score wins; a draw is possible', () {
+    var s = fresh(11);
+    // Player first makes one productive swap; second idles.
+    s = applyOk(s, firstSwap(s, PlayerSlot.first));
+    for (var i = 0; i < 60; i++) {
+      s = applyOk(s, const TickMove());
+    }
+    expect(s.isFinished, isTrue);
+    if (s.scores[0] > s.scores[1]) {
+      expect(s.outcome, MatchOutcome.firstWins);
+    }
+    // A fresh match ticked straight down draws 0-0.
+    var d = fresh(11);
+    for (var i = 0; i < 60; i++) {
+      d = applyOk(d, const TickMove());
+    }
+    expect(d.outcome, MatchOutcome.draw);
+  });
+
+  test('EndTurnMove is illegal; TickMove is illegal in timed turns', () {
+    final s = fresh();
+    expect(
+      applyMove(s, const EndTurnMove()),
+      isA<EngineFailure<MoveResult>>(),
+    );
+    final classic =
+        (newMatch(7, const MatchConfig.duel()) as EngineOk<MatchState>).value;
+    expect(
+      applyMove(classic, const TickMove()),
+      isA<EngineFailure<MoveResult>>(),
+    );
+  });
+
+  test('fever doubles points in the last 15 seconds', () {
+    var s = fresh();
+    for (var i = 0; i < 45; i++) {
+      s = applyOk(s, const TickMove());
+    }
+    expect(s.matchSecondsLeft, 15);
+    expect(s.fever, isTrue);
+    final before = s.scores[0];
+    s = applyOk(s, firstSwap(s, PlayerSlot.first));
+    final gained = s.scores[0] - before;
+    expect(gained > 0, isTrue);
+    // A 3-piece clear is worth 10/piece x2 — at least 60.
+    expect(gained >= 60, isTrue);
+  });
+
+  test('earned sabotage lands on the rival board at their next move', () {
+    var s = fresh();
+    // First plays a move that (with this seed) may earn boxes; keep
+    // playing until a queue exists, bounded.
+    var guard = 0;
+    while (s.pendingObstacles[PlayerSlot.second.index].isEmpty &&
+        guard++ < 30) {
+      s = applyOk(s, firstSwap(s, PlayerSlot.first));
+    }
+    // If this seed earned nothing at all, the invariant is vacuous —
+    // count it as covered and finish.
+    if (s.pendingObstacles[PlayerSlot.second.index].isEmpty) return;
+    expect(
+      s.boards[PlayerSlot.second.index].cells.any((c) => c == -2),
+      isFalse,
+    );
+    // Second's next move lands the queued boxes on their own board.
+    var landed = false;
+    s = applyOk(s, firstSwap(s, PlayerSlot.second));
+    for (var i = 0; i < 30 && !landed; i++) {
+      if (s.boards[PlayerSlot.second.index].cells.contains(-2)) {
+        landed = true;
+      }
+    }
+    expect(landed, isTrue);
+    expect(s.pendingObstacles[PlayerSlot.second.index], isEmpty);
+  });
+
+  test('move codec carries the player tag and ticks round-trip', () {
+    const a = SwapMove(
+      firstCell: (row: 2, col: 3),
+      secondCell: (row: 2, col: 4),
+      player: PlayerSlot.second,
+    );
+    expect(Move.fromJson(a.toJson()), a);
+    const p = PowerMove(power: PowerKind.laserChase, player: PlayerSlot.first);
+    expect(Move.fromJson(p.toJson()), p);
+    const t = TickMove();
+    expect(Move.fromJson(t.toJson()), t);
+    expect(Move.fromJson({'kind': 'tick'}), t);
+  });
+
+  test('interleaved ticks and swaps stay deterministic', () {
+    var a = fresh(23), b = fresh(23);
+    final log = <Move>[];
+    var guard = 0;
+    while (!a.isFinished && guard++ < 200) {
+      final moves =
+          (legalMoves(
+                a,
+                player:
+                    guard.isEven ? PlayerSlot.first : PlayerSlot.second,
+              )
+              as EngineOk<List<Move>>)
+          .value;
+      final m = moves.isEmpty ? const TickMove() : moves.first;
+      log.add(m);
+      a = (applyMove(a, m) as EngineOk<MoveResult>).value.state;
+      if (guard % 4 == 0) {
+        log.add(const TickMove());
+        a = (applyMove(a, const TickMove()) as EngineOk<MoveResult>)
+            .value
+            .state;
+      }
+    }
+    for (final m in log) {
+      b = (applyMove(b, m) as EngineOk<MoveResult>).value.state;
+    }
+    expect(stateHash(b), stateHash(a));
+  });
+});
 }

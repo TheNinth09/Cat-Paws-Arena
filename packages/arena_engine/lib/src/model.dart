@@ -144,6 +144,22 @@ class MatchConfig {
   /// only — the engine never reads a clock. The agreed duel uses `30`.
   final int turnSeconds;
 
+  /// Variant B — Frenzy: both players act on their own boards in real
+  /// time for [matchSeconds] instead of alternating timed turns. When
+  /// `true`, [MatchState.activePlayer] stays [PlayerSlot.first], swaps
+  /// and powers carry an explicit [Move.player], [EndTurnMove] is
+  /// illegal and the clock advances only through [TickMove].
+  final bool simultaneous;
+
+  /// Wall-clock length of a simultaneous match, in seconds. `60` in the
+  /// agreed Frenzy duel; ignored by the turn-based rules.
+  final int matchSeconds;
+
+  /// Countdown threshold (seconds left) at which the Frenzy "Zoomies
+  /// Fever" window begins: every score is doubled and every 3+ match
+  /// creates a special. Ignored by the turn-based rules.
+  final int feverSeconds;
+
   /// Rainbow resolution rule.
   final RainbowRule rainbowRule;
 
@@ -166,6 +182,9 @@ class MatchConfig {
     this.colourCount = 5,
     this.turnsPerPlayer = 3,
     this.turnSeconds = 30,
+    this.simultaneous = false,
+    this.matchSeconds = 0,
+    this.feverSeconds = 0,
     this.rainbowRule = RainbowRule.clearOneColour,
     this.engineVersion = kEngineVersion,
     this.powerConfiguration = PowerRuleset.threeFreeEqual,
@@ -186,11 +205,35 @@ class MatchConfig {
       colourCount = 5,
       turnsPerPlayer = 3,
       turnSeconds = 30,
+      simultaneous = false,
+      matchSeconds = 0,
+      feverSeconds = 0,
       rainbowRule = RainbowRule.clearOneColour,
       engineVersion = kEngineVersion,
       powerConfiguration = PowerRuleset.threeFreeEqual,
       firstPower = PowerKind.zoomies,
       secondPower = PowerKind.zoomies;
+
+  /// The shipped Variant B "Frenzy" duel: 7x7 per-player boards, five
+  /// colours, 60 simultaneous seconds, last 15 s are Zoomies Fever x2.
+  /// [turnsPerPlayer]/[turnSeconds] keep valid classic values but are
+  /// unused by the simultaneous rules.
+  const MatchConfig.frenzy({
+    PowerKind firstPower = PowerKind.zoomies,
+    PowerKind secondPower = PowerKind.zoomies,
+  }) : boardWidth = 7,
+       boardHeight = 7,
+       colourCount = 5,
+       turnsPerPlayer = 1,
+       turnSeconds = 60,
+       simultaneous = true,
+       matchSeconds = 60,
+       feverSeconds = 15,
+       rainbowRule = RainbowRule.clearOneColour,
+       engineVersion = kEngineVersion,
+       powerConfiguration = PowerRuleset.threeFreeEqual,
+       firstPower = firstPower,
+       secondPower = secondPower;
 
   /// Canonical string identifying this configuration, for logs and
   /// cross-checks. Field order is fixed.
@@ -199,6 +242,7 @@ class MatchConfig {
       '${boardWidth}x$boardHeight|'
       'c$colourCount|'
       't$turnsPerPlayer/${turnSeconds}s|'
+      'sim=$simultaneous/${matchSeconds}s/f$feverSeconds|'
       'rainbow:${rainbowRule.name}|'
       'powers:${powerConfiguration.name}|'
       'loadout:${firstPower.name}/${secondPower.name}';
@@ -213,6 +257,9 @@ class MatchConfig {
     'colourCount': colourCount,
     'turnsPerPlayer': turnsPerPlayer,
     'turnSeconds': turnSeconds,
+    'simultaneous': simultaneous,
+    'matchSeconds': matchSeconds,
+    'feverSeconds': feverSeconds,
     'rainbowRule': rainbowRule.name,
     'powerConfiguration': powerConfiguration.name,
     'firstPower': firstPower.name,
@@ -246,6 +293,11 @@ class MatchConfig {
         turnSeconds == null) {
       return null;
     }
+    // Frenzy fields are absent in configs written before Variant B —
+    // they decode as the classic timed-turn rules they were written for.
+    final simultaneous = json['simultaneous'] == true;
+    final matchSeconds = intField('matchSeconds') ?? 0;
+    final feverSeconds = intField('feverSeconds') ?? 0;
     final rainbowRule = RainbowRule.values.asNameMap()[json['rainbowRule']];
     final powerConfiguration = PowerRuleset.values.asNameMap()[
       json['powerConfiguration']
@@ -264,6 +316,9 @@ class MatchConfig {
       colourCount: colourCount,
       turnsPerPlayer: turnsPerPlayer,
       turnSeconds: turnSeconds,
+      simultaneous: simultaneous,
+      matchSeconds: matchSeconds,
+      feverSeconds: feverSeconds,
       rainbowRule: rainbowRule,
       engineVersion: engineVersion,
       powerConfiguration: powerConfiguration,
@@ -280,6 +335,9 @@ class MatchConfig {
       other.colourCount == colourCount &&
       other.turnsPerPlayer == turnsPerPlayer &&
       other.turnSeconds == turnSeconds &&
+      other.simultaneous == simultaneous &&
+      other.matchSeconds == matchSeconds &&
+      other.feverSeconds == feverSeconds &&
       other.rainbowRule == rainbowRule &&
       other.engineVersion == engineVersion &&
       other.powerConfiguration == powerConfiguration &&
@@ -293,6 +351,9 @@ class MatchConfig {
     colourCount,
     turnsPerPlayer,
     turnSeconds,
+    simultaneous,
+    matchSeconds,
+    feverSeconds,
     rainbowRule,
     engineVersion,
     powerConfiguration,
@@ -316,7 +377,14 @@ class MatchConfig {
 /// replace round/move counters, [EndTurnMove] and [TurnEnded] replace
 /// per-move turn consumption and [RoundEnded], powers fire from a shared
 /// 0..100 meter and always queue cardboard boxes.
-const int kEngineVersion = 5;
+///
+/// Version 6: Variant B "Frenzy" — [MatchConfig.simultaneous] adds
+/// per-player boards with real-time play: [Move.player], [TickMove] and
+/// [ClockTicked] advance the 60-second match clock, the last
+/// [MatchConfig.feverSeconds] double every score and turn every 3+
+/// match into a special, and queued obstacles land on the receiver's
+/// next move instead of a turn boundary.
+const int kEngineVersion = 6;
 
 /// Maximum pending obstacles queued for one player. Obstacles earned beyond
 /// this cap are discarded (the oldest queued obstacles are kept).
@@ -342,9 +410,14 @@ const int kPointsPerSpecialCreate = 50;
 
 /// Maximum cardboard boxes one player may earn for the opponent during a
 /// single turn, from every source combined (cascade combos, special
-/// pairs, powers). The pending queue is empty when a turn starts, so the
-/// queue length doubles as the per-turn counter.
+/// pairs, powers). In simultaneous matches the same constant caps the
+/// receiver's pending queue — at most 4 boxes may be in flight.
 const int kMaxObstaclesPerTurn = 4;
+
+/// Score multiplier during the Frenzy "Zoomies Fever" window — the last
+/// [MatchConfig.feverSeconds] of a simultaneous match double every point
+/// source (pieces, boxes, special creations).
+const int kFeverMultiplier = 2;
 
 /// Cardboard boxes every power queues for the opponent. All three powers
 /// are equal strength: same obstacle count, same meter cost.
@@ -441,6 +514,12 @@ class MatchState {
   /// [PlayerSlot.index]. Only that player's board events advance it.
   final List<int> rngState;
 
+  /// Seconds left on the Frenzy match clock. `0` in turn-based matches;
+  /// in simultaneous matches it counts down from
+  /// [MatchConfig.matchSeconds] via [TickMove] and reaching `0` ends the
+  /// match — the engine never reads a wall clock.
+  final int matchSecondsLeft;
+
   /// Final outcome, or `null` while the match is ongoing.
   final MatchOutcome? outcome;
 
@@ -457,6 +536,7 @@ class MatchState {
     required List<List<ObstacleKind>> pendingObstacles,
     required List<int> powerCharge,
     required List<int> rngState,
+    required this.matchSecondsLeft,
     required this.outcome,
   }) : turnsRemaining = List.unmodifiable(turnsRemaining),
        scores = List.unmodifiable(scores),
@@ -479,6 +559,7 @@ class MatchState {
     required List<List<ObstacleKind>> pendingObstacles,
     required List<int> powerCharge,
     required List<int> rngState,
+    int matchSecondsLeft = 0,
     MatchOutcome? outcome,
   }) {
     return MatchState._(
@@ -494,12 +575,22 @@ class MatchState {
       pendingObstacles: pendingObstacles,
       powerCharge: powerCharge,
       rngState: rngState,
+      matchSecondsLeft: matchSecondsLeft,
       outcome: outcome,
     );
   }
 
   /// Whether the match has produced a final outcome.
   bool get isFinished => outcome != null;
+
+  /// Whether the Frenzy "Zoomies Fever" window is live: simultaneous
+  /// match, clock inside the last [MatchConfig.feverSeconds]. Fever
+  /// doubles every score and makes every 3+ match create a special.
+  bool get fever =>
+      config.simultaneous &&
+      !isFinished &&
+      matchSecondsLeft > 0 &&
+      matchSecondsLeft <= config.feverSeconds;
 
   /// Score snapshot as a record.
   ScorePair get scorePair =>
@@ -528,10 +619,18 @@ class MatchState {
       powerCharge[player.index] >= kPowerMeterMax;
 }
 
-/// A player action. The acting player is always [MatchState.activePlayer];
-/// a move never names a player.
+/// A player action. In timed-turn matches the acting player is always
+/// [MatchState.activePlayer] and moves carry no [player]; in
+/// simultaneous (Frenzy) matches there is no active player, so [SwapMove]
+/// and [PowerMove] name their slot explicitly and [TickMove] advances the
+/// shared clock.
 sealed class Move {
   const Move();
+
+  /// The slot this move acts for, or `null` in timed-turn moves where
+  /// [MatchState.activePlayer] decides. [TickMove]/[EndTurnMove] never
+  /// name a player.
+  PlayerSlot? get player => null;
 
   /// Stable JSON-compatible encoding for move logs. No timestamps or object
   /// references; field order is fixed.
@@ -545,15 +644,25 @@ sealed class Move {
       final a = _cellFromJson(json['a']);
       final b = _cellFromJson(json['b']);
       if (a == null || b == null) return null;
-      return SwapMove(firstCell: a, secondCell: b);
+      return SwapMove(
+        firstCell: a,
+        secondCell: b,
+        player: PlayerSlot.values.asNameMap()[json['player']],
+      );
     }
     if (kind == 'power') {
       final power = PowerKind.values.asNameMap()[json['power']];
       if (power == null) return null;
-      return PowerMove(power: power);
+      return PowerMove(
+        power: power,
+        player: PlayerSlot.values.asNameMap()[json['player']],
+      );
     }
     if (kind == 'endTurn') {
       return const EndTurnMove();
+    }
+    if (kind == 'tick') {
+      return const TickMove();
     }
     return null;
   }
@@ -571,43 +680,57 @@ sealed class Move {
 final class SwapMove extends Move {
   final CellPos firstCell;
   final CellPos secondCell;
+  @override
+  final PlayerSlot? player;
 
-  const SwapMove({required this.firstCell, required this.secondCell});
+  const SwapMove({
+    required this.firstCell,
+    required this.secondCell,
+    this.player,
+  });
 
   @override
   Map<String, Object?> toJson() => {
     'kind': 'swap',
     'a': {'row': firstCell.row, 'col': firstCell.col},
     'b': {'row': secondCell.row, 'col': secondCell.col},
+    if (player != null) 'player': player!.name,
   };
 
   @override
   bool operator ==(Object other) =>
       other is SwapMove &&
       other.firstCell == firstCell &&
-      other.secondCell == secondCell;
+      other.secondCell == secondCell &&
+      other.player == player;
 
   @override
-  int get hashCode => Object.hash(firstCell, secondCell);
+  int get hashCode => Object.hash(firstCell, secondCell, player);
 }
 
 /// Fire the acting player's power. [power] must equal the power the
-/// active player's cat brought into the match ([MatchConfig.powerFor]);
+/// acting player's cat brought into the match ([MatchConfig.powerFor]);
 /// the meter must be full ([MatchState.canFirePower]).
 final class PowerMove extends Move {
   final PowerKind power;
+  @override
+  final PlayerSlot? player;
 
-  const PowerMove({required this.power});
+  const PowerMove({required this.power, this.player});
 
   @override
-  Map<String, Object?> toJson() => {'kind': 'power', 'power': power.name};
+  Map<String, Object?> toJson() => {
+    'kind': 'power',
+    'power': power.name,
+    if (player != null) 'player': player!.name,
+  };
 
   @override
   bool operator ==(Object other) =>
-      other is PowerMove && other.power == power;
+      other is PowerMove && other.power == power && other.player == player;
 
   @override
-  int get hashCode => power.hashCode;
+  int get hashCode => Object.hash(power, player);
 }
 
 /// End the current turn early. The 30-second timer is presentation-side;
@@ -621,6 +744,24 @@ final class EndTurnMove extends Move {
 
   @override
   bool operator ==(Object other) => other is EndTurnMove;
+
+  @override
+  int get hashCode => 0;
+}
+
+/// Advance the Frenzy match clock by one second. Legal only in
+/// simultaneous matches; the host ([PlayerSlot.first]) writes ticks into
+/// the shared move log so both replicas count down identically. When
+/// [MatchState.matchSecondsLeft] reaches `0` the match ends and the
+/// higher score wins.
+final class TickMove extends Move {
+  const TickMove();
+
+  @override
+  Map<String, Object?> toJson() => {'kind': 'tick'};
+
+  @override
+  bool operator ==(Object other) => other is TickMove;
 
   @override
   int get hashCode => 0;
@@ -792,6 +933,14 @@ final class TurnEnded extends GameEvent {
   final ScorePair scores;
   final MatchOutcome? outcome;
   const TurnEnded({required this.turn, required this.scores, required this.outcome});
+}
+
+/// One second ticked off the Frenzy match clock by a [TickMove].
+/// [secondsLeft] is the countdown value after the tick; the fever window
+/// starts when it drops to [MatchConfig.feverSeconds].
+final class ClockTicked extends GameEvent {
+  final int secondsLeft;
+  const ClockTicked({required this.secondsLeft});
 }
 
 /// Terminal result with per-player final state hashes.

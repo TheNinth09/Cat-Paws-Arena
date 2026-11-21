@@ -269,6 +269,10 @@ class ArenaMatchController extends ChangeNotifier {
   /// 500 ms ticker driving the turn countdown and auto-end.
   Timer? _turnClock;
 
+  /// 1 s ticker writing [engine.TickMove]s on the authoritative side of
+  /// a Frenzy match (local, or the online host).
+  Timer? _frenzyClock;
+
   /// Paces the house bot's moves inside its turn.
   Timer? _botTimer;
 
@@ -294,6 +298,12 @@ class ArenaMatchController extends ChangeNotifier {
   /// bot always banks its turn even if the clock is stuck (and so a
   /// zero-delay bot in tests can't chain timers forever inside one pump).
   int _botMovesThisTurn = 0;
+
+  /// Slowest cadence the Frenzy bot may play at even with a zero
+  /// [botMoveDelay] test override: one move per 100 ms keeps the duel
+  /// fair and prevents an unending chain of zero-duration timers inside
+  /// a single fake-async pump.
+  static const _frenzyBotFloor = Duration(milliseconds: 100);
 
   // --- online duel state --------------------------------------------------
 
@@ -340,10 +350,29 @@ class ArenaMatchController extends ChangeNotifier {
   /// Seconds left on the current turn's clock (contract: 30 s per turn).
   /// Counts down for whichever side holds the turn; at zero the active
   /// player auto-ends (this client only ever ends its own online turn).
-  int get turnSecondsLeft =>
-      phase == MatchPhase.playing && _turnTicksLeft > 0
-          ? (_turnTicksLeft + 1) ~/ 2
-          : 0;
+  /// In Frenzy matches this reads the shared 60-second match clock.
+  int get turnSecondsLeft => isFrenzy
+      ? matchSecondsLeft
+      : phase == MatchPhase.playing && _turnTicksLeft > 0
+      ? (_turnTicksLeft + 1) ~/ 2
+      : 0;
+
+  /// Whether this duel is a Variant B Frenzy: 60 simultaneous seconds,
+  /// per-player boards, no turns.
+  bool get isFrenzy => _state?.config.simultaneous ?? false;
+
+  /// Seconds left on the shared Frenzy clock (`60 -> 0`).
+  int get matchSecondsLeft =>
+      isEngine && phase == MatchPhase.playing
+          ? _state?.matchSecondsLeft ?? 0
+          : _state?.matchSecondsLeft ?? 0;
+
+  /// Length of a Frenzy match from the config (60 s).
+  int get matchSecondsTotal => _state?.config.matchSeconds ?? 60;
+
+  /// Zoomies Fever: the last [MatchConfig.feverSeconds] double every
+  /// score and turn every 3+ match into a special.
+  bool get isFever => _state?.fever ?? false;
 
   /// The engine turn number currently in play (`1..2*turnsPerPlayer`).
   int get turn => _state?.turn ?? 1;
@@ -357,13 +386,15 @@ class ArenaMatchController extends ChangeNotifier {
   /// Turns per player from the match config (3 in the agreed duel).
   int get turnsPerPlayer => _state?.config.turnsPerPlayer ?? 3;
 
-  /// True while the local player holds the turn.
+  /// True while the local player holds the turn — always true in Frenzy
+  /// (both sides act the whole 60 seconds).
   bool get playerTurn =>
-      isEngine &&
-      _state != null &&
-      !isFlagged &&
-      phase == MatchPhase.playing &&
-      _state!.activePlayer == _localSlot;
+      isFrenzy ||
+      (isEngine &&
+          _state != null &&
+          !isFlagged &&
+          phase == MatchPhase.playing &&
+          _state!.activePlayer == _localSlot);
 
   /// The power this client's cat brought into the match (engine config for
   /// engine duels; the profile pick for the legacy race).
@@ -387,14 +418,15 @@ class ArenaMatchController extends ChangeNotifier {
       isEngine ? _state?.chargeOf(_opponentSlot) ?? 0 : bot.charge;
 
   /// True once the 24-hour slow-play deadline passed and it is the
-  /// opponent's move — the UI may offer [claimForfeit].
+  /// opponent's move — the UI may offer [claimForfeit]. In Frenzy both
+  /// sides always "hold the turn", so the deadline alone decides.
   bool get canClaimForfeit {
     final s = online?.session;
     if (s == null || phase != MatchPhase.playing) return false;
     final deadline = s.deadline;
     return deadline != null &&
         DateTime.now().isAfter(deadline) &&
-        !s.isMyTurn &&
+        (isFrenzy || !s.isMyTurn) &&
         !s.isOver;
   }
 
@@ -427,6 +459,13 @@ class ArenaMatchController extends ChangeNotifier {
     if (phase != MatchPhase.playing || paused || _busy) return false;
     if (!isEngine) return true;
     if (_state == null || _state!.isFinished) return false;
+    if (isFrenzy) {
+      // 60 seconds of open play: our slot may always move. Online, the
+      // only gate is the shared match still running — ticks stream in
+      // constantly, so cursor catch-up would starve input.
+      if (isOnline) return !online!.session.isOver;
+      return true;
+    }
     // The 30 s clock hit zero: playerInput is closed; a cascade already
     // in flight finishes draining, then the turn ends (spec §3).
     if (_turnTicksLeft <= 0) return false;
@@ -447,6 +486,10 @@ class ArenaMatchController extends ChangeNotifier {
     if (phase != MatchPhase.playing || paused) return false;
     if (!isEngine) return true;
     if (_state == null || _state!.isFinished || isFlagged) return false;
+    if (isFrenzy) {
+      if (isOnline) return !online!.session.isOver;
+      return true;
+    }
     // Turn clock expired — no new swaps, even while the last cascade
     // still animates (spec §3).
     if (_turnTicksLeft <= 0) return false;
@@ -464,9 +507,11 @@ class ArenaMatchController extends ChangeNotifier {
   PowerKind? _queuedPower;
 
   /// True while the remote opponent holds the turn or their moves are
-  /// still animating (online duels only).
+  /// still animating (online duels only). Meaningless in Frenzy — both
+  /// sides hold the board at once.
   bool get opponentTurn =>
       isOnline &&
+      !isFrenzy &&
       phase == MatchPhase.playing &&
       _state != null &&
       !isFlagged &&
@@ -519,7 +564,7 @@ class ArenaMatchController extends ChangeNotifier {
   /// A suggested legal swap (flat cell pair) for the tutorial hint.
   (int, int)? get hintSwap {
     if (!tutorialActive || _state == null) return null;
-    final legal = engine.legalMoves(_state!);
+    final legal = engine.legalMoves(_state!, player: _localSlot);
     if (legal is! engine.EngineOk<List<engine.Move>>) return null;
     final w = _state!.config.boardWidth;
     for (final m in legal.value) {
@@ -537,7 +582,7 @@ class ArenaMatchController extends ChangeNotifier {
   @visibleForTesting
   List<(int, int)> get legalSwaps {
     if (!isEngine || _state == null) return const [];
-    final legal = engine.legalMoves(_state!);
+    final legal = engine.legalMoves(_state!, player: _localSlot);
     if (legal is! engine.EngineOk<List<engine.Move>>) return const [];
     final w = _state!.config.boardWidth;
     return [
@@ -562,6 +607,7 @@ class ArenaMatchController extends ChangeNotifier {
     boardSignals.inputEnabled.value = myTurnInput;
     boardSignals.active.value = phase != MatchPhase.finished;
     boardSignals.suspended.value = paused;
+    boardSignals.fever.value = isFever;
     final h = hintSwap;
     boardSignals.hints.value = h == null ? null : {h.$1, h.$2};
   }
@@ -612,7 +658,7 @@ class ArenaMatchController extends ChangeNotifier {
       return;
     }
     _botSeed = _seed ^ 0x5f3759df;
-    final config = engine.MatchConfig(
+    final config = engine.MatchConfig.frenzy(
       firstPower: engine.PowerKind.values[player.power.clamp(0, 2)],
       secondPower: engine.PowerKind.values[_botSeed % 3],
     );
@@ -629,6 +675,9 @@ class ArenaMatchController extends ChangeNotifier {
       phase = MatchPhase.playing;
       _bot = HouseBot(level: botLevel, seed: _botSeed);
       _armTurnClock();
+      // Frenzy: the house cat plays in parallel from second zero — in
+      // timed turns this call is a no-op until the turn flips to it.
+      _maybeBotTurn();
     } else {
       phase = MatchPhase.finished;
       result = 0;
@@ -665,16 +714,42 @@ class ArenaMatchController extends ChangeNotifier {
     refresh();
   }
 
-  /// Arms the 30-second turn clock for the current state and starts the
-  /// shared ticker (local and online engine matches).
+  /// Arms the match clock for the current state: a 60-second Frenzy
+  /// ticker in simultaneous matches, or the 30-second turn clock in
+  /// timed-turn matches.
   void _armTurnClock() {
     final s = _state;
     if (s == null) return;
+    if (s.config.simultaneous) {
+      // The Frenzy countdown lives in the engine — the authoritative
+      // side (local match, or the online host) writes one TickMove per
+      // second into the move log and every replica follows it.
+      _frenzyClock ??= Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _frenzyTick(),
+      );
+      return;
+    }
     _turnKey = '${s.turn}:${s.activePlayer.index}';
     _turnTicksLeft = s.config.turnSeconds * 2;
     _turnClock ??= Timer.periodic(
       const Duration(milliseconds: 500),
       (_) => _turnTick(),
+    );
+  }
+
+  /// Drives the Frenzy match clock. Only the authoritative side writes
+  /// ticks: this phone in a house match, the host (PlayerSlot.first) in
+  /// online duels — guests replay host ticks from the shared log.
+  void _frenzyTick() {
+    if (_disposed || phase != MatchPhase.playing || paused) return;
+    final s = _state;
+    if (s == null || s.isFinished || isFlagged) return;
+    if (isOnline && _localSlot != engine.PlayerSlot.first) return;
+    _applyEngine(
+      const engine.TickMove(),
+      isPlayerMove: true,
+      countMove: false,
     );
   }
 
@@ -760,6 +835,7 @@ class ArenaMatchController extends ChangeNotifier {
         engine.SwapMove(
           firstCell: (row: a ~/ w, col: a % w),
           secondCell: (row: b ~/ w, col: b % w),
+          player: _localSlot,
         ),
         isPlayerMove: true,
       );
@@ -798,6 +874,7 @@ class ArenaMatchController extends ChangeNotifier {
             PowerKind.shadowPounce => engine.PowerKind.shadowPounce,
             PowerKind.laserChase => engine.PowerKind.laserChase,
           },
+          player: _localSlot,
         ),
         isPlayerMove: true,
       );
@@ -819,17 +896,19 @@ class ArenaMatchController extends ChangeNotifier {
 
   /// Ends the current turn early (RENUNTA). The 30 s clock would end it
   /// anyway; this just skips the remaining seconds. Online, the move goes
-  /// through the shared log like any other.
+  /// through the shared log like any other. No-op in Frenzy — there are
+  /// no turns to end.
   void endTurn() {
     if (!acceptingInput) return;
-    if (!isEngine) return;
+    if (!isEngine || isFrenzy) return;
     _applyEngine(const engine.EndTurnMove(), isPlayerMove: true);
   }
 
   /// Test seam: ends whichever side's turn is currently active, exactly
   /// as the turn clock does when it expires — the bot's turn included.
   /// Widget tests use it to drive a full match without waiting out each
-  /// side's timed turn in fake async.
+  /// side's timed turn in fake async. In Frenzy it fast-forwards the
+  /// whole 60-second clock so the match ends immediately.
   void debugEndActiveTurn() {
     final s = _state;
     if (s == null ||
@@ -838,13 +917,28 @@ class ArenaMatchController extends ChangeNotifier {
         isOnline) {
       return;
     }
+    if (isFrenzy) {
+      var guard = s.config.matchSeconds + 2;
+      while (!_state!.isFinished && guard-- > 0) {
+        _applyEngine(
+          const engine.TickMove(),
+          isPlayerMove: true,
+          countMove: false,
+        );
+      }
+      return;
+    }
     _applyEngine(
       const engine.EndTurnMove(),
       isPlayerMove: s.activePlayer == _localSlot,
     );
   }
 
-  void _applyEngine(engine.Move move, {required bool isPlayerMove}) {
+  void _applyEngine(
+    engine.Move move, {
+    required bool isPlayerMove,
+    bool countMove = true,
+  }) {
     if (isOnline && isPlayerMove) {
       unawaited(_playOnline(move));
       return;
@@ -870,6 +964,7 @@ class ArenaMatchController extends ChangeNotifier {
       (res as engine.EngineOk<engine.MoveResult>).value,
       prev,
       isPlayerMove: isPlayerMove,
+      countMove: countMove,
     );
   }
 
@@ -880,14 +975,16 @@ class ArenaMatchController extends ChangeNotifier {
     engine.MoveResult mr,
     engine.MatchState prev, {
     required bool isPlayerMove,
+    bool countMove = true,
   }) {
     _state = mr.state;
     _trackTurn();
     final events = _adapter!.adaptMove(mr, before: prev);
     // Extra-move bonus (Match Masters style): every special this move
-    // created banks +2 s on the active turn's clock — cascades cap at +4 s.
+    // created banks +2 s on the active turn's clock — cascades cap at
+    // +4 s. Turn-clock mechanic only; the Frenzy clock is fixed at 60 s.
     final specials = events.whereType<SpecialCreated>().length;
-    if (specials > 0) {
+    if (specials > 0 && !isFrenzy) {
       final bonus = specials.clamp(0, 2) * 4;
       _turnTicksLeft += bonus;
       bonusSeconds = bonus ~/ 2;
@@ -900,11 +997,11 @@ class ArenaMatchController extends ChangeNotifier {
       });
     }
     final accepted = mr.hashAfter != mr.hashBefore;
-    if (isPlayerMove && accepted) {
+    if (isPlayerMove && accepted && countMove) {
       _playerMoves++;
       _acceptedMoves++;
       if (_playerMoves >= 3) _markTutorialDone();
-    } else if (!isPlayerMove && accepted) {
+    } else if (!isPlayerMove && accepted && countMove) {
       _remoteMoves++;
     }
     _emit(events);
@@ -915,57 +1012,80 @@ class ArenaMatchController extends ChangeNotifier {
     if (!isOnline) _maybeBotTurn();
   }
 
-  /// Paces the house bot through its turn: one move per [_botPace] until
-  /// the clock nearly runs out, then it banks the turn. Re-armed after
-  /// every committed move and after a pause/resume.
+  /// Paces the house bot: in timed turns one move per [_botPace] until
+  /// the clock nearly runs out, then it banks the turn; in Frenzy the
+  /// bot keeps playing its own board for the whole 60 seconds. Re-armed
+  /// after every committed move and after a pause/resume — but an armed
+  /// countdown is never reset, or a fast-swiping player would starve the
+  /// bot forever.
   void _maybeBotTurn() {
-    _botTimer?.cancel();
-    _botTimer = null;
     if (isOnline || _disposed) return;
     final s = _state;
     if (s == null ||
         s.isFinished ||
-        s.activePlayer != engine.PlayerSlot.second ||
+        (!s.config.simultaneous &&
+            s.activePlayer != engine.PlayerSlot.second) ||
         paused) {
+      _botTimer?.cancel();
+      _botTimer = null;
       return;
     }
-    _botTimer = Timer(botMoveDelay ?? _botPace, () async {
+    // A bot timer is already counting down — leave it alone. Re-arming
+    // here (every committed move calls this) would reset the countdown
+    // on each player swipe and the bot would never fire.
+    if (_botTimer != null) return;
+    final pace = botMoveDelay ?? _botPace;
+    _botTimer = Timer(
+      // A zero test delay must not chain zero-duration timers inside a
+      // single fake-async pump — and a frame-speed bot would be unfair
+      // anyway. Frenzy caps the floor at one move per 100 ms.
+      s.config.simultaneous && pace < _frenzyBotFloor ? _frenzyBotFloor : pace,
+      () async {
       _botTimer = null;
       if (_disposed) return;
       final cur = _state;
-      if (cur == null ||
-          cur.isFinished ||
-          cur.activePlayer != engine.PlayerSlot.second) {
-        return;
-      }
+      if (cur == null || cur.isFinished) return;
       if (paused) {
         // Resume re-arms via pause(); nothing to do meanwhile.
         return;
       }
-      // Near the end of its turn the bot banks the turn cleanly instead
-      // of letting the clock auto-expire mid-animation. The 40-move cap
-      // is unreachable at human pacing (~13 s of moves) but guarantees
-      // the bot's timer chain always terminates when the clock stalls.
+      final frenzy = cur.config.simultaneous;
+      if (!frenzy && cur.activePlayer != engine.PlayerSlot.second) {
+        return;
+      }
       final engine.Move move;
-      if (_botMovesThisTurn >= 40 || turnSecondsLeft <= 3) {
+      if (!frenzy && (_botMovesThisTurn >= 40 || turnSecondsLeft <= 3)) {
+        // Near the end of its turn the bot banks the turn cleanly
+        // instead of letting the clock auto-expire mid-animation. The
+        // 40-move cap guarantees the timer chain terminates.
         move = const engine.EndTurnMove();
       } else {
-        move = await _bot!.choose(cur);
-        // choose() yields the event loop between evaluations — the
-        // clock may have ended the turn or the match meanwhile. Never
-        // apply a move computed against a stale state.
-        if (_disposed ||
+        move = await _bot!.choose(
+          cur,
+          player: frenzy ? engine.PlayerSlot.second : null,
+        );
+        // choose() yields the event loop between evaluations. Never
+        // apply a move computed against a stale state: in timed turns
+        // the state identity must not have moved on; in Frenzy the
+        // bot's own board is untouched by the player's moves, so only
+        // finish/pause/dispose gates matter — an obsolete swap is
+        // simply rejected by the engine if boxes landed on it.
+        final stale =
+            _disposed ||
             paused ||
-            !identical(_state, cur) ||
-            cur.isFinished ||
-            cur.activePlayer != engine.PlayerSlot.second) {
+            _state == null ||
+            _state!.isFinished ||
+            (!frenzy &&
+                (!identical(_state, cur) ||
+                    cur.activePlayer != engine.PlayerSlot.second));
+        if (stale) {
           if (!_disposed) _maybeBotTurn();
           return;
         }
         _botMovesThisTurn++;
       }
       _applyEngine(move, isPlayerMove: false);
-      // _commitEngineMove re-arms the next step, or the turn flips back.
+      // _commitEngineMove re-arms the next step, or the match ends.
     });
   }
 
@@ -1134,6 +1254,7 @@ class ArenaMatchController extends ChangeNotifier {
     _clock?.cancel();
     _pollTimer?.cancel();
     _turnClock?.cancel();
+    _frenzyClock?.cancel();
     _botTimer?.cancel();
     _bonusTimer?.cancel();
     _busy = false;
@@ -1150,6 +1271,7 @@ class ArenaMatchController extends ChangeNotifier {
     _pollTimer?.cancel();
     _clock?.cancel();
     _turnClock?.cancel();
+    _frenzyClock?.cancel();
     _botTimer?.cancel();
     _bonusTimer?.cancel();
     _busy = false;
@@ -1277,6 +1399,7 @@ class ArenaMatchController extends ChangeNotifier {
     _clock?.cancel();
     _pollTimer?.cancel();
     _turnClock?.cancel();
+    _frenzyClock?.cancel();
     _botTimer?.cancel();
     _bonusTimer?.cancel();
     _busy = false;
@@ -1357,6 +1480,7 @@ class ArenaMatchController extends ChangeNotifier {
     _search?.cancel();
     _clock?.cancel();
     _turnClock?.cancel();
+    _frenzyClock?.cancel();
     _botTimer?.cancel();
     _bonusTimer?.cancel();
     _turnKey = null;
@@ -1393,6 +1517,7 @@ class ArenaMatchController extends ChangeNotifier {
     _search?.cancel();
     _clock?.cancel();
     _turnClock?.cancel();
+    _frenzyClock?.cancel();
     _botTimer?.cancel();
     _bonusTimer?.cancel();
     _busy = false;
@@ -1410,6 +1535,7 @@ class ArenaMatchController extends ChangeNotifier {
     _clock?.cancel();
     _pollTimer?.cancel();
     _turnClock?.cancel();
+    _frenzyClock?.cancel();
     _botTimer?.cancel();
     _bonusTimer?.cancel();
     _settleTimer?.cancel();

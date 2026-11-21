@@ -66,6 +66,10 @@ class BoardSignals {
   final active = ValueNotifier<bool>(true);
   final suspended = ValueNotifier<bool>(false);
   final hints = ValueNotifier<Set<int>?>(null);
+
+  /// Zoomies Fever (the last seconds of a Frenzy match): the VFX overlay
+  /// reads this for the golden fire frame around the board.
+  final fever = ValueNotifier<bool>(false);
 }
 
 /// Presentation-only board. It renders a [BoardSnapshot] and animates the

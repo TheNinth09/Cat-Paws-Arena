@@ -27,8 +27,13 @@ class HouseBot {
   /// accrues so frames keep rendering while the bot thinks. The pick
   /// order and RNG consumption are unchanged, so results stay
   /// deterministic per [seed].
-  Future<engine.Move> choose(engine.MatchState state) async {
-    final legal = engine.legalMoves(state);
+  /// [player] tells simultaneous matches which side's board to plan on;
+  /// timed-turn matches ignore it (the active player is implied).
+  Future<engine.Move> choose(
+    engine.MatchState state, {
+    engine.PlayerSlot? player,
+  }) async {
+    final legal = engine.legalMoves(state, player: player);
     if (legal is! engine.EngineOk<List<engine.Move>>) {
       // The engine guarantees EndTurnMove exists while the match runs;
       // this is only a defensive fallback.
@@ -46,10 +51,11 @@ class HouseBot {
     }
     var best = playable.first;
     var bestScore = -1e18;
+    final slot = player ?? state.activePlayer;
     final clock = Stopwatch()..start();
     var sliceStart = 0;
     for (final m in playable) {
-      final s = _evaluate(state, m);
+      final s = _evaluate(state, m, slot);
       if (s > bestScore || (s == bestScore && _rng.nextBool())) {
         bestScore = s;
         best = m;
@@ -62,11 +68,14 @@ class HouseBot {
     return best;
   }
 
-  double _evaluate(engine.MatchState state, engine.Move move) {
+  double _evaluate(
+    engine.MatchState state,
+    engine.Move move,
+    engine.PlayerSlot slot,
+  ) {
     final res = engine.applyMove(state, move);
     if (res is! engine.EngineOk<engine.MoveResult>) return -1e17;
     final next = res.value.state;
-    final slot = state.activePlayer;
     final scoreDelta = next.scoreOf(slot) - state.scoreOf(slot);
     if (level == 1) return scoreDelta.toDouble();
     final chargeDelta = next.chargeOf(slot) - state.chargeOf(slot);

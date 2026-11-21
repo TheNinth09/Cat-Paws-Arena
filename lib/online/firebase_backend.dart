@@ -248,7 +248,7 @@ class FirestoreCloudStore implements CloudStore, MatchStore {
             'guestUid': guestUid,
             'createdAt': FieldValue.serverTimestamp(),
             'seed': Random.secure().nextInt(1 << 31),
-            'config': MatchConfig(
+            'config': MatchConfig.frenzy(
               firstPower: PowerKind.values[room.power.clamp(0, 2)],
               secondPower: PowerKind.values[power.clamp(0, 2)],
             ).fingerprint,

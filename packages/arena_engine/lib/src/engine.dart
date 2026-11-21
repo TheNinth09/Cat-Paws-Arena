@@ -37,8 +37,8 @@ EngineResult<MatchState> newMatch(int seed, MatchConfig config) {
       turn: 1,
       activePlayer: PlayerSlot.first,
       turnsRemaining: [
-        config.turnsPerPlayer,
-        config.turnsPerPlayer,
+        config.simultaneous ? 0 : config.turnsPerPlayer,
+        config.simultaneous ? 0 : config.turnsPerPlayer,
       ],
       turnMoves: 0,
       scores: [0, 0],
@@ -52,36 +52,54 @@ EngineResult<MatchState> newMatch(int seed, MatchConfig config) {
         GameRandom(GameRandom.deriveSeed(seed, ['fx', 0])).state,
         GameRandom(GameRandom.deriveSeed(seed, ['fx', 1])).state,
       ],
+      matchSecondsLeft: config.simultaneous ? config.matchSeconds : 0,
     ),
   );
 }
 
-/// All currently legal moves for [MatchState.activePlayer].
+/// All currently legal moves for [MatchState.activePlayer] — or, in
+/// simultaneous matches, for [player] (required to enumerate a specific
+/// side; defaults to [PlayerSlot.first]).
 ///
-/// Does not mutate state or consume randomness. Always includes
-/// [EndTurnMove] — turns end only through it. Swaps are the productive
-/// adjacent pairs; a [PowerMove] appears only when the meter is full and
-/// names the power the active player's cat brought into the match.
-EngineResult<List<Move>> legalMoves(MatchState state) {
+/// Does not mutate state or consume randomness. Timed-turn matches always
+/// include [EndTurnMove] — turns end only through it. Frenzy matches
+/// include only [player]-tagged swaps and a [PowerMove] when the meter
+/// is full; the clock moves exclusively through [TickMove].
+EngineResult<List<Move>> legalMoves(MatchState state, {PlayerSlot? player}) {
   if (state.isFinished) return const EngineOk([]);
-  final slot = state.activePlayer;
+  final simultaneous = state.config.simultaneous;
+  final slot = simultaneous ? (player ?? PlayerSlot.first) : state.activePlayer;
   final board = MutableBoard.fromState(state.boardOf(slot));
   final pairs = legalSwapPairs(board);
   final w = board.width;
   CellPos pos(int index) => (row: index ~/ w, col: index % w);
   final moves = <Move>[
     for (final (a, b) in pairs)
-      SwapMove(firstCell: pos(a), secondCell: pos(b)),
+      SwapMove(
+        firstCell: pos(a),
+        secondCell: pos(b),
+        player: simultaneous ? slot : null,
+      ),
   ];
   if (state.canFirePower(slot)) {
-    moves.add(PowerMove(power: state.config.powerFor(slot)));
+    moves.add(
+      PowerMove(
+        power: state.config.powerFor(slot),
+        player: simultaneous ? slot : null,
+      ),
+    );
   }
-  moves.add(const EndTurnMove());
+  if (!simultaneous) moves.add(const EndTurnMove());
   return EngineOk(List<Move>.unmodifiable(moves));
 }
 
-/// Applies [move] for the active player, returning the new state and the
-/// ordered events produced by the transition.
+/// Applies [move], returning the new state and the ordered events
+/// produced by the transition.
+///
+/// Timed-turn moves act for [MatchState.activePlayer]; a move that
+/// names a different [Move.player] is rejected. Simultaneous swaps and
+/// powers act for their tagged player on that player's own board, and
+/// [TickMove] runs the shared 60-second clock down.
 ///
 /// A well-formed swap that creates no match and involves no special piece
 /// is explicitly rejected: the result is [EngineOk] with unchanged state,
@@ -94,17 +112,67 @@ EngineResult<MoveResult> applyMove(MatchState state, Move move) {
       EngineError(EngineErrorCode.matchFinished, 'match already ended'),
     );
   }
-  final slot = state.activePlayer;
+  final simultaneous = state.config.simultaneous;
   final hashBefore = stateHash(state);
 
   switch (move) {
-    case SwapMove():
-      return _applySwap(state, move, slot, hashBefore);
-    case PowerMove():
-      return _applyPower(state, move, slot, hashBefore);
+    case TickMove():
+      if (!simultaneous) {
+        return const EngineFailure(
+          EngineError(
+            EngineErrorCode.invalidMove,
+            'tick outside a simultaneous match',
+          ),
+        );
+      }
+      return _applyTick(state, hashBefore);
     case EndTurnMove():
-      return _applyEndTurn(state, slot, hashBefore);
+      if (simultaneous) {
+        return const EngineFailure(
+          EngineError(
+            EngineErrorCode.invalidMove,
+            'end-turn outside a timed-turn match',
+          ),
+        );
+      }
+      return _applyEndTurn(state, state.activePlayer, hashBefore);
+    case SwapMove() || PowerMove():
+      final slot = move.player ?? state.activePlayer;
+      if (!simultaneous && slot != state.activePlayer) {
+        return const EngineFailure(
+          EngineError(
+            EngineErrorCode.invalidMove,
+            'move names a player who is not active',
+          ),
+        );
+      }
+      return switch (move) {
+        SwapMove() => _applySwap(state, move, slot, hashBefore),
+        PowerMove() => _applyPower(state, move, slot, hashBefore),
+        _ => _invalidMove('unreachable'),
+      };
   }
+}
+
+/// One second off the Frenzy clock: emits [ClockTicked], and at zero
+/// settles the match on the higher score (equal scores draw).
+EngineResult<MoveResult> _applyTick(MatchState state, String hashBefore) {
+  final work = _Work.fromState(state);
+  work.matchSecondsLeft--;
+  if (work.matchSecondsLeft <= 0) {
+    work.matchSecondsLeft = 0;
+    work.outcome =
+        work.scores[0] > work.scores[1]
+            ? MatchOutcome.firstWins
+            : work.scores[1] > work.scores[0]
+            ? MatchOutcome.secondWins
+            : MatchOutcome.draw;
+    // Obstacles still queued have no next move and are discarded.
+    work.pending[0].clear();
+    work.pending[1].clear();
+  }
+  work.events.add(ClockTicked(secondsLeft: work.matchSecondsLeft));
+  return _result(work, hashBefore);
 }
 
 EngineResult<MoveResult> _applySwap(
@@ -228,6 +296,7 @@ EngineResult<MoveResult> _applySwap(
   }
   _resolveMatches(work, slot);
   _ensureLegalMove(work, slot);
+  _deliverObstacles(work, slot);
 
   return _result(work, hashBefore);
 }
@@ -277,8 +346,22 @@ EngineResult<MoveResult> _applyPower(
   );
   _resolveMatches(work, slot);
   _ensureLegalMove(work, slot);
+  _deliverObstacles(work, slot);
 
   return _result(work, hashBefore);
+}
+
+/// In simultaneous matches, delivers [slot]'s queued sabotage boxes onto
+/// their own board right after their move resolves — the real-time
+/// equivalent of "lands at the start of your next turn". No-op in
+/// timed-turn matches (turn boundaries handle delivery there).
+void _deliverObstacles(_Work work, PlayerSlot slot) {
+  if (!work.config.simultaneous) return;
+  if (work.pending[slot.index].isEmpty) return;
+  _landObstacles(work, slot);
+  work.pending[slot.index].clear();
+  // Fresh boxes may have eaten the last legal move.
+  _ensureLegalMove(work, slot);
 }
 
 /// Ends the active player's turn early: emits [TurnEnded], consumes one
@@ -373,6 +456,7 @@ class _Work {
   final List<List<ObstacleKind>> pending;
   final List<int> powerCharge;
   final List<int> rngState;
+  int matchSecondsLeft;
   MatchOutcome? outcome;
   final List<GameEvent> events = <GameEvent>[];
 
@@ -388,14 +472,20 @@ class _Work {
     required this.pending,
     required this.powerCharge,
     required this.rngState,
+    required this.matchSecondsLeft,
     required this.outcome,
   });
 
   factory _Work.fromState(MatchState s) {
-    // Shared board: both players act on the same 7×7 board, alternating
-    // turns. `newMatch` already seeds identical boards for both slots, so
-    // sharing one mutable instance keeps replays deterministic.
-    final shared = MutableBoard.fromState(s.boards.first);
+    // Timed turns share one 7×7 board: `newMatch` already seeds identical
+    // boards for both slots, so sharing one mutable instance keeps replays
+    // deterministic. Simultaneous matches give every slot their own
+    // board — each player's moves resolve on their side only.
+    final boards =
+        s.config.simultaneous
+            ? [for (final b in s.boards) MutableBoard.fromState(b)]
+            : [MutableBoard.fromState(s.boards.first)];
+    final shared = boards.length == 1 ? [boards[0], boards[0]] : boards;
     return _Work._(
       seed: s.seed,
       config: s.config,
@@ -404,10 +494,11 @@ class _Work {
       turnsRemaining: List<int>.of(s.turnsRemaining),
       turnMoves: s.turnMoves,
       scores: List<int>.of(s.scores),
-      boards: [shared, shared],
+      boards: shared,
       pending: [for (final q in s.pendingObstacles) List<ObstacleKind>.of(q)],
       powerCharge: List<int>.of(s.powerCharge),
       rngState: List<int>.of(s.rngState),
+      matchSecondsLeft: s.matchSecondsLeft,
       outcome: s.outcome,
     );
   }
@@ -423,6 +514,16 @@ class _Work {
     second: scores[PlayerSlot.second.index],
   );
 
+  /// Whether the Zoomies Fever window is live while this transition
+  /// resolves — doubles scores and upgrades 3-matches into specials.
+  bool get fever =>
+      config.simultaneous &&
+      matchSecondsLeft > 0 &&
+      matchSecondsLeft <= config.feverSeconds;
+
+  /// Multiplier for every point source during fever — `1` otherwise.
+  int get pointsMultiplier => fever ? kFeverMultiplier : 1;
+
   MatchState freeze() => MatchState.create(
     seed: seed,
     config: config,
@@ -435,6 +536,7 @@ class _Work {
     pendingObstacles: pending,
     powerCharge: powerCharge,
     rngState: rngState,
+    matchSecondsLeft: matchSecondsLeft,
     outcome: outcome,
   );
 }
@@ -466,6 +568,15 @@ EngineError? _validateConfig(MatchConfig config) {
     return const EngineError(
       EngineErrorCode.invalidConfig,
       'config violates engine constraints',
+    );
+  }
+  if (config.simultaneous &&
+      (config.matchSeconds < 10 ||
+          config.feverSeconds < 0 ||
+          config.feverSeconds >= config.matchSeconds)) {
+    return const EngineError(
+      EngineErrorCode.invalidConfig,
+      'simultaneous config violates engine constraints',
     );
   }
   return null;
@@ -515,14 +626,15 @@ Set<int> _removePieceCells(
     }
   }
   if (adjacentBoxes > 0) {
-    work.scores[slot.index] += adjacentBoxes * kPointsPerBox;
+    work.scores[slot.index] +=
+        adjacentBoxes * kPointsPerBox * work.pointsMultiplier;
   }
   if (broken.isNotEmpty) {
     work.events.add(
       ObstacleBroken(
         player: slot,
         cells: _posList(w, broken.toList()),
-        points: adjacentBoxes * kPointsPerBox,
+        points: adjacentBoxes * kPointsPerBox * work.pointsMultiplier,
       ),
     );
   }
@@ -723,7 +835,11 @@ void _fireSwapSpecials(_Work work, PlayerSlot slot, int first, int second) {
       points += isBoxCode(scratch[j]) ? kPointsPerBox : kPointsPerPiece;
       scratch[j] = kCellEmpty;
     }
-    fired.add((_specialKindOf(base), effect, points));
+    fired.add((
+      _specialKindOf(base),
+      effect,
+      points * work.pointsMultiplier,
+    ));
   }
   if (fired.isEmpty) {
     work.storeRng(slot, rng);
@@ -923,6 +1039,7 @@ void _fireCombo(_Work work, PlayerSlot slot, int first, int second) {
     points += isBoxCode(scratch[j]) ? kPointsPerBox : kPointsPerPiece;
     scratch[j] = kCellEmpty;
   }
+  points *= work.pointsMultiplier;
   board.cells.setAll(0, scratch);
   final sorted = cells.toList()..sort();
   work.events.add(
@@ -1012,6 +1129,17 @@ void _resolveMatches(_Work work, PlayerSlot slot) {
           code = specialCode(kLineRow, g.colour);
           orient = LineOrientation.row;
         }
+      } else if (work.fever && g.cells.length == 3) {
+        // Zoomies Fever: even a plain 3-match pays out a line special —
+        // the middle cell survives as the anchor while both ends clear.
+        anchor = g.cells[1];
+        if (g.isStraightHorizontal) {
+          code = specialCode(kLineColumn, g.colour);
+          orient = LineOrientation.column;
+        } else {
+          code = specialCode(kLineRow, g.colour);
+          orient = LineOrientation.row;
+        }
       } else {
         continue;
       }
@@ -1027,9 +1155,11 @@ void _resolveMatches(_Work work, PlayerSlot slot) {
     final sorted = matched.toList()..sort();
     // Cascade multiplier: wave 0 pays x1.0, each chained wave +0.5x.
     // Special creations add a flat kPointsPerSpecialCreate bonus.
+    // Fever doubles the whole bundle.
     final points =
-        sorted.length * kPointsPerPiece * (2 + wave) ~/ 2 +
-        creations.length * kPointsPerSpecialCreate;
+        (sorted.length * kPointsPerPiece * (2 + wave) ~/ 2 +
+            creations.length * kPointsPerSpecialCreate) *
+        work.pointsMultiplier;
     work.events.add(
       Cleared(player: slot, cells: _posList(w, sorted), points: points),
     );
@@ -1091,7 +1221,11 @@ void _fireBoardSpecials(_Work work, PlayerSlot slot, List<int> indices) {
       points += isBoxCode(scratch[j]) ? kPointsPerBox : kPointsPerPiece;
       scratch[j] = kCellEmpty;
     }
-    fired.add((_specialKindOf(base), effect, points));
+    fired.add((
+      _specialKindOf(base),
+      effect,
+      points * work.pointsMultiplier,
+    ));
   }
   if (fired.isEmpty) {
     work.storeRng(slot, rng);
@@ -1305,7 +1439,8 @@ void _powerShadowPounce(_Work work, PlayerSlot slot) {
     }
   }
   final sorted = cells.toList()..sort();
-  final pouncePoints = _pointsFor(board.cells, sorted);
+  final pouncePoints =
+      _pointsFor(board.cells, sorted) * work.pointsMultiplier;
   work.events.add(
     PowerFired(
       player: slot,
@@ -1365,7 +1500,8 @@ void _powerLaserChase(_Work work, PlayerSlot slot) {
     }
   }
   final sorted = cells.toList()..sort();
-  final laserPoints = _pointsFor(board.cells, sorted);
+  final laserPoints =
+      _pointsFor(board.cells, sorted) * work.pointsMultiplier;
   work.events.add(
     PowerFired(
       player: slot,
@@ -1471,6 +1607,7 @@ String _stateCanonical(MatchState s) => [
   'active=${s.activePlayer.name}',
   'turnsLeft=${s.turnsRemaining.join(',')}',
   'turnMoves=${s.turnMoves}',
+  'matchLeft=${s.matchSecondsLeft}',
   'scores=${s.scores.join(',')}',
   'charge=${s.powerCharge.join(',')}',
   'rng=${s.rngState.join(',')}',
@@ -1495,6 +1632,7 @@ String playerHash(MatchState state, PlayerSlot player) {
     'config=${state.config.fingerprint}',
     'player=${player.name}',
     'turn=${state.turn}',
+    'matchLeft=${state.matchSecondsLeft}',
     'turnsLeft=${state.turnsRemaining[i]}',
     'score=${state.scores[i]}',
     'charge=${state.powerCharge[i]}',

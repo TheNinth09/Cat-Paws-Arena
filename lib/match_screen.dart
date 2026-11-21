@@ -18,6 +18,8 @@ import 'ui_widgets.dart';
 import 'vs_screen.dart';
 import 'widgets/battle_hud.dart';
 import 'widgets/board_vfx_overlay.dart';
+import 'widgets/frenzy_tug_of_war_hud.dart';
+import 'widgets/frenzy_vfx_overlay.dart';
 
 /// Compile-time switch for the frame-time profiling overlay. Build a release
 /// APK/AAB with `--dart-define=CPA_FRAME_PROBE=true` to profile on device.
@@ -109,6 +111,7 @@ class _MatchScreenState extends State<MatchScreen>
   late final DuelAudio _audio;
   late final DuelMusic _music;
   final _vfx = BoardVfxController();
+  final _frenzyVfx = FrenzyVfxController();
   int _lastCountdown = -1;
   late final AnimationController _momentFx;
   final _boardKey = GlobalKey<BoardViewState>();
@@ -120,14 +123,6 @@ class _MatchScreenState extends State<MatchScreen>
   bool showingDialog = false;
   PowerKind? _momentPower;
   Player get p => widget.player;
-  int get power {
-    final raw = p.cat == 'Tzuki'
-        ? 0
-        : p.cat == 'Bubble'
-        ? 1
-        : p.power;
-    return raw >= 0 && raw < powers.length ? raw : 0;
-  }
 
   int get modeIndex =>
       widget.mode >= 0 && widget.mode < modeNames.length ? widget.mode : 0;
@@ -201,6 +196,7 @@ class _MatchScreenState extends State<MatchScreen>
     fx.dispose();
     _momentFx.dispose();
     _vfx.dispose();
+    _frenzyVfx.dispose();
     _audio.dispose();
     p.removeListener(_music.sync);
     match.removeListener(_matchListener);
@@ -229,7 +225,9 @@ class _MatchScreenState extends State<MatchScreen>
   void _onBoardEvent(BoardEvent event) {
     _audio.play(event);
     _emitVfx(event);
-    if (event is PowerFired) {
+    // The full-screen power moment is skipped in Frenzy — it would eat
+    // swipes during real-time play; the overlay VFX carries the show.
+    if (event is PowerFired && !match.isFrenzy) {
       setState(() => _momentPower = event.power);
       _momentFx.forward(from: 0);
     }
@@ -285,6 +283,37 @@ class _MatchScreenState extends State<MatchScreen>
           ),
           shake: kind == SpecialKind.bomb ? 0.5 : 0.25,
         );
+        if (match.isFrenzy) {
+          // The Frenzy overlay paints the spectacular layer: rockets
+          // streak, bombs/copters shockwave, the rainbow vortex swirls.
+          final nc = Offset((c.dx + 0.5) / 7, (c.dy + 0.5) / 7);
+          switch (kind) {
+            case SpecialKind.lineHorizontal:
+              _frenzyVfx.spawnVfx(
+                type: CatPowerVfxType.rocketBlast,
+                normalizedCenter: nc,
+              );
+            case SpecialKind.lineVertical:
+              _frenzyVfx.spawnVfx(
+                type: CatPowerVfxType.rocketBlast,
+                normalizedCenter: nc,
+                horizontal: false,
+              );
+            case SpecialKind.bomb || SpecialKind.copter:
+              _frenzyVfx.spawnVfx(
+                type: CatPowerVfxType.bombShockwave,
+                normalizedCenter: nc,
+              );
+            case SpecialKind.rainbow:
+              _frenzyVfx.spawnVfx(
+                type: CatPowerVfxType.zoomies,
+                normalizedCenter: nc,
+                durationSec: 0.8,
+              );
+            case SpecialKind.none:
+              break;
+          }
+        }
       case ObstacleBroken(:final cells, :final points):
         for (final i in cells.take(6)) {
           _vfx.emit(
@@ -322,6 +351,32 @@ class _MatchScreenState extends State<MatchScreen>
           ),
           shake: 0.4,
         );
+        if (match.isFrenzy) {
+          // Equipped-power VFX: Zoomies vortex / Shadow Pounce claws /
+          // Laser Chase beam — mirrored on the Frenzy overlay layer.
+          final nc = Offset((c.dx + 0.5) / 7, (c.dy + 0.5) / 7);
+          _frenzyVfx.spawnVfx(
+            type: switch (power) {
+              PowerKind.zoomies => CatPowerVfxType.zoomies,
+              PowerKind.shadowPounce => CatPowerVfxType.shadowPounce,
+              PowerKind.laserChase => CatPowerVfxType.laserChase,
+            },
+            normalizedCenter: nc,
+            durationSec: 0.8,
+          );
+        }
+      case ObstacleQueued(:final player) when match.isFrenzy:
+        // Combo sabotage: the engine event names the RECEIVER, so boxes
+        // aimed at the opponent are the ones we earned — those arc off
+        // the board toward the rival avatar (ours only bump the HUD
+        // incoming counter).
+        if (player == PlayerSlot.second) {
+          _frenzyVfx.spawnVfx(
+            type: CatPowerVfxType.boxFlight,
+            normalizedCenter: const Offset(0.5, 0.45),
+            durationSec: 0.7,
+          );
+        }
       case Shuffled():
         _vfx.emit(
           BoardVfxEvent(
@@ -623,7 +678,28 @@ class _MatchScreenState extends State<MatchScreen>
   /// plate) flanking the turn banner, the clock and the round badge.
   /// The active side's ring glows — gold for the player, blue for the
   /// opponent; the opponent plate carries the sabotage `xN` badge.
+  /// Frenzy matches swap this for the tug-of-war HUD: central 60 s
+  /// countdown, live territory bar and incoming-box counters.
   Widget _battleTopHud() {
+    if (match.isFrenzy) {
+      return FrenzyTugOfWarHud(
+        playerName: p.name,
+        playerAvatar: catPortrait(p.cat, size: 52),
+        playerScore: match.playerScore,
+        playerSabotageIncoming: match.incomingObstacles.length,
+        playerEmote: emote.isEmpty ? null : _EmoteBubble(emote),
+        opponentName: match.botName,
+        opponentAvatar: _opponentAvatar(52),
+        opponentScore: match.botScore,
+        opponentSabotageIncoming: match.outgoingObstacles,
+        opponentEmote:
+            opponentEmote.isEmpty ? null : _EmoteBubble(opponentEmote),
+        secondsRemaining: match.matchSecondsLeft,
+        isFeverMode: match.isFever,
+        onSettingsTap: _pauseMenu,
+        onOpponentTap: _opponentDetails,
+      );
+    }
     final yourTurn = match.playerTurn;
     final enginePlaying = match.isEngine && match.phase == MatchPhase.playing;
     final seconds = match.isEngine ? match.turnSecondsLeft : match.remaining;
@@ -805,12 +881,19 @@ class _MatchScreenState extends State<MatchScreen>
   /// a suggested swap on the board.
   Widget _tutorialOverlay() {
     if (!match.tutorialActive) return const SizedBox.shrink();
-    final texts = [
-      'Prima ta luptă! Ai 30 de secunde pe rând — tura se termină singură.',
-      'Schimbă două piese alăturate de aceeași culoare. Urmează indicatorul auriu!',
-      'Piesele cu auriu sunt speciale — trage-le peste ORICE piesă vecină ca să detoneze!',
-      'Când bara de putere e plină, atinge-o ca s-o declanșezi!',
-    ];
+    final texts = match.isFrenzy
+        ? const [
+            'Prima ta luptă FRENZY! 60 de secunde — muți non-stop, fără ture!',
+            'Schimbă două piese alăturate de aceeași culoare. Urmează indicatorul auriu!',
+            'Piesele cu auriu sunt speciale — trage-le peste ORICE piesă vecină ca să detoneze!',
+            'Combo-urile trimit cutii pe tabla rivalului. Când bara de putere e plină, ACTIVEAZĂ!',
+          ]
+        : const [
+            'Prima ta luptă! Ai 30 de secunde pe rând — tura se termină singură.',
+            'Schimbă două piese alăturate de aceeași culoare. Urmează indicatorul auriu!',
+            'Piesele cu auriu sunt speciale — trage-le peste ORICE piesă vecină ca să detoneze!',
+            'Când bara de putere e plină, atinge-o ca s-o declanșezi!',
+          ];
     final text = texts[match.playerMoves.clamp(0, texts.length - 1)];
     // In-flow coach mark between the HUD and the board — it never sits
     // over the 7×7 cells and never eats a button.
@@ -880,6 +963,16 @@ class _MatchScreenState extends State<MatchScreen>
           Positioned.fill(
             child: BoardVfxOverlay(controller: _vfx),
           ),
+          // Frenzy layer: power VFX (vortex, claws, laser), special
+          // detonations, the sabotage box flight and the Fever flame
+          // frame — its own RepaintBoundary + capped at 8 effects.
+          if (match.isFrenzy)
+            Positioned.fill(
+              child: FrenzyVfxOverlay(
+                controller: _frenzyVfx,
+                fever: match.boardSignals.fever,
+              ),
+            ),
         ],
       ),
     );
@@ -1043,7 +1136,7 @@ class _MatchScreenState extends State<MatchScreen>
                   const SizedBox(height: 2),
                   label(
                     'vs ${match.botName} (${match.isOnline ? 'PRIETEN' : 'BOT'}) • '
-                    '${match.turnsPerPlayer} turnuri',
+                    '${match.isFrenzy ? 'FRENZY 60s' : '${match.turnsPerPlayer} turnuri'}',
                     size: 12,
                     color: _muted,
                   ),

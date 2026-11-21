@@ -32,14 +32,20 @@ EngineResult<SyncHashes> initialSyncHashes(int seed, MatchConfig config) {
   return EngineOk(syncHashes((res as EngineOk<MatchState>).value));
 }
 
-/// Whether [move] is currently legal for [MatchState.activePlayer].
+/// Whether [move] is currently legal — for [MatchState.activePlayer] in
+/// timed-turn matches, or for [player] (default: the move's own
+/// [Move.player]) in simultaneous matches.
 ///
 /// Membership check against [legalMoves] (which never mutates state or
 /// consumes randomness). Note a well-formed but non-productive swap is
 /// NOT in the legal set even though [applyMove] accepts it with a
 /// [SwapRejected] event — use [applyMove] when the distinction matters.
-EngineResult<bool> isLegalMove(MatchState state, Move move) {
-  final legal = legalMoves(state);
+EngineResult<bool> isLegalMove(
+  MatchState state,
+  Move move, {
+  PlayerSlot? player,
+}) {
+  final legal = legalMoves(state, player: player ?? move.player);
   if (legal is EngineFailure<List<Move>>) return EngineFailure(legal.error);
   return EngineOk((legal as EngineOk<List<Move>>).value.contains(move));
 }
@@ -263,7 +269,10 @@ EngineResult<LogSummary> summarizeLog(
       );
     }
     final turn = state.turn;
-    final player = state.activePlayer;
+    // Simultaneous moves name their own player; timed-turn moves take
+    // the active slot, so a turn-ending move still counts toward the
+    // turn that produced it.
+    final player = entry.move.player ?? state.activePlayer;
     final applied = _applyEntry(state, entry, i);
     if (applied is EngineFailure<_Step>) return EngineFailure(applied.error);
     final step = (applied as EngineOk<_Step>).value;

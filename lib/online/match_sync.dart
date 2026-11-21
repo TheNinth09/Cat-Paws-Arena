@@ -16,7 +16,7 @@ class MatchSession {
 
   /// The duel config for [record]'s agreed power loadout. Both phones must
   /// derive the same config or their hashes diverge.
-  static MatchConfig configFor(MatchRecord record) => MatchConfig(
+  static MatchConfig configFor(MatchRecord record) => MatchConfig.frenzy(
     firstPower: PowerKind.values[record.power1.clamp(0, 2)],
     secondPower: PowerKind.values[record.power2.clamp(0, 2)],
   );
@@ -67,50 +67,70 @@ class MatchSession {
   int get movesApplied => _applied;
   MatchFlag? get flag => _flag;
   bool get isOver => _state.outcome != null || record.forfeitWinner != null;
-  bool get isMyTurn => _flag == null && !isOver && _state.activePlayer == slot;
+  /// Timed-turn matches gate input on the active player. In simultaneous
+  /// matches both sides may always play while the match runs — moves
+  /// carry their own [Move.player].
+  bool get isMyTurn =>
+      _flag == null &&
+      !isOver &&
+      (_state.config.simultaneous || _state.activePlayer == slot);
 
   /// Server time of the last move; the slow-play limit runs from here.
   DateTime? get lastMoveAt => _lastMoveAt;
   DateTime? get deadline => _lastMoveAt?.add(roundLimit);
 
   /// Plays [move] locally and appends it to the shared log. A rejected
-  /// swap changes nothing and is not sent.
+  /// swap changes nothing and is not sent. In simultaneous matches the
+  /// opponent may append between our refresh and our write — on that
+  /// conflict we refresh, re-apply the same move and retry, since a
+  /// Frenzy swap only depends on our own board which the opponent
+  /// cannot touch.
   Future<MoveResult> play(Move move) async {
     if (!isMyTurn) {
       throw const MatchException(MatchErrorCode.notYourTurn);
     }
-    final result = applyMove(_state, move);
-    if (result is! EngineOk<MoveResult>) {
-      throw const OnlineException(OnlineErrorCode.backend, 'invalid_move');
+    for (var attempt = 0; attempt < 8; attempt++) {
+      final result = applyMove(_state, move);
+      if (result is! EngineOk<MoveResult>) {
+        throw const OnlineException(OnlineErrorCode.backend, 'invalid_move');
+      }
+      final res = result.value;
+      if (_isRejected(res)) return res;
+      final index = _applied;
+      try {
+        await store.appendMove(
+          matchId,
+          MoveRecord(
+            index: index,
+            uid: uid,
+            slot: slot,
+            move: move.toJson(),
+            hashAfter: res.hashAfter,
+            next: _nextOf(res.state),
+          ),
+        );
+      } on MatchException catch (e) {
+        if (e.code == MatchErrorCode.moveConflict) {
+          await refresh();
+          if (_state.config.simultaneous &&
+              !isOver &&
+              attempt + 1 < 8) {
+            continue;
+          }
+        }
+        rethrow;
+      }
+      // [watch] may already have accepted this move from the store.
+      if (_applied == index) {
+        _state = res.state;
+        _applied++;
+        // Local estimate until [refresh] reads the server time.
+        _lastMoveAt = DateTime.now().toUtc();
+      }
+      await _maybeFinish();
+      return res;
     }
-    final res = result.value;
-    if (_isRejected(res)) return res;
-    final index = _applied;
-    try {
-      await store.appendMove(
-        matchId,
-        MoveRecord(
-          index: index,
-          uid: uid,
-          slot: slot,
-          move: move.toJson(),
-          hashAfter: res.hashAfter,
-          next: _nextOf(res.state),
-        ),
-      );
-    } on MatchException catch (e) {
-      if (e.code == MatchErrorCode.moveConflict) await refresh();
-      rethrow;
-    }
-    // [watch] may already have accepted this move from the store.
-    if (_applied == index) {
-      _state = res.state;
-      _applied++;
-      // Local estimate until [refresh] reads the server time.
-      _lastMoveAt = DateTime.now().toUtc();
-    }
-    await _maybeFinish();
-    return res;
+    throw const MatchException(MatchErrorCode.moveConflict);
   }
 
   /// Reads the log and applies moves this phone has not seen. Returns how
@@ -152,7 +172,9 @@ class MatchSession {
 
   /// Claims the win when the opponent let the 24-hour limit pass.
   Future<void> claimForfeit() async {
-    if (isMyTurn || isOver) {
+    // Frenzy: isMyTurn is always true (both sides always hold the board)
+    // — the deadline check in the caller is the only guard.
+    if ((!_state.config.simultaneous && isMyTurn) || isOver) {
       throw const MatchException(MatchErrorCode.notYourTurn);
     }
     await store.claimForfeit(matchId, slot);
@@ -182,12 +204,19 @@ class MatchSession {
     final sender = move.uid == kDeletedUid
         ? move.slot
         : record.slotOf(move.uid);
-    if (sender != move.slot ||
-        move.slot != _state.activePlayer ||
-        _state.outcome != null) {
+    if (sender != move.slot || _state.outcome != null) {
       return _raise(MatchFlag.wrongTurn);
     }
     final decoded = Move.fromJson(move.move);
+    if (_state.config.simultaneous) {
+      // Frenzy: the sender may only act for their own slot — swaps and
+      // powers carry `player` and must match it, and only the host
+      // (PlayerSlot.first) may write clock ticks.
+      final actsFor = decoded?.player ?? PlayerSlot.first;
+      if (actsFor != move.slot) return _raise(MatchFlag.wrongTurn);
+    } else if (move.slot != _state.activePlayer) {
+      return _raise(MatchFlag.wrongTurn);
+    }
     final result = decoded == null ? null : applyMove(_state, decoded);
     if (result is! EngineOk<MoveResult> || _isRejected(result.value)) {
       return _raise(MatchFlag.invalidMove);
