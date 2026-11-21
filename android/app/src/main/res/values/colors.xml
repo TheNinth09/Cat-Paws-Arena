@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark wood behind the app surface — never a white/black band. -->
+    <color name="cpa_wood">#24150e</color>
+</resources>

@@ -80,6 +80,8 @@ kotlin {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // WindowCompat / WindowInsetsControllerCompat for true immersive mode.
+    implementation("androidx.core:core:1.15.0")
 }
 
 flutter {

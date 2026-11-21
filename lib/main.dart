@@ -24,6 +24,14 @@ Future<void> main() async {
   // the art climbs to the screen edges and no band sits above the HUD
   // or under the nav bar. A swipe from an edge reveals them transiently.
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  // The transient swipe bars fade on their own, but some OEMs leave them
+  // up or drop immersive entirely (dialog, keyboard, app switch) — the
+  // moment they surface we pull them straight back down.
+  SystemChrome.setSystemUIChangeCallback((systemOverlaysAreVisible) async {
+    if (systemOverlaysAreVisible) {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
+  });
   // Transparent system bars everywhere — the default nav-bar colour shows as
   // a dark band at the bottom (and a scrim at the top) on many devices.
   SystemChrome.setSystemUIOverlayStyle(
@@ -79,7 +87,16 @@ class CatPawsApp extends StatelessWidget {
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: gold),
-      scaffoldBackgroundColor: ink,
+      // Every surface is transparent so each screen's own full-bleed art
+      // reaches the physical edges; behind it the window paints dark
+      // wood (#24150e) instead of a white/black band.
+      scaffoldBackgroundColor: Colors.transparent,
+      canvasColor: Colors.transparent,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
       fontFamily: 'Nunito',
       textTheme: const TextTheme(
         bodyMedium: TextStyle(color: ink, fontWeight: FontWeight.w600),
