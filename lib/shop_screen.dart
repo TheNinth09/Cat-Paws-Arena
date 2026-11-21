@@ -240,6 +240,7 @@ class _ShopScreenState extends State<ShopScreen> {
                 art: offer.art,
                 extraArt: offer.extraArt,
                 subtitle: offer.subtitle,
+                badge: ownsOffer(offer) ? '' : 'ÎN CURÂND',
                 buttonText: ownsOffer(offer) ? 'DEȚINUT' : offer.leiPrice,
                 onPressed: ownsOffer(offer)
                     ? null
@@ -345,7 +346,7 @@ class _HeroDealCard extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: ArenaButton(
-            text: owned ? 'DEȚINUT' : 'PACHET • 8.99 LEI',
+            text: owned ? 'DEȚINUT' : '8.99 LEI • ÎN CURÂND',
             onPressed: onPressed,
             green: true,
             singleLine: true,
@@ -461,7 +462,9 @@ class _PackCard extends StatelessWidget {
     child: InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
-      child: Ink(
+      child: Stack(
+        children: [
+          Ink(
         decoration: BoxDecoration(
           gradient: _cardGradient,
           borderRadius: BorderRadius.circular(18),
@@ -542,6 +545,38 @@ class _PackCard extends StatelessWidget {
             ),
           ],
         ),
+        ),
+          // Real-money checkout is not wired yet — mark it up front so the
+          // card never reads as a live purchase.
+          const Positioned(
+            top: 4,
+            right: 5,
+            child: _SoonChip(),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _SoonChip extends StatelessWidget {
+  const _SoonChip();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+    decoration: BoxDecoration(
+      color: const Color(0xcc2a1a12),
+      borderRadius: BorderRadius.circular(7),
+      border: Border.all(color: gold, width: 1),
+    ),
+    child: const Text(
+      'ÎN CURÂND',
+      style: TextStyle(
+        color: gold,
+        fontSize: 7,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0.3,
       ),
     ),
   );
