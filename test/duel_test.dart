@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:arena_engine/arena_engine.dart' as engine;
 import 'package:arena_engine/src/board.dart' as board;
 import 'package:cat_paws_arena/board_game.dart';
+import 'package:cat_paws_arena/catalog.dart';
 import 'package:cat_paws_arena/duel_audio.dart';
 import 'package:cat_paws_arena/duel_events.dart';
 import 'package:cat_paws_arena/engine_events.dart';
@@ -1770,6 +1771,57 @@ void main() {
       expect(queued, isNotEmpty);
       expect(queued.first.player, engine.PlayerSlot.second);
       expect(queued.first.count, inInclusiveRange(1, 2));
+    });
+  });
+
+  group('selected-cat power resolution', () {
+    test('Tzuki and Bubble keep signature powers regardless of editor pick', () {
+      for (var editorPick = 0; editorPick < 3; editorPick++) {
+        expect(powerForCat('Tzuki', editorPick), 0);
+        expect(powerForCat('Bubble', editorPick), 1);
+        expect(powerForCat('Custom', editorPick), editorPick);
+      }
+      expect(powerForCat('Custom', 9), 2, reason: 'clamped to a valid power');
+    });
+
+    test('Player.selectedCatPower follows the selected cat', () async {
+      SharedPreferences.setMockInitialValues({});
+      final p = Player(await SharedPreferences.getInstance())..power = 2;
+      p.cat = 'Tzuki';
+      expect(p.selectedCatPower, 0);
+      p.cat = 'Bubble';
+      expect(p.selectedCatPower, 1);
+      p.cat = 'Custom';
+      expect(p.selectedCatPower, 2);
+    });
+
+    testWidgets('the engine duel runs the selected cat power, not the raw pick', (
+      tester,
+    ) async {
+      for (final (cat, expected) in [
+        ('Tzuki', PowerKind.zoomies),
+        ('Bubble', PowerKind.shadowPounce),
+        ('Custom', PowerKind.laserChase),
+      ]) {
+        SharedPreferences.setMockInitialValues({});
+        final p = Player(await SharedPreferences.getInstance())
+          ..cat = cat
+          ..power = 2; // deliberately different from Tzuki/Bubble signatures
+        final m = ArenaMatchController(p, 0, botLevel: 1, seed: 42);
+        addTearDown(m.dispose);
+        m.eventSink = (_) => m.onBoardIdle();
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pump();
+        expect(m.phase, MatchPhase.playing);
+        expect(
+          m.playerPower,
+          expected,
+          reason: '$cat must bring its own power into the duel',
+        );
+        m.debugEndActiveTurn();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(m.phase, MatchPhase.finished);
+      }
     });
   });
 }

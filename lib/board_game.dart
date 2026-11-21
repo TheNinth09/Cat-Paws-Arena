@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -145,6 +146,10 @@ class BoardViewState extends State<BoardView>
   int? _dragFrom;
   Offset _panDelta = Offset.zero;
   double _now = 0;
+  /// Frame clock mirrored for the painter + banner layer: bumping it
+  /// repaints the board WITHOUT rebuilding the widget subtree, which is
+  /// what makes continuous cascades cheap (no per-tick setState).
+  final ValueNotifier<double> _frame = ValueNotifier<double>(0);
   double _schedule = 0;
   Duration _lastElapsed = Duration.zero;
   bool _artRequested = false;
@@ -241,6 +246,7 @@ class BoardViewState extends State<BoardView>
       s.hints.removeListener(_repaint);
     }
     _ticker.dispose();
+    _frame.dispose();
     widget.onIdle?.call();
     for (final c in _completers) {
       if (!c.isCompleted) c.complete();
@@ -845,7 +851,11 @@ class BoardViewState extends State<BoardView>
         _schedule <= _now) {
       _ticker.stop();
     }
-    if (dirty || _fx.isNotEmpty || _meta.isNotEmpty) setState(() {});
+    // Repaint-only path: the painter and banner layer listen to _frame,
+    // so animation frames never rebuild the gesture/layout widgets.
+    if (dirty || _fx.isNotEmpty || _meta.isNotEmpty || _banners.isNotEmpty) {
+      _frame.value = _now;
+    }
   }
 
   void _finishAll() {
@@ -1047,7 +1057,7 @@ class BoardViewState extends State<BoardView>
                   painter: _BoardPainter(
                     cells: _cells,
                     fx: _fx,
-                    now: _now,
+                    nowSource: _frame,
                     art: _art,
                     selected: _selected,
                     hinted: _hintCells,
@@ -1055,7 +1065,11 @@ class BoardViewState extends State<BoardView>
                     height: height,
                   ),
                 ),
-                IgnorePointer(child: _bannerLayer(cell)),
+                ValueListenableBuilder<double>(
+                  valueListenable: _frame,
+                  builder: (_, _, _) =>
+                      IgnorePointer(child: _bannerLayer(cell)),
+                ),
               ],
             ),
           ),
@@ -1223,17 +1237,21 @@ class _BoardPainter extends CustomPainter {
   _BoardPainter({
     required this.cells,
     required this.fx,
-    required this.now,
+    required ValueListenable<double> nowSource,
     required this.art,
     required this.selected,
     required this.width,
     required this.height,
     this.hinted,
-  });
+  }) : nowSource = nowSource,
+       super(repaint: nowSource);
 
   final List<BoardCell> cells;
   final List<_Fx> fx;
-  final double now;
+  /// Live frame clock — the painter reads the current value on every
+  /// repaint so the widget never rebuilds it just to advance [now].
+  final ValueListenable<double> nowSource;
+  double get now => nowSource.value;
   final Map<String, ui.Image> art;
   final int? selected;
   final int width;

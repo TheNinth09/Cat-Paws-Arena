@@ -72,7 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-            SafeArea(
+            HudSafeArea(
               child: Column(
                 children: [
                   _header(context),
@@ -390,9 +390,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ),
   );
 
-  /// Avatar chooser — the three preset cat artworks plus PISICA MEA,
-  /// which renders the player's own customized cat (it stays in sync with
-  /// the PISICI editor). Persisted in [Player.avatarArt].
+  /// Avatar chooser — the three preset cat artworks plus the live
+  /// customized cat (it stays in sync with the PISICI editor). This is
+  /// the PLAYER's identity and is stored separately in
+  /// [Player.avatarArt] — the duel cat selection lives on the PISICI
+  /// page (`Player.cat`) and is never affected by this picker.
   void _pickAvatarArt(BuildContext context) => showAppDialog(
     context,
     english ? 'CHOOSE AVATAR' : 'ALEGE AVATARUL',
@@ -413,7 +415,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? 'BUBBLE'
         : art == 'cat_custom'
         ? 'CUSTOM'
-        : (english ? 'MY CAT' : 'PISICA MEA');
+        : (english ? 'EDITED CAT' : 'PISICA EDITATĂ');
     final selected = player.avatarArt == art;
     return InkWell(
       onTap: () {

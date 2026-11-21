@@ -137,6 +137,17 @@ const powerEffects = [
   'effect_shadow_pounce',
   'effect_laser_chase',
 ];
+
+/// Single source of truth for which power a duel cat brings into a match:
+/// Tzuki and Bubble have fixed signature powers; the Custom cat uses the
+/// power picked in the cat editor ([customPower] = `Player.power`). The
+/// Cats page, the room hand-off and the match config must all resolve
+/// through this — `Player.power` alone is only the Custom cat's pick.
+int powerForCat(String cat, int customPower) => switch (cat) {
+      'Tzuki' => 0,
+      'Bubble' => 1,
+      _ => customPower.clamp(0, 2),
+    };
 const modeNames = ['1v1 Arena', 'Speed Rush', 'Survival', 'High-Stakes Ranked'];
 const modeThresholds = [0, 1000, 2000, 3000];
 

@@ -579,11 +579,9 @@ class _MatchScreenState extends State<MatchScreen>
                     // scaffold bands at the top and bottom.
                     MatchPhase.searching => versus(),
                     MatchPhase.finished => result(),
-                    MatchPhase.playing => SafeArea(
+                    MatchPhase.playing => HudSafeArea(
                       child: Padding(
-                        // Status bar is hidden system-wide — the larger
-                        // top pad keeps the HUD off the screen edge.
-                        padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                         child: battle(),
                       ),
                     ),

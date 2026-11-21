@@ -757,11 +757,7 @@ class _CatStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final power = cat == 'Tzuki'
-        ? 0
-        : cat == 'Bubble'
-        ? 1
-        : player.power;
+    final power = powerForCat(cat, player.power);
     final (tagText, tagColor) = cat == 'Tzuki'
         ? ('RARĂ', const Color(0xff8e4fc4))
         : cat == 'Bubble'

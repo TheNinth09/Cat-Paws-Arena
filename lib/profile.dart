@@ -64,6 +64,12 @@ class Player extends ChangeNotifier {
       english = false,
       notifications = false,
       haptics = true;
+  /// Power index (0–2, into `powerNames`/`PowerKind.values`) the currently
+  /// selected duel cat brings into a match — resolved through
+  /// [powerForCat] so Tzuki and Bubble keep their signature powers and the
+  /// Custom cat uses the editor pick stored in [power].
+  int get selectedCatPower => powerForCat(cat, power);
+
   Set<String> owned = {};
   Set<int> claims = {};
 

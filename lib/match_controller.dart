@@ -400,7 +400,7 @@ class ArenaMatchController extends ChangeNotifier {
   /// engine duels; the profile pick for the legacy race).
   PowerKind get playerPower {
     if (!isEngine) {
-      return switch (player.power.clamp(0, 2)) {
+      return switch (player.selectedCatPower) {
         1 => PowerKind.shadowPounce,
         2 => PowerKind.laserChase,
         _ => PowerKind.zoomies,
@@ -659,7 +659,7 @@ class ArenaMatchController extends ChangeNotifier {
     }
     _botSeed = _seed ^ 0x5f3759df;
     final config = engine.MatchConfig.frenzy(
-      firstPower: engine.PowerKind.values[player.power.clamp(0, 2)],
+      firstPower: engine.PowerKind.values[player.selectedCatPower],
       secondPower: engine.PowerKind.values[_botSeed % 3],
     );
     final res = engine.newMatch(_seed, config);

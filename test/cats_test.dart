@@ -538,7 +538,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('profile-avatar-pick')));
     await tester.pumpAndSettle();
-    for (final label in ['TZUKI', 'BUBBLE', 'CUSTOM', 'PISICA MEA']) {
+    for (final label in ['TZUKI', 'BUBBLE', 'CUSTOM', 'PISICA EDITATĂ']) {
       expect(find.text(label), findsOneWidget);
     }
 
@@ -549,7 +549,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('profile-avatar-pick')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('PISICA MEA'));
+    await tester.tap(find.text('PISICA EDITATĂ'));
     await tester.pumpAndSettle();
     expect(player.avatarArt, 'my_cat');
   });

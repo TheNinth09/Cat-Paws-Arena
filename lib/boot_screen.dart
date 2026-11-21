@@ -136,7 +136,7 @@ class _BootState extends State<Boot> {
           ),
         ),
         const Positioned.fill(child: CustomPaint(painter: _BootCharm())),
-        SafeArea(
+        HudSafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
             child: Column(

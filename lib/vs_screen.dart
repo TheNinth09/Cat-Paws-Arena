@@ -95,7 +95,7 @@ class MatchupScene extends StatelessWidget {
           ),
         ),
       ),
-      SafeArea(
+      HudSafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(

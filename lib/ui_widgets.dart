@@ -7,6 +7,47 @@ const ink = Color(0xff51312d),
     cream = Color(0xffffedbb),
     gold = Color(0xffffc63c);
 
+/// Immersive-mode inset guard for full-bleed pages. A plain [SafeArea]
+/// spends the whole reported top inset (status-bar sized even while the
+/// bar is hidden — and taller on devices with a camera cutout), which
+/// pushes the floating HUD down into a dead art band. [HudSafeArea] keeps
+/// the real cutout clearance but caps it so the HUD rides near the top.
+/// Left/right insets pass through untouched (landscape cutouts).
+class HudSafeArea extends StatelessWidget {
+  const HudSafeArea({
+    super.key,
+    required this.child,
+    this.top = true,
+    this.bottom = true,
+  });
+
+  final Widget child;
+  final bool top;
+  final bool bottom;
+
+  /// Largest reported top inset we honour — covers camera cutouts on real
+  /// devices (~24–40 px) while trimming oversized reports.
+  static const maxTop = 40.0;
+
+  /// Largest bottom inset honoured — gesture-pill clearance without a
+  /// dead strip above the floating bars.
+  static const maxBottom = 24.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final vp = MediaQuery.viewPaddingOf(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        top: top ? min(vp.top, maxTop) : 0,
+        bottom: bottom ? min(vp.bottom, maxBottom) : 0,
+        left: vp.left,
+        right: vp.right,
+      ),
+      child: child,
+    );
+  }
+}
+
 Widget sprite(String name, {double size = 40}) => Image.asset(
   'assets/generated/$name.png',
   width: size,

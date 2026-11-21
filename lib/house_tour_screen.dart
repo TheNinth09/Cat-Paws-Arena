@@ -237,7 +237,7 @@ class _HouseTourScreenState extends State<HouseTourScreen> {
                 ),
               ),
             ),
-            SafeArea(
+            HudSafeArea(
               child: ListView.builder(
                 key: const PageStorageKey('house-tour-scroll'),
                 controller: _scroll,
@@ -252,7 +252,7 @@ class _HouseTourScreenState extends State<HouseTourScreen> {
               ),
             ),
             // Floating header: back arrow + titles, no bar.
-            SafeArea(
+            HudSafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
                 child: Row(
