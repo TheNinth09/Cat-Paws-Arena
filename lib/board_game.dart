@@ -487,6 +487,9 @@ class BoardViewState extends State<BoardView>
         if (content.isEmpty) return const [];
         _cells[from] = const BoardCell();
         _cells[to] = content;
+        // Fall speed scales with distance — a one-cell drop lands quick,
+        // a six-cell drop keeps the same gravity instead of teleporting.
+        final dropRows = (to ~/ width - from ~/ width).abs();
         return [
           _moveFx(
             event,
@@ -496,13 +499,16 @@ class BoardViewState extends State<BoardView>
             from: from,
             to: to,
             start: start,
-            dur: 0.16,
+            dur: (0.09 + dropRows * 0.042).clamp(0.11, 0.32).toDouble(),
             squash: true,
           ),
         ];
       case Refilled(:final cell, :final piece):
         final c = _cells[cell];
         _cells[cell] = BoardCell(piece: piece, obstacle: c.obstacle);
+        // Refills spawn above the board — the fall distance is the row
+        // plus the off-board gap, so deep cells get a real drop arc.
+        final dropRows = cell ~/ width + 1.6;
         return [
           _moveFx(
             event,
@@ -511,7 +517,7 @@ class BoardViewState extends State<BoardView>
             from: cell,
             to: cell,
             start: start,
-            dur: 0.18,
+            dur: (0.09 + dropRows * 0.042).clamp(0.12, 0.34).toDouble(),
             delay: _refillDelay(cell, start),
             squash: true,
           ),
@@ -1217,12 +1223,25 @@ class _Fx {
   }
 
   double _curve(double t) => switch (kind) {
-    _FxKind.fall || _FxKind.refill => t * t,
+    _FxKind.fall || _FxKind.refill => _fallCurve(t),
     _FxKind.swap =>
       t < 0.5 ? 4 * t * t * t : 1 - math.pow(-2 * t + 2, 3) / 2,
     _FxKind.shuffle => 0.5 - 0.5 * math.cos(math.pi * t),
     _ => t,
   };
+
+  /// Gravity in, soft settle out: quadratic acceleration for the bulk of
+  /// the drop, then a short ease-out into the landing cell so pieces
+  /// arrive on target instead of snapping (the squash carries impact).
+  double _fallCurve(double t) {
+    const accel = 0.82;
+    if (t < accel) {
+      final u = t / accel;
+      return u * u * 0.955;
+    }
+    final u = (t - accel) / (1 - accel);
+    return 0.955 + 0.045 * (1 - (1 - u) * (1 - u));
+  }
 }
 
 /// A transient floating label for meta events (no cell animation).

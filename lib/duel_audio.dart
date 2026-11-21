@@ -246,10 +246,14 @@ class DuelMusic {
     if (want && !_started) {
       _started = true;
       unawaited(
-        _player.play(
-          AssetSource(asset),
-          volume: volume,
-        ).catchError((Object _) {}),
+        _player.play(AssetSource(asset), volume: volume).then((_) {
+          // play() is async — if a pause/background request landed while
+          // the source was still loading, playback would have slipped
+          // past the pause call and kept running in the background.
+          if (!_started) {
+            unawaited(_player.stop().catchError((Object _) {}));
+          }
+        }).catchError((Object _) {}),
       );
     } else if (!want && _started) {
       _started = false;
@@ -260,6 +264,12 @@ class DuelMusic {
   void setBackgrounded(bool value) {
     _backgrounded = value;
     sync();
+    // Definitive silence while backgrounded: stop() (not pause) clears
+    // any playback that raced past the pause above; on resume sync()
+    // restarts the loop from the top, which is fine for a music bed.
+    if (value) {
+      unawaited(_player.stop().catchError((Object _) {}));
+    }
   }
 
   Future<void> dispose() async {

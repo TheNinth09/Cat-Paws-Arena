@@ -403,20 +403,40 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       body: Stack(
         fit: StackFit.expand,
         children: [
+          // Page backgrounds slide in sync with the PageView scroll —
+          // the outgoing art moves left, the incoming follows it. Both
+          // layers stay fully opaque, so no translucent scaffold-brown
+          // band can flash at a crossfade midpoint during navigation.
           Positioned.fill(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              child: KeyedSubtree(
-                key: ValueKey('bg-$tab'),
-                child: arenaImage(
-                  _pageBgs[tab],
-                  fit: BoxFit.cover,
-                  fallback: RoomBackground(
-                    tier: p.tier,
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
+            child: AnimatedBuilder(
+              animation: pages,
+              builder: (context, _) {
+                final w = MediaQuery.sizeOf(context).width;
+                final pos =
+                    (pages.hasClients && pages.positions.isNotEmpty
+                            ? pages.page ?? tab.toDouble()
+                            : tab.toDouble())
+                        .clamp(0.0, (_pageBgs.length - 1).toDouble());
+                final base = pos.floor();
+                final end = (pos.ceil()).clamp(0, _pageBgs.length - 1);
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    for (var i = base; i <= end; i++)
+                      Transform.translate(
+                        offset: Offset((i - pos) * w, 0),
+                        child: arenaImage(
+                          _pageBgs[i],
+                          fit: BoxFit.cover,
+                          fallback: RoomBackground(
+                            tier: p.tier,
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
           HudSafeArea(

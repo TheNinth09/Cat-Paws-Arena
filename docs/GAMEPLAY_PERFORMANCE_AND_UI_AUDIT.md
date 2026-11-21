@@ -1,9 +1,80 @@
 # Gameplay, Performance & UI Audit — Cat Paws Arena
 
-Audit efectuat pe codul `main` (post v46, `fa7ae21`) + verificări pe dispozitiv
+Audit efectuat pe codul `main` + verificări pe dispozitiv
 (emulator Android 14, 320×640, build `--profile` cu `--dart-define=CPA_FRAME_PROBE=true`).
 
-## Sumar rezultate
+## Runda 2 (v48) — navigare, audio, căderi, performanță
+
+| Problemă | Gravitate | Cauză exactă | Stare |
+|---|---|---|---|
+| Bandă maro **în timpul navigării** | **P0** | `AnimatedSwitcher(220ms)` făcea cross-fade între fundalurile paginilor — la mijlocul tranziției ambele imagini ~50% alfa și tavanele se spălau spre maro-ul scaffold-ului; în plus fundalul se schimba instant la `onPageChanged` în timp ce conținutul încă aluneca → tavan gol vizibil | ✅ reparat — fundalurile alunecă sincronizat cu `pages.page` |
+| Muzica continuă în background | **P0** | `DuelMusic.sync()` — `_player.play()` e async; dacă `setBackgrounded→pause()` ajungea în timp ce play-ul încă se rezolva (decodare sursă), redarea pornea DUPĂ pauză și rămânea în fundal; `pause()` pe o redare care a fugit de cursă nu mai oprea nimic | ✅ reparat — gard pe promisiunea play() + `stop()` definitiv la background |
+| Căderea pieselor nenaturală | **P0** | `Fell` folosea `dur: 0.16` FIX indiferent de distanță (1 sau 6 celule — aceeași durată → teleportare pe căderi lungi, plutire pe cele scurte); curbă `t²` fără aterizare | ✅ reparat — durată proporțională cu distanța + curbă accelerație→deccelerație |
+| Pagina PISICI cu conținutul de jos tăiat | **P2** | Padding de jos 24px — ultimul buton părea tranchiat la margine | ✅ padding 72px |
+
+### Fix-uri runda 2 — detalii
+
+**Navigare (`lib/home_screen.dart`):** `AnimatedSwitcher` cross-fade înlocuit cu
+`AnimatedBuilder(animation: pages)` — fundalurile paginilor alunecă pe orizontală
+în sincron perfect cu `PageController.page`: `bg_base` la `-(pos-i)*w`, `bg_next`
+la `(i-pos)*w`. Ambele imagini rămân 100% opace în orice moment → zero spălare
+maro; arta se mișcă literalmente odată cu conținutul (comportament tip
+Royal Match/Brawl Stars).
+
+**Audio (`lib/duel_audio.dart` `DuelMusic`):**
+- `sync()`: după ce promisiunea `play()` se rezolvă, dacă `_started` a căzut
+  între timp (pauză/background cerut în cursa decodării sursei) → `stop()`
+  imediat — redarea nu mai poate fugi de pauză.
+- `setBackgrounded(true)`: `stop()` definitiv (nu doar `pause()`) — curăță
+  orice redare activă sau în cursă; la `resumed` `sync()` repornește bucla
+  de la început (acceptabil pentru un bed muzical).
+- Observatorii existenți (home + match) păstrați; toggle-ul `p.music`
+  rămâne sursa de adevăr; fără instanțe duplicate (`_started` guard).
+
+**Căderi (`lib/board_game.dart`):**
+- `Fell`: `dur = (0.09 + rows*0.042).clamp(0.11, 0.32)` — 1 celulă ≈ 0.13s,
+  6 celule ≈ 0.32s — aceeași gravitație percepută pe orice distanță.
+- `Refilled`: spawn deasupra tablei păstrat; durata acum include distanța
+  off-board (`row + 1.6`), deci piesele noi "cad" cu aceeași fizică.
+- Curbă nouă `_fallCurve`: accelerație pătratică până la 82% (95.5% drum),
+  apoi ease-out pătratic până la 100% — aterizare lină; `squash`-ul existent
+  (dip 0.24 sin, 0.12s) poartă impactul vizual.
+
+**PISICI (`lib/cats_screen.dart`):** padding de jos al ListView-ului 24→72 —
+butoanele de jos nu mai par tranchiate la marginea ecranului.
+
+### Propuneri P1 care așteaptă aprobarea ta (neimplementate)
+
+Mecanici neschimbate — doar straturi vizuale noi, fiecare adaugă cod:
+
+1. **Reacții ale pisicilor în HUD** — avatarurile din colțuri anima scurt
+   (bounce/tilt) la cascada proprie ≥x3 sau la power; la atacul advers
+   (sabotage) — "flinch". Doar widget, fără reguli noi.
+2. **Feedback combo crescător** — etichete "+N puncte" deja existente;
+   propun tier-uri vizuale: combo 2 → text mai mare + scântei, combo 3+ →
+   flash de ramă aurie (tot în painter, ~40 linii).
+3. **Tensiune la final** — în ultimele 15s (deja Fever x2) propun puls
+   discret al barei tug-of-war către lider; la scor apropiat (<5% diferență)
+   culoarea barei pulsa alb.
+4. **Final de meci** — victoria are deja scenă dedicată; propun confetti
+   de lăbuțe peste ecranul de rezultat (painter existent reutilizat).
+
+Acestea NU ating regulile, scorul, economia sau puterile — confirmă și le
+implementez în runda următoare.
+
+---
+
+## Runda 1 (v47) — rezumat anterior
+
+| Problemă | Gravitate | Cauză exactă | Stare |
+|---|---|---|---|
+| Bandă maro mare sus pe ecrane | **P0** | `SafeArea` consuma integral `viewPadding.top` (înălțimea status-bar-ului ascuns / a decupajului camerei) + padding-uri fixe suplimentare (`SizedBox(8)`, `Padding(top:10)`) → zonă moartă de artă | ✅ reparat |
+| Puterea pisicii greșită în meci | **P0** | `player.power` (alegerea din editor, valabilă doar pentru pisica Custom) era trimis în config-ul engine și în camerele online indiferent de pisica selectată | ✅ reparat |
+| Rebuild complet al board-ului la fiecare frame | **P0** | `BoardView._onTick` apela `setState` la fiecare tick de animație → ~60 rebuild-uri/sec ale întregului sub-arbore (LayoutBuilder, Listener, GestureDetector, Stack, bannere) | ✅ reparat |
+| „PISICA MEA" ambiguu în profil | **P0** | Eticheta amesteca identitatea jucătorului cu selecția pisicii de duel | ✅ reparat |
+| Spațiere dead-zone lăsată de layout | **P1** | HUD împins în jos de inset + gap-uri fixe | ✅ reparat prin același fix |
+
+## Sumar rezultate runda 1
 
 | Problemă | Gravitate | Cauză exactă | Stare |
 |---|---|---|---|

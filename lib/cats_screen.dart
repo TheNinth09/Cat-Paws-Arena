@@ -561,7 +561,7 @@ class _CatsScreenState extends State<CatsScreen> {
       ),
       ListView(
         key: const PageStorageKey('cats-scroll'),
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 72),
         children: [
           const _CreatorTitle(),
           const SizedBox(height: 4),
