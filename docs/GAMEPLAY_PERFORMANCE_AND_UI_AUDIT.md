@@ -209,3 +209,23 @@ dată la `targetWidth: 320`.
 - `flutter test` — 133/133 (inclusiv cele 3 teste noi de putere).
 - Build `--profile` instalat pe emulator — lobby, PISICI (Tzuki→Bubble→etape),
   meci Frenzy complet, 60 FPS, putere corectă pe Bubble, zero crash logcat.
+
+### Dovăzi dispozitiv runda 2 (v48, emulator Android 14)
+
+- **Navigare:** swipe între taburi → fundalurile paginilor alunecă împreună
+  cu conținutul; zero bandă maro vizibilă în orice poziție a tranziției
+  (captură `build/v48_team.png` — tabul ECHIPĂ pe arta proprie).
+- **Audio lifecycle:** în meci → `input keyevent KEYCODE_HOME` →
+  `dumpsys media.audio_flinger`: **5 tracks, 0 active** (muzica oprită);
+  revenire în aplicație → **1 track activ** (muzica reluată corect, fără
+  instanțe duplicate). Verificat și re-încărcare task fără porniri duble.
+- **Meci complet pe release:** instalat APK v48 → lobby cu date salvate →
+  meci vs bot: 60 FPS constant, Bubble+POUNCE corect, sabotaje vizibile,
+  zero crash-uri în logcat.
+
+### Release v48
+
+- Tag `apk-test-0.7.0-48`, `main` = `d4b288b`, version `0.7.0+48`.
+- APK: `cat-paws-arena-test-0.7.0-48.apk` — 99,889,531 bytes
+- SHA-256: `eb73846a9a33b4c3a7cb0f08dd1ee8532fdae84bd17ef30d171f10513ba49a50`
+- Construit cu `--dart-define=CPA_ONLINE_BACKEND=firebase` (Firebase live).
